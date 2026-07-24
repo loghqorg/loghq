@@ -235,21 +235,22 @@ const stats = [
 
 <style>
 /* loghq - Space Grotesk display + JetBrains Mono for numerics/code/log lines.
-   One accent (rose), off-black/off-white, auto light+dark, radius lock 12px. */
+   One accent (indigo — chrome/navigation only; severity has its own semantic
+   colors), off-black/off-white, auto light+dark, radius lock 12px. */
 :root {
   --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
-  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #e11d48;
-  --rail: rgba(225,29,72,0.14); --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #4f46e5;
+  --rail: rgba(79,70,229,0.14); --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #090b11; --panel: #10131c; --border: rgba(148,163,184,0.12);
-    --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #fb7185; --rail: rgba(251,113,133,0.16); }
+    --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #818cf8; --rail: rgba(129,140,248,0.16); }
 }
 :root[data-theme="dark"] { --bg: #090b11; --panel: #10131c; --border: rgba(148,163,184,0.12);
-  --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #fb7185; --rail: rgba(251,113,133,0.16); }
+  --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #818cf8; --rail: rgba(129,140,248,0.16); }
 :root[data-theme="light"] { --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
-  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #e11d48; --rail: rgba(225,29,72,0.14); }
+  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #4f46e5; --rail: rgba(79,70,229,0.14); }
 
 body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 .mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
