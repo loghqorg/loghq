@@ -1,0 +1,105 @@
+<script client>
+// Pricing / upgrade via stx client directives. Interval + state are signals; the
+// Upgrade button starts a Stripe Checkout (external redirect via location).
+const interval = state('monthly')
+const err = state('')
+const loading = state(false)
+
+function pick(v) { interval.set(v) }
+
+async function upgrade() {
+  const token = localStorage.getItem('token')
+  if (!token) { navigate('/login'); return }
+  loading.set(true)
+  err.set('')
+  try {
+    const res = await fetch('/payments/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ interval: interval() }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok && data.url) { location.assign(data.url); return }
+    err.set(data.error || 'Checkout is not available yet.')
+  }
+  catch {
+    err.set('Something went wrong. Please try again.')
+  }
+  finally {
+    loading.set(false)
+  }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root { --bg:#fbfbfd; --panel:#ffffff; --border:rgba(15,23,42,0.09); --text:#0b0f19; --text-2:#4b5565; --text-3:#97a1b2; --accent:#e11d48; --sans:'Space Grotesk', ui-sans-serif, system-ui, sans-serif; }
+@media (prefers-color-scheme: dark) { :root { --bg:#090b11; --panel:#10131c; --border:rgba(148,163,184,0.12); --text:#f3f5f9; --text-2:#b3bccb; --text-3:#667085; --accent:#fb7185; } }
+:root[data-theme="dark"] { --bg:#090b11; --panel:#10131c; --border:rgba(148,163,184,0.12); --text:#f3f5f9; --text-2:#b3bccb; --text-3:#667085; --accent:#fb7185; }
+:root[data-theme="light"] { --bg:#fbfbfd; --panel:#ffffff; --border:rgba(15,23,42,0.09); --text:#0b0f19; --text-2:#4b5565; --text-3:#97a1b2; --accent:#e11d48; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.wordmark { font-weight: 700; letter-spacing: -0.03em; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; }
+.card-pro { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 12px 40px color-mix(in srgb, var(--accent) 12%, transparent); }
+.btn { border-radius: 10px; transition: transform .12s ease, opacity .15s ease; font-weight: 600; }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:disabled { opacity: .6; cursor: default; }
+.btn-ghost { border: 1px solid var(--border); color: var(--text-2); }
+.check { color: var(--accent); }
+.seg { border: 1px solid var(--border); border-radius: 999px; }
+.seg button { border-radius: 999px; cursor: pointer; background: transparent; color: var(--text-2); border: none; }
+.seg button.on { background: var(--accent); color: #fff; }
+.err { color: #ef4444; }
+</style>
+
+<div class="min-h-[100dvh] px-5 py-14 md:px-10">
+  <div class="max-w-3xl mx-auto">
+    <header class="text-center mb-10">
+      <a href="/" class="wordmark text-2xl">loghq</a>
+      <h1 class="wordmark text-3xl md:text-4xl mt-6" style="letter-spacing:-0.035em">Simple, honest pricing</h1>
+      <p class="text-base mt-3" style="color: var(--text-3)">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
+      <div class="seg inline-flex items-center gap-1 p-1 mt-6 text-sm">
+        <button @click="pick('monthly')" :class="interval() === 'monthly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Monthly</button>
+        <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Yearly <span style="opacity:.8">-17%</span></button>
+      </div>
+    </header>
+
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="card p-7">
+        <div class="text-sm font-semibold uppercase tracking-wider" style="color: var(--text-3)">Free</div>
+        <div class="mt-3"><span class="wordmark text-4xl">\$0</span><span class="text-sm" style="color: var(--text-3)"> / forever</span></div>
+        <p class="text-sm mt-2" style="color: var(--text-2)">Everything you need to get started.</p>
+        <ul class="mt-6 space-y-2.5 text-sm">
+          <li class="flex items-center gap-2"><span class="check">✓</span> 1 project</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> 5k errors / mo</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> 30-day retention</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> Community support</li>
+        </ul>
+        <a href="/register" class="btn btn-ghost w-full block text-center py-2.5 text-sm mt-7">Get started</a>
+      </div>
+
+      <div class="card card-pro p-7">
+        <div class="text-sm font-semibold uppercase tracking-wider" style="color: var(--accent)">Pro</div>
+        <div class="mt-3">
+          <span class="wordmark text-4xl">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span><span class="text-sm" style="color: var(--text-3)">{{ interval() === 'yearly' ? ' / year' : ' / month' }}</span>
+        </div>
+        <p class="text-sm mt-2" style="color: var(--text-2)">For teams and sites that are growing.</p>
+        <ul class="mt-6 space-y-2.5 text-sm">
+          <li class="flex items-center gap-2"><span class="check">✓</span> Unlimited projects</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> Unlimited errors</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> Full retention</li>
+          <li class="flex items-center gap-2"><span class="check">✓</span> Priority support</li>
+        </ul>
+        <button @click="upgrade" :disabled="loading()" class="btn btn-primary w-full py-2.5 text-sm mt-7">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
+        @if (err())
+          <p class="err text-xs text-center mt-3">{{ err() }}</p>
+        @endif
+      </div>
+    </div>
+    <p class="text-center text-xs mt-10" style="color: var(--text-3)">Prefer to self-host? loghq is open source and free to run yourself.</p>
+  </div>
+</div>

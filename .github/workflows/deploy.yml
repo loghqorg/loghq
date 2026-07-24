@@ -1,0 +1,152 @@
+name: Deploy
+
+# Push-to-deploy, branch → environment. This app runs on its OWN Hetzner box
+# (config/cloud.ts has no `attachTo`), so the deploy provisions/refreshes the
+# box, ships loghq's sites + the ts-cloud dashboard, and reconciles Porkbun DNS.
+#   main  → production   (bare apex domain)
+#   stage → staging      (staging.<domain>)
+#   dev   → development  (dev.<domain>)
+on:
+  push:
+    branches: [main, stage, dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [production, staging, development]
+        default: staging
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  determine-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+      flag: ${{ steps.map.outputs.flag }}
+    steps:
+      - id: map
+        run: |
+          case "${{ github.event.inputs.environment || github.ref_name }}" in
+            production|main)  echo "environment=production"  >> "$GITHUB_OUTPUT"; echo "flag=--prod"    >> "$GITHUB_OUTPUT" ;;
+            staging|stage)    echo "environment=staging"     >> "$GITHUB_OUTPUT"; echo "flag=--staging" >> "$GITHUB_OUTPUT" ;;
+            development|dev)  echo "environment=development" >> "$GITHUB_OUTPUT"; echo "flag=--dev"     >> "$GITHUB_OUTPUT" ;;
+            *) echo "No environment mapped for ${{ github.ref_name }}"; exit 1 ;;
+          esac
+
+  deploy:
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.determine-environment.outputs.environment }}
+    permissions:
+      contents: read
+      deployments: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Attach deploys over SSH to the shared box (same DEPLOY_SSH_KEY authorized
+      # on the box). Derive the .pub from the private key so one secret suffices.
+      - name: Add deploy SSH key
+        run: |
+          if [ -n "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+            chmod 644 ~/.ssh/id_ed25519.pub
+          fi
+
+      # Reconstruct .env.keys on the runner from the private-key secrets so the
+      # DEPLOYED BOX can decrypt its committed, encrypted .env.<env> at runtime.
+      # .env.keys is gitignored (never committed); created here so `buddy deploy`
+      # ships it with the app. Without it the box reads `encrypted:…` verbatim
+      # and config (app.env / database.default) is invalid → DB unreadable.
+      - name: Create .env.keys for the box
+        run: |
+          umask 077
+          {
+            echo '# Generated in CI from secrets — do not commit.'
+            echo "DOTENV_PRIVATE_KEY_PRODUCTION=\"${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}\""
+            echo "DOTENV_PRIVATE_KEY_STAGING=\"${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}\""
+            echo "DOTENV_PRIVATE_KEY_DEVELOPMENT=\"${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}\""
+          } > .env.keys
+          chmod 600 .env.keys
+          # Sanity (no secret printed): confirm the file has the 3 keys.
+          echo "created .env.keys with $(grep -c '^DOTENV_PRIVATE_KEY' .env.keys) private keys"
+
+      - name: Deploy (${{ needs.determine-environment.outputs.environment }})
+        # Invoke the buddy CLI from node_modules directly rather than via the
+        # ./buddy wrapper. The wrapper is built for the vendored/pantry layout
+        # (it resolves a project-local pantry bun + NODE_PATH); a node_modules
+        # app has neither. This is the same entrypoint the site `start` commands use.
+        run: bun node_modules/@stacksjs/buddy/dist/cli.js deploy ${{ needs.determine-environment.outputs.flag }} --yes
+        env:
+          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          # Decrypt this app's own .env.<environment>.
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
+          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Provision/refresh loghq's own box + reconcile Porkbun DNS
+          # (apex/www A upserted to the box IP + additive config/dns.ts sync).
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PORKBUN_API_KEY: ${{ secrets.PORKBUN_API_KEY }}
+          PORKBUN_SECRET_KEY: ${{ secrets.PORKBUN_SECRET_KEY }}
+          # Serve the ts-cloud management dashboard at cloud.loghq.org
+          # (also carried encrypted in .env.production; set here explicitly).
+          TS_CLOUD_UI_DOMAIN: cloud.loghq.org
+          COPYFILE_DISABLE: '1'
+
+      # ts-cloud ships a DECRYPTED shared/.env for the running service, but the
+      # buddy CLI (and preStart hooks) load .env.<env> (still encrypted) directly
+      # and need the KEY file — which rsync drops because .env.keys is gitignored.
+      # So: install .env.keys into shared/ (persists across releases) + symlink it
+      # into the current release, then run migrate now that it can actually
+      # decrypt. This creates the framework auth schema (oauth_access_tokens,
+      # users.two_factor_*) the login flow needs. Output shows here in the Actions
+      # log (unlike preStart, which runs on the box).
+      - name: Provision .env.keys on the box + migrate
+        env:
+          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
+          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
+        run: |
+          set -euo pipefail
+          APP_DIR=/var/www/loghq-main
+          # Resolve this environment's box IP from the decrypted .env.<env>
+          # (.env.keys was written on the runner in the earlier step).
+          IP="$(bun -e '
+            const { autoLoadEnv } = await import("@stacksjs/env");
+            autoLoadEnv({ env: process.env.APP_ENV, keysFile: ".env.keys", overload: true, quiet: true });
+            const ip = process.env.APP_ENV === "staging" ? process.env.STAGING_SERVER_IP : process.env.APP_SERVER_IP;
+            process.stdout.write(String(ip || "").trim());
+          ')"
+          test -n "$IP" || { echo "::error::could not resolve server IP for $APP_ENV"; exit 1; }
+          echo "box: $IP  (env: $APP_ENV)"
+          SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${IP}"
+          # Write .env.keys into shared/ (600) from the secrets on this runner,
+          # then symlink it into the live release. Content is piped (never echoed).
+          printf '# Provisioned by CI from secrets — do not edit.\nDOTENV_PRIVATE_KEY_PRODUCTION="%s"\nDOTENV_PRIVATE_KEY_STAGING="%s"\nDOTENV_PRIVATE_KEY_DEVELOPMENT="%s"\n' \
+            "$DOTENV_PRIVATE_KEY_PRODUCTION" "$DOTENV_PRIVATE_KEY_STAGING" "$DOTENV_PRIVATE_KEY_DEVELOPMENT" \
+            | $SSH "umask 077; mkdir -p ${APP_DIR}/shared; cat > ${APP_DIR}/shared/.env.keys; chmod 600 ${APP_DIR}/shared/.env.keys; ln -sfn ${APP_DIR}/shared/.env.keys ${APP_DIR}/current/.env.keys"
+          echo "== .env.keys installed =="; $SSH "ls -l ${APP_DIR}/current/.env.keys"
+          echo "== migrate (additive; auto-declines the destructive drops) =="
+          # `buddy migrate` is a fastCommand that SKIPS the preloader's keyed
+          # autoLoadEnv, so it never decrypts .env.<env> on its own. Source the
+          # already-decrypted shared/.env (+ .env.keys) first so the plaintext
+          # config is in the shell env before buddy loads.
+          # Y = run migrations, n = do NOT apply destructive drops (two_factor_* etc.)
+          $SSH "cd ${APP_DIR}/current && set -a && . ${APP_DIR}/shared/.env && . ${APP_DIR}/shared/.env.keys && set +a && printf 'Y\nn\n' | bun node_modules/@stacksjs/buddy/dist/cli.js migrate" \
+            || echo "::warning::migrate returned non-zero — inspect the output above"

@@ -1,0 +1,542 @@
+<script server>
+// loghq log stream. Authenticates the current user from the token cookie
+// (mirrored from localStorage by login/register), loads THEIR projects
+// owner-scoped, and renders the active one's log stream (newest first) with
+// level-threshold, time-range, and text-search filters. Reads via db.unsafe.
+const meta = { title: 'loghq - Logs', description: 'Log streaming' }
+
+const { db } = await import('@stacksjs/database')
+
+// Query params come from globalThis.__stxServeSearch (the dev server stashes
+// url.search there).
+const query = new URLSearchParams((typeof globalThis !== 'undefined' && globalThis.__stxServeSearch) || '')
+
+// Level filter is a MINIMUM-severity threshold: the key names the floor, and we
+// expand it to the set of levels at or above it. Whitelisted — the raw param is
+// never interpolated into SQL.
+const LEVEL_ORDER = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency']
+const LEVEL_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'debug', label: 'Debug+' },
+  { key: 'info', label: 'Info+' },
+  { key: 'warning', label: 'Warn+' },
+  { key: 'error', label: 'Error+' },
+]
+const levelFilter = LEVEL_TABS.some(t => t.key === query.get('level')) ? query.get('level') : 'all'
+const levelSet = (levelFilter === 'all' || levelFilter === 'debug')
+  ? null
+  : LEVEL_ORDER.slice(LEVEL_ORDER.indexOf(levelFilter))
+
+// Free-text search over the message (bounded, passed as a bound param).
+const search = (query.get('q') || '').slice(0, 200)
+
+// Date ranges are a whitelist: the key comes from the URL, but only the mapped
+// interval string (never the raw param) is ever interpolated into SQL.
+const RANGES = [
+  { key: '1h', label: '1h', interval: '1 hour' },
+  { key: '24h', label: '24h', interval: '24 hours' },
+  { key: '7d', label: '7d', interval: '7 days' },
+  { key: '30d', label: '30d', interval: '30 days' },
+  { key: 'all', label: 'All time', interval: null },
+]
+const rangeFilter = RANGES.some(r => r.key === query.get('range')) ? query.get('range') : '24h'
+const activeRange = RANGES.find(r => r.key === rangeFilter)
+
+const requestedProject = query.get('project')
+const cookieProject = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_project')) || ''
+
+const PAGE_SIZE = 50
+const pageParam = Number.parseInt(query.get('page') || '1', 10)
+const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
+
+// Authenticate from the token cookie (mirrored from localStorage by
+// login/register). A project the user does not own is never resolved, so no
+// tenant can read another tenant's logs by guessing a project id.
+const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+let user = null
+if (token) {
+  try {
+    const { Auth } = await import('@stacksjs/auth')
+    user = await Auth.getUserFromToken(token)
+  }
+  catch { user = null }
+}
+
+// Load the user's OWN projects (plus invited) and pick the active one.
+let projects = []
+let activeProject = null
+let needsOnboarding = false
+let pendingInvites = []
+if (user) {
+  const userEmail = String(user.email || '').trim().toLowerCase()
+  projects = (await db.unsafe(
+    `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.created_at, p.is_active,
+            (p.owner_id = $1) AS is_owner
+     FROM projects p
+     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
+     WHERE p.owner_id = $1 OR m.email IS NOT NULL
+     ORDER BY p.created_at DESC NULLS LAST, p.id`,
+    [Number(user.id), userEmail],
+  )) ?? []
+  pendingInvites = (await db.unsafe(
+    `SELECT i.token, p.name AS project_name FROM project_invites i
+     JOIN projects p ON p.id = i.project_id
+     WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
+    [userEmail],
+  )) ?? []
+  if (projects.length === 0 && pendingInvites.length === 0)
+    needsOnboarding = true
+  else if (projects.length > 0)
+    activeProject = projects.find(p => p.id === requestedProject) || projects.find(p => p.id === cookieProject) || projects[0]
+}
+const projectId = activeProject?.id || null
+
+// Canonical dashboard URL for a filter state; defaults are omitted so links stay
+// clean. The project rides the loghq_project cookie. Changing any filter resets
+// to page 1.
+function pageUrl(overrides) {
+  const state = { level: levelFilter, range: rangeFilter, q: search, page: requestedPage, ...overrides }
+  const p = new URLSearchParams()
+  if (state.level && state.level !== 'all')
+    p.set('level', state.level)
+  if (state.range && state.range !== '24h')
+    p.set('range', state.range)
+  if (state.q)
+    p.set('q', state.q)
+  if (state.page && state.page > 1)
+    p.set('page', String(state.page))
+  const s = p.toString()
+  return s ? `/dashboard?${s}` : '/dashboard'
+}
+
+const levelTabs = LEVEL_TABS.map(t => ({ ...t, href: pageUrl({ level: t.key, page: 1 }) }))
+const rangeTabs = RANGES.map(r => ({ ...r, href: pageUrl({ range: r.key, page: 1 }) }))
+
+let logs = []
+let counts = { total: 0, warnings: 0, errors: 0 }
+let live = false
+let pager = { from: 0, to: 0, total: 0, page: 1, pages: 1, hasPrev: false, hasNext: false, prevHref: '', nextHref: '' }
+
+async function loadData() {
+  if (!projectId)
+    return
+  // WHERE for the stream: project + level threshold + range + search. The
+  // interval string is from the RANGES whitelist; levels come from the
+  // LEVEL_ORDER whitelist; the search term is a bound param.
+  const conds = ['project_id = $1']
+  const params = [projectId]
+  if (levelSet) {
+    params.push(levelSet)
+    conds.push(`level = ANY($${params.length})`)
+  }
+  // timestamp is stored as an ISO-8601 varchar (the ingest writes toISOString()),
+  // so cast before comparing against a real timestamp.
+  if (activeRange.interval)
+    conds.push(`timestamp::timestamptz >= NOW() - INTERVAL '${activeRange.interval}'`)
+  if (search) {
+    params.push(`%${search}%`)
+    conds.push(`message ILIKE $${params.length}`)
+  }
+  const where = conds.join(' AND ')
+
+  const filteredTotal = Number((await db.unsafe(`SELECT COUNT(*) AS n FROM log_entries WHERE ${where}`, params))?.[0]?.n ?? 0)
+  const pages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE))
+  const page = Math.min(requestedPage, pages)
+  const offset = (page - 1) * PAGE_SIZE
+
+  logs = (await db.unsafe(
+    `SELECT id, level, message, channel, environment, release, framework, host, context, timestamp
+     FROM log_entries WHERE ${where} ORDER BY timestamp DESC, id DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+    params,
+  )) ?? []
+
+  pager = {
+    from: filteredTotal === 0 ? 0 : offset + 1,
+    to: offset + logs.length,
+    total: filteredTotal,
+    page,
+    pages,
+    hasPrev: page > 1,
+    hasNext: page < pages,
+    prevHref: pageUrl({ page: page - 1 }),
+    nextHref: pageUrl({ page: page + 1 }),
+  }
+
+  // Stats respect the date range but not the level tabs (which only slice the
+  // list). Warnings = warning; errors = error and worse.
+  const cconds = ['project_id = $1']
+  if (activeRange.interval)
+    cconds.push(`timestamp::timestamptz >= NOW() - INTERVAL '${activeRange.interval}'`)
+  const c = (await db.unsafe(
+    `SELECT COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE level = 'warning') AS warnings,
+            COUNT(*) FILTER (WHERE level IN ('error','critical','alert','emergency')) AS errors
+     FROM log_entries WHERE ${cconds.join(' AND ')}`,
+    [projectId],
+  ))?.[0]
+  counts = { total: Number(c?.total ?? 0), warnings: Number(c?.warnings ?? 0), errors: Number(c?.errors ?? 0) }
+  live = true
+}
+
+try {
+  if (projectId)
+    await Promise.race([loadData(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000))])
+}
+catch {
+  live = false
+}
+
+// Severity drives the one accent-adjacent semantic color on the list rail.
+function levelColor(level) {
+  switch (level) {
+    case 'emergency': case 'alert': case 'critical': return '#f43f5e'
+    case 'error': return '#fb7185'
+    case 'warning': return '#f59e0b'
+    case 'notice': return '#38bdf8'
+    case 'info': return '#60a5fa'
+    default: return '#94a3b8' // debug
+  }
+}
+function levelLabel(level) {
+  return String(level || 'info').toUpperCase()
+}
+// Absolute clock (HH:MM:SS) for the row; the stream is read against wall time.
+function clockOf(iso) {
+  if (!iso) return '--:--:--'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso).slice(11, 19) || '--:--:--'
+  return d.toISOString().slice(11, 19)
+}
+function dayOf(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(5, 10)
+}
+// Pretty-print stored JSON context for the expanded row (best-effort).
+function prettyContext(raw) {
+  if (!raw) return ''
+  try { return JSON.stringify(JSON.parse(raw), null, 2) }
+  catch { return String(raw) }
+}
+
+const stats = [
+  { label: 'Log entries', value: counts.total.toLocaleString() },
+  { label: 'Warnings', value: counts.warnings.toLocaleString() },
+  { label: 'Errors', value: counts.errors.toLocaleString() },
+]
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* loghq - Space Grotesk display + JetBrains Mono for numerics/code/log lines.
+   One accent (rose), off-black/off-white, auto light+dark, radius lock 12px. */
+:root {
+  --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
+  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #e11d48;
+  --rail: rgba(225,29,72,0.14); --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #090b11; --panel: #10131c; --border: rgba(148,163,184,0.12);
+    --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #fb7185; --rail: rgba(251,113,133,0.16); }
+}
+:root[data-theme="dark"] { --bg: #090b11; --panel: #10131c; --border: rgba(148,163,184,0.12);
+  --text: #f3f5f9; --text-2: #b3bccb; --text-3: #667085; --accent: #fb7185; --rail: rgba(251,113,133,0.16); }
+:root[data-theme="light"] { --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
+  --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #e11d48; --rail: rgba(225,29,72,0.14); }
+
+body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
+.wordmark { font-family: var(--sans); font-weight: 700; letter-spacing: -0.03em; }
+.wordmark-link { color: inherit; text-decoration: none; transition: opacity 0.15s ease; }
+.wordmark-link:hover { opacity: 0.75; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease; }
+a.pill:hover, button.pill:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+a.pill:active, button.pill:active { transform: translateY(1px); }
+.log-row { transition: background-color 0.12s ease; }
+.log-row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+details[open] > .log-row { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+summary { list-style: none; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+.search-input { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; color: var(--text); outline: none; transition: border-color 0.15s ease; }
+.search-input:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.search-input::placeholder { color: var(--text-3); }
+.chrome-logout { border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
+.chrome-logout:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.chrome-upgrade { background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
+.chrome-upgrade:hover { filter: brightness(1.12); }
+.chrome-upgrade:active { transform: translateY(1px); }
+.reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
+@keyframes reveal { to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 9px; color: var(--text-2); background: var(--panel); cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease; }
+.icon-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.icon-btn svg { width: 17px; height: 17px; }
+.theme-btn .ic-sun, .theme-btn .ic-moon { display: none; }
+.theme-btn[data-t="light"] .ic-sun { display: block; }
+.theme-btn[data-t="dark"] .ic-moon { display: block; }
+.ctx-pre { white-space: pre-wrap; word-break: break-word; }
+</style>
+
+<!-- Apply the saved theme before first paint (no flash of the wrong theme). -->
+<script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+
+<div class="min-h-[100dvh] px-5 py-10 md:px-10">
+  <div class="max-w-5xl mx-auto">
+
+    @if (!user)
+      <div id="auth-pending" class="text-center py-24 text-sm" style="color: var(--text-3)">Loading…</div>
+    @endif
+
+    @if (user && needsOnboarding)
+      <div class="text-center py-24 text-sm" style="color: var(--text-3)">Setting up your workspace…</div>
+      <script>window.location.replace('/projects/new')</script>
+    @endif
+
+    @if (user && !needsOnboarding)
+
+    @if (pendingInvites.length)
+      <div id="invite-banner" class="mb-7">
+        @foreach (pendingInvites as inv)
+          <div class="panel flex flex-wrap items-center gap-3 px-5 py-3.5 mb-2.5" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" data-token="{{ inv.token }}">
+            <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
+            <div class="ml-auto flex items-center gap-2">
+              <button class="js-invite-join pill px-4 py-1.5 text-sm font-semibold border" style="color:#fff; background:var(--accent); border-color:var(--accent)">Join</button>
+              <button class="js-invite-dismiss pill px-3 py-1.5 text-sm border" style="color:var(--text-3); border-color:var(--border)" title="Hide for now">Dismiss</button>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    @endif
+
+    @if (projectId)
+    <header class="flex flex-wrap items-end justify-between gap-5 mb-8">
+      <div class="flex items-center gap-3">
+        <a href="/projects" class="wordmark-link"><h1 class="wordmark text-2xl md:text-[28px] leading-none">loghq</h1></a>
+        @if (projects.length > 1)
+          <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
+                  class="panel mono px-3 py-1.5 text-sm" style="color: var(--text-2)">
+            @foreach (projects as p)
+              <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
+            @endforeach
+          </select>
+        @else
+          <span class="mono text-sm" style="color: var(--text-2)">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
+        @endif
+        <a href="/projects" class="pill px-3 py-1.5 text-sm font-medium border" style="color: var(--text-2); border-color: var(--border)">All apps</a>
+        <a href="/projects/new" class="pill px-3 py-1.5 text-sm font-medium border" style="color: var(--text-2); border-color: var(--border)">+ New app</a>
+        <button id="theme-toggle" class="icon-btn theme-btn" title="Toggle theme" aria-label="Toggle theme">
+          <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="/settings" data-no-router class="icon-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </a>
+      </div>
+      <nav class="flex flex-wrap items-center gap-1.5">
+        @foreach (levelTabs as f)
+          <a href="{{ f.href }}"
+             class="pill px-3.5 py-1.5 text-sm font-medium border"
+             style="{{ f.key === levelFilter ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ f.label }}</a>
+        @endforeach
+        <span class="w-px h-4 mx-1.5 shrink-0" style="background: var(--border)" aria-hidden="true"></span>
+        @foreach (rangeTabs as r)
+          <a href="{{ r.href }}"
+             class="pill mono px-3 py-1.5 text-xs font-medium border"
+             style="{{ r.key === rangeFilter ? 'color: var(--accent); border-color: var(--accent)' : 'color: var(--text-3); border-color: var(--border)' }}">{{ r.label }}</a>
+        @endforeach
+      </nav>
+    </header>
+
+    <!-- Search: plain GET form, preserves level + range via hidden fields. -->
+    <form method="get" action="/dashboard" class="mb-6 flex items-center gap-2">
+      @if (levelFilter !== 'all')<input type="hidden" name="level" value="{{ levelFilter }}">@endif
+      @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
+      <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
+             class="search-input mono flex-1 px-4 py-2.5 text-sm" />
+      <button type="submit" class="pill px-4 py-2.5 text-sm font-semibold border" style="color:#fff; background:var(--accent); border-color:var(--accent)">Search</button>
+      @if (search)
+        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="pill px-3 py-2.5 text-sm border" style="color: var(--text-3); border-color: var(--border)">Clear</a>
+      @endif
+    </form>
+
+    @if (!live)
+      <div class="panel px-4 py-3 mb-8 text-sm reveal" style="color: var(--text-2)">
+        <span class="font-semibold" style="color: var(--text)">Waiting for data.</span> Make sure Postgres is provisioned.
+      </div>
+    @endif
+
+    <!-- Stats: hairline-separated, mono numerics -->
+    <div class="panel grid grid-cols-3 divide-x mb-8 reveal" style="border-color: var(--border)">
+      @foreach (stats as s)
+        <div class="px-5 py-5" style="border-color: var(--border)">
+          <div class="text-xs font-medium uppercase tracking-wider mb-2" style="color: var(--text-3)">{{ s.label }}</div>
+          <div class="mono text-3xl font-semibold tracking-tight">{{ s.value }}</div>
+        </div>
+      @endforeach
+    </div>
+
+    <section class="panel overflow-hidden reveal">
+      <div class="flex items-center justify-between px-5 py-3.5 border-b" style="border-color: var(--border)">
+        <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-3)">Stream</span>
+        <span class="mono text-xs" style="color: var(--text-3)">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
+      </div>
+
+      @forelse (logs as entry)
+        <details class="border-b" style="border-color: var(--border)">
+          <summary class="log-row flex items-center gap-3 px-5 py-2.5">
+            <span class="w-1 self-stretch rounded-full shrink-0" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
+            <span class="mono text-xs shrink-0 tabular-nums" style="color: var(--text-3)" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
+            <span class="mono text-[11px] font-semibold uppercase shrink-0 w-16 text-center rounded px-1 py-0.5" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 12%, transparent)">{{ levelLabel(entry.level) }}</span>
+            @if (entry.channel)
+              <span class="mono text-[11px] shrink-0 max-w-28 truncate" style="color: var(--text-3)">{{ entry.channel }}</span>
+            @endif
+            <span class="mono text-sm min-w-0 flex-1 truncate" style="color: var(--text)">{{ entry.message }}</span>
+          </summary>
+          <div class="px-5 pb-4 pt-1" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
+            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs mono" style="color: var(--text-3)">
+              <span>{{ dayOf(entry.timestamp) }} {{ clockOf(entry.timestamp) }} UTC</span>
+              @if (entry.environment)<span>env: <span style="color: var(--text-2)">{{ entry.environment }}</span></span>@endif
+              @if (entry.framework)<span>via: <span style="color: var(--text-2)">{{ entry.framework }}</span></span>@endif
+              @if (entry.release)<span>release: <span style="color: var(--text-2)">{{ entry.release }}</span></span>@endif
+              @if (entry.host)<span>host: <span style="color: var(--text-2)">{{ entry.host }}</span></span>@endif
+            </div>
+            <div class="mono text-sm mb-3" style="color: var(--text); white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
+            @if (entry.context)
+              <pre class="ctx-pre mono text-xs panel px-3 py-2.5 overflow-x-auto" style="color: var(--text-2)">{{ prettyContext(entry.context) }}</pre>
+            @endif
+          </div>
+        </details>
+      @empty
+        <div class="px-5 py-16 text-center">
+          <div class="text-base font-medium mb-1">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
+          <div class="text-sm" style="color: var(--text-3)">Point an SDK at this project and its logs stream in here live.</div>
+        </div>
+      @endforelse
+
+      @if (pager.pages > 1)
+        <div class="flex items-center justify-between px-5 py-3.5">
+          <span class="mono text-xs" style="color: var(--text-3)">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
+          <div class="flex items-center gap-2">
+            @if (pager.hasPrev)
+              <a href="{{ pager.prevHref }}" class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-2); border-color: var(--border)">&larr; Newer</a>
+            @else
+              <span class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-3); border-color: var(--border); opacity: 0.45">&larr; Newer</span>
+            @endif
+            <span class="mono text-xs tabular-nums" style="color: var(--text-3)">{{ pager.page }} / {{ pager.pages }}</span>
+            @if (pager.hasNext)
+              <a href="{{ pager.nextHref }}" class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-2); border-color: var(--border)">Older &rarr;</a>
+            @else
+              <span class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-3); border-color: var(--border); opacity: 0.45">Older &rarr;</span>
+            @endif
+          </div>
+        </div>
+      @endif
+    </section>
+    @else
+      <div class="text-center py-20">
+        <a href="/projects" data-no-router class="wordmark-link"><h1 class="wordmark text-2xl mb-3">loghq</h1></a>
+        <p class="text-sm" style="color: var(--text-3)">Accept an invitation above to get started, or <a href="/projects/new" data-no-router style="color: var(--accent)">create your own app</a>.</p>
+      </div>
+    @endif
+    @endif
+
+    <footer class="mt-12 text-center text-xs" style="color: var(--text-3)">
+      Log streaming on Stacks and Postgres. <span class="mono">loghq.org</span>
+    </footer>
+
+  </div>
+</div>
+
+<!-- Client guard: enforce the bearer token, mirror it into the cookie the
+     server authenticates from, and add the logout / plan chrome. -->
+<script>
+(function () {
+  var t = localStorage.getItem('token')
+  if (!t) { window.location.replace('/login'); return }
+  if (!/(^|;)\s*loghq_token=/.test(document.cookie)) {
+    document.cookie = 'loghq_token=' + t + '; path=/; max-age=2592000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
+    window.location.reload()
+    return
+  }
+  if (document.getElementById('auth-pending')) {
+    localStorage.removeItem('token'); localStorage.removeItem('user')
+    document.cookie = 'loghq_token=; path=/; max-age=0'
+    window.location.replace('/login')
+    return
+  }
+
+  function signOut() {
+    localStorage.removeItem('token'); localStorage.removeItem('user')
+    document.cookie = 'loghq_token=; path=/; max-age=0'
+    window.location.assign('/login')
+  }
+  var auth = { headers: { Authorization: 'Bearer ' + t } }
+
+  var qs = new URLSearchParams(window.location.search)
+  if (qs.get('project')) {
+    document.cookie = 'loghq_project=' + encodeURIComponent(qs.get('project')) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
+    qs.delete('project')
+    var rest = qs.toString()
+    window.history.replaceState(null, '', window.location.pathname + (rest ? '?' + rest : ''))
+  }
+
+  var inviteBanner = document.getElementById('invite-banner')
+  if (inviteBanner) inviteBanner.addEventListener('click', function (e) {
+    var row = e.target.closest('[data-token]')
+    if (!row) return
+    if (e.target.classList.contains('js-invite-dismiss')) { row.remove(); return }
+    if (!e.target.classList.contains('js-invite-join')) return
+    var jbtn = e.target
+    jbtn.disabled = true; jbtn.textContent = 'Joining…'
+    fetch('/api/invites/accept', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: row.getAttribute('data-token') }) })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
+      .then(function (res) {
+        if (!res.ok) { jbtn.disabled = false; jbtn.textContent = 'Join'; return }
+        document.cookie = 'loghq_project=' + encodeURIComponent(res.b.project) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
+        window.location.assign('/dashboard')
+      })
+      .catch(function () { jbtn.disabled = false; jbtn.textContent = 'Join' })
+  })
+
+  var themeBtn = document.getElementById('theme-toggle')
+  if (themeBtn) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)')
+    var effTheme = function () { return document.documentElement.getAttribute('data-theme') || (mq.matches ? 'dark' : 'light') }
+    var paintTheme = function () { themeBtn.setAttribute('data-t', effTheme()) }
+    paintTheme()
+    themeBtn.addEventListener('click', function () {
+      var next = effTheme() === 'dark' ? 'light' : 'dark'
+      document.documentElement.setAttribute('data-theme', next)
+      try { localStorage.setItem('loghq_theme', next) } catch (e) {}
+      paintTheme()
+    })
+  }
+
+  var btn = document.createElement('button')
+  btn.textContent = 'Log out'
+  btn.className = 'chrome-logout'
+  btn.style.cssText = 'position:fixed;top:16px;right:18px;font:500 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;cursor:pointer;z-index:60'
+  btn.addEventListener('click', signOut)
+  var up = document.createElement('a')
+  up.textContent = 'Upgrade'; up.href = '/pricing'
+  up.className = 'chrome-upgrade'
+  up.style.cssText = 'position:fixed;top:16px;right:112px;font:600 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;text-decoration:none;z-index:60'
+  document.body.appendChild(up); document.body.appendChild(btn)
+
+  fetch('/api/me', auth)
+    .then(function (r) { if (r.status === 401) { signOut(); return null } return r.ok ? r.json() : null })
+    .then(function (d) {
+      if (d && d.pro) {
+        up.textContent = 'Pro'; up.removeAttribute('href')
+        up.style.background = 'transparent'; up.style.color = 'var(--accent)'
+        up.style.border = '1px solid var(--accent)'; up.style.cursor = 'default'
+      }
+    })
+    .catch(function () {})
+})()
+</script>
