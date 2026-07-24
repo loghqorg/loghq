@@ -1,30 +1,31 @@
 <script server>
 // The real SDK snippet doubles as the hero visual. Legitimate product content,
 // not a div-based fake screenshot.
-const snippet = `import { loghq } from '@loghq/sdk'
+const snippet = `// config/logging.php
+'channels' => [
+  'loghq' => ['driver' => 'loghq'],
+  'stack' => ['channels' => ['single', 'loghq']],
+]
 
-loghq.init({
-  dsn: 'https://ingest.loghq.org/p_9f2c',
-  release: 'checkout@2.14.0',
-  environment: 'production',
-})
+// then log as you already do
+Log::info('order placed', ['order_id' => 42])
+Log::warning('inventory low', ['sku' => 'ABC-1'])
 
-// every uncaught error is captured, fingerprinted,
-// and grouped into a single issue automatically`
+// every line streams to loghq — searchable, filterable, live`
 
 const featureCells = [
-  { slug: 'capture', cls: 'cell', title: 'Automatic capture', body: 'One init call captures every uncaught error with its stack, release, and environment.' },
-  { slug: 'grouping', cls: 'cell tint', title: 'Fingerprint grouping', body: 'Identical errors fold into one issue with a live count and an affected-user tally.' },
-  { slug: 'releases', cls: 'cell', title: 'Releases and environments', body: 'Tag every event with a release and environment so a regression names its own deploy.' },
-  { slug: 'stack-traces', cls: 'cell', title: 'Readable stack traces', body: 'Upload a source map and every frame resolves back to your original file and line.' },
-  { slug: 'alerts', cls: 'cell tint', title: 'Alerts and triage', body: 'Get told when an issue is new or spiking, and stay quiet for the known and handled.' },
-  { slug: 'self-host', cls: 'cell', title: 'Self-hosting', body: 'Open source, on your own Postgres. Sensitive stack data never leaves your servers.' },
+  { slug: 'capture', cls: 'cell', title: 'Every level, captured', body: 'One log channel ships debug through emergency — all eight severities, with their structured context.' },
+  { slug: 'grouping', cls: 'cell tint', title: 'Filter by severity', body: 'Threshold the stream to warnings-and-up, errors-and-up, or a single level. Signal without the noise.' },
+  { slug: 'releases', cls: 'cell', title: 'Releases and environments', body: 'Every line is tagged with its environment and release, so you can scope the stream to one deploy.' },
+  { slug: 'stack-traces', cls: 'cell', title: 'Structured context', body: 'Expand any line to see its full JSON context — ids, timings, payloads — pretty-printed, not flattened.' },
+  { slug: 'alerts', cls: 'cell tint', title: 'Search everything', body: 'Full-text search across every message, scoped by level and time window. Find the one line that matters.' },
+  { slug: 'self-host', cls: 'cell', title: 'Self-hosting', body: 'Open source, on your own Postgres. Sensitive log data never leaves your servers.' },
 ]
 
 const steps = [
-  { num: '01', verb: 'Install', body: 'Drop the SDK into your app. One init call wires up global capture across every runtime.' },
-  { num: '02', verb: 'Capture', body: 'Uncaught errors, stack traces, release, and environment are collected the moment they throw.' },
-  { num: '03', verb: 'Triage', body: 'Identical errors fold into one issue with a live count and affected-user tally, sorted by impact.' },
+  { num: '01', verb: 'Install', body: 'Add the loghq log channel to your app. One line in your logging config wires up the stream.' },
+  { num: '02', verb: 'Log', body: 'Keep logging exactly as you do today — every Log call is shipped to loghq in the background.' },
+  { num: '03', verb: 'Stream', body: 'Watch lines land live, filter by level and time, search messages, and inspect structured context.' },
 ]
 </script>
 
@@ -53,8 +54,8 @@ const steps = [
 
       <section class="hero">
         <div class="reveal">
-          <h1 class="hero-title">Error tracking for people who ship.</h1>
-          <p class="hero-sub">Capture every production error, fold the duplicates into one issue, and see what is actually breaking. Signal, not a wall of noise.</p>
+          <h1 class="hero-title">Your logs, finally worth reading.</h1>
+          <p class="hero-sub">Stream every log line from your app into a fast, searchable UI. Filter by level, search messages, inspect structured context — instead of tailing a file.</p>
           <div class="hero-actions">
             <a class="btn primary" data-auth-cta href="/register">Get started</a>
             <a class="btn ghost" href="https://github.com/stacksjs/loghq">View source</a>
@@ -64,7 +65,7 @@ const steps = [
         <div class="hero-code reveal" style="animation-delay: 0.08s">
           <div class="code-bar">
             <span class="dot" aria-hidden="true"></span>
-            <span class="chart-cap">app/error-boundary.ts</span>
+            <span class="chart-cap">config/logging.php</span>
           </div>
           <pre class="code-body"><code>{{ snippet }}</code></pre>
         </div>
@@ -72,7 +73,7 @@ const steps = [
 
       <section id="features" class="section reveal" aria-labelledby="features-heading">
         <div class="section-head">
-          <h2 id="features-heading" class="section-title">From throw to triaged, without the noise.</h2>
+          <h2 id="features-heading" class="section-title">From scattered log files to one live stream.</h2>
         </div>
         <div class="bento">
           @foreach (featureCells as cell)

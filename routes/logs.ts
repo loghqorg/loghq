@@ -242,11 +242,15 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const params: any[] = [projectId]
 
   // Level filter: exact, or comma-separated set (e.g. ?level=error,critical).
+  // Expanded to individual placeholders (`IN ($n,$n+1,…)`) rather than a single
+  // array param — db.unsafe binds a JS array as a malformed Postgres array
+  // literal, so `= ANY($n)` fails.
   if (q.level) {
     const levels = String(q.level).split(',').map(s => s.trim().toLowerCase()).filter(l => LEVELS.has(l))
     if (levels.length) {
-      params.push(levels)
-      where.push(`level = ANY($${params.length})`)
+      const placeholders = levels.map((_, i) => `$${params.length + i + 1}`).join(',')
+      levels.forEach(l => params.push(l))
+      where.push(`level IN (${placeholders})`)
     }
   }
   if (q.channel) {

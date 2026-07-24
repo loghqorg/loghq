@@ -126,8 +126,11 @@ async function loadData() {
   const conds = ['project_id = $1']
   const params = [projectId]
   if (levelSet) {
-    params.push(levelSet)
-    conds.push(`level = ANY($${params.length})`)
+    // Individual placeholders (`IN (...)`), not `= ANY($n)` with an array param:
+    // db.unsafe binds a JS array as a malformed Postgres array literal.
+    const placeholders = levelSet.map((_, i) => `$${params.length + i + 1}`).join(',')
+    levelSet.forEach(l => params.push(l))
+    conds.push(`level IN (${placeholders})`)
   }
   // timestamp is stored as an ISO-8601 varchar (the ingest writes toISOString()),
   // so cast before comparing against a real timestamp.
