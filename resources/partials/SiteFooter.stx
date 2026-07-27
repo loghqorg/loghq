@@ -54,7 +54,7 @@
       <span class="brand-mark">b</span>
       <span class="brand-name">loghq</span>
     </a>
-    <span>Open source error tracking, built on Stacks and Postgres.</span>
+    <span>Open source log streaming, built on Stacks and Postgres.</span>
   </div>
 </footer>
 

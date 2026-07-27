@@ -11,20 +11,20 @@ const snippet = `// config/logging.php
 Log::info('order placed', ['order_id' => 42])
 Log::warning('inventory low', ['sku' => 'ABC-1'])
 
-// every line streams to loghq — searchable, filterable, live`
+// every line streams to loghq: searchable, filterable, live`
 
 const featureCells = [
-  { slug: 'capture', cls: 'cell', title: 'Every level, captured', body: 'One log channel ships debug through emergency — all eight severities, with their structured context.' },
-  { slug: 'grouping', cls: 'cell tint', title: 'Filter by severity', body: 'Threshold the stream to warnings-and-up, errors-and-up, or a single level. Signal without the noise.' },
-  { slug: 'releases', cls: 'cell', title: 'Releases and environments', body: 'Every line is tagged with its environment and release, so you can scope the stream to one deploy.' },
-  { slug: 'stack-traces', cls: 'cell', title: 'Structured context', body: 'Expand any line to see its full JSON context — ids, timings, payloads — pretty-printed, not flattened.' },
+  { slug: 'capture', cls: 'cell feature', title: 'Every level, captured', body: 'One log channel ships debug through emergency: all eight severities, with their structured context.' },
+  { slug: 'grouping', cls: 'cell', title: 'Filter by severity', body: 'Threshold the stream to warnings-and-up, errors-and-up, or a single level. Signal without the noise.' },
+  { slug: 'releases', cls: 'cell tint', title: 'Releases and environments', body: 'Every line is tagged with its environment and release, so you can scope the stream to one deploy.' },
+  { slug: 'stack-traces', cls: 'cell', title: 'Structured context', body: 'Expand any line to see its full JSON context (ids, timings, payloads), pretty-printed, not flattened.' },
   { slug: 'alerts', cls: 'cell tint', title: 'Search everything', body: 'Full-text search across every message, scoped by level and time window. Find the one line that matters.' },
   { slug: 'self-host', cls: 'cell', title: 'Self-hosting', body: 'Open source, on your own Postgres. Sensitive log data never leaves your servers.' },
 ]
 
 const steps = [
   { num: '01', verb: 'Install', body: 'Add the loghq log channel to your app. One line in your logging config wires up the stream.' },
-  { num: '02', verb: 'Log', body: 'Keep logging exactly as you do today — every Log call is shipped to loghq in the background.' },
+  { num: '02', verb: 'Log', body: 'Keep logging exactly as you do today. Every Log call is shipped to loghq in the background.' },
   { num: '03', verb: 'Stream', body: 'Watch lines land live, filter by level and time, search messages, and inspect structured context.' },
 ]
 </script>
@@ -55,7 +55,7 @@ const steps = [
       <section class="hero">
         <div class="reveal">
           <h1 class="hero-title">Your logs, finally worth reading.</h1>
-          <p class="hero-sub">Stream every log line from your app into a fast, searchable UI. Filter by level, search messages, inspect structured context — instead of tailing a file.</p>
+          <p class="hero-sub">Stream every log line from your app into a fast, searchable UI. Filter by level, search messages, and inspect structured context instead of tailing a file.</p>
           <div class="hero-actions">
             <a class="btn primary" data-auth-cta href="/register">Get started</a>
             <a class="btn ghost" href="https://github.com/stacksjs/loghq">View source</a>
@@ -105,14 +105,14 @@ const steps = [
 
       <section class="section reveal" aria-label="Open source and self-hosting">
         <div class="open-band">
-          <p><strong>Open source, and yours to run.</strong> Host loghq on your own Postgres so sensitive stack data never leaves your infrastructure, or start on the hosted tier in a minute.</p>
+          <p><strong>Open source, and yours to run.</strong> Host loghq on your own Postgres so sensitive log data never leaves your infrastructure, or start on the hosted tier in a minute.</p>
           <a class="btn ghost" href="/features/self-host">Read about self-hosting</a>
         </div>
       </section>
 
       <section class="section reveal" aria-label="Get started">
         <div class="cta-band">
-          <h2>Ship with a net under you.</h2>
+          <h2>Stop tailing log files.</h2>
           <div class="cta-actions">
             <a class="btn primary" data-auth-cta href="/register">Get started</a>
             <a class="btn ghost" href="/use-cases">See use cases</a>

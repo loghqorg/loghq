@@ -210,6 +210,11 @@ a.cell:hover { background: var(--surface-2); }
 .cell.lead { grid-column: span 1; }
 .cell.tint { background: var(--accent-soft); }
 a.cell.tint:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+/* Featured bento cell: a soft rose wash (bughq accent) tinted into a corner, so
+   the grid has visual variation rather than six identical text cards. */
+.cell.feature { background: radial-gradient(120% 140% at 100% 0%, var(--accent-soft), transparent 58%), var(--surface); }
+a.cell.feature:hover { background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%), var(--surface-2); }
+.cell.feature h3 { color: var(--accent); }
 .cell-more { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); transition: color 0.16s ease, gap 0.16s ease; }
 .cell-more::after { content: "\2192"; }
 a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
