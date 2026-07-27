@@ -203,6 +203,17 @@ function levelColor(level) {
 function levelLabel(level) {
   return String(level || 'info').toUpperCase()
 }
+// Compact fixed-width labels so the level column stays aligned across every row
+// (a log tail reads best when the message always starts at the same x).
+function chipLabel(level) {
+  switch (level) {
+    case 'emergency': return 'EMERG'
+    case 'critical': return 'CRIT'
+    case 'warning': return 'WARN'
+    case 'notice': return 'NOTE'
+    default: return String(level || 'info').toUpperCase()
+  }
+}
 // Absolute clock (HH:MM:SS) for the row; the stream is read against wall time.
 function clockOf(iso) {
   if (!iso) return '--:--:--'
@@ -222,10 +233,12 @@ function prettyContext(raw) {
   catch { return String(raw) }
 }
 
+// Stats carry state, not just a number: the dot + number tint go live only when
+// the count is non-zero, so "are there errors right now?" reads at a glance.
 const stats = [
-  { label: 'Log entries', value: counts.total.toLocaleString() },
-  { label: 'Warnings', value: counts.warnings.toLocaleString() },
-  { label: 'Errors', value: counts.errors.toLocaleString() },
+  { label: 'Log entries', value: counts.total.toLocaleString(), dot: false, on: false, color: null },
+  { label: 'Warnings', value: counts.warnings.toLocaleString(), dot: true, on: counts.warnings > 0, color: '#f59e0b' },
+  { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, on: counts.errors > 0, color: '#f43f5e' },
 ]
 </script>
 
@@ -284,20 +297,53 @@ summary::-webkit-details-marker { display: none; }
 .theme-btn[data-t="light"] .ic-sun { display: block; }
 .theme-btn[data-t="dark"] .ic-moon { display: block; }
 .ctx-pre { white-space: pre-wrap; word-break: break-word; }
+/* Keyboard focus — a visible ring on every interactive control (accessibility,
+   not optional). Search gets an inset ring so it doesn't clash with its pill. */
+a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
+}
+summary:focus-visible { outline-offset: -2px; }
+.search-input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* Physical press feedback on a log row. */
+.log-row:active { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+/* Log stream aligned as fixed columns: rail · time · level · channel · message. */
+.log-row { display: grid; grid-template-columns: 3px 4.75rem 3.75rem 6rem minmax(0, 1fr); align-items: center; column-gap: 0.75rem; }
+.lvl-chip { display: inline-block; text-align: center; white-space: nowrap; }
+/* Subtle grain so the flat surfaces don't read as sterile. Fixed, non-blocking,
+   barely-there; sits under the floating chrome (z-60). */
+.grain { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.03;
+  background-size: 170px 170px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+@media (prefers-reduced-motion: no-preference) { .grain { opacity: 0.032; } }
+/* Project dropdown: the native select chevron hugged the rounded border. Reset
+   the native appearance and draw our own with a comfortable inset + room for the
+   value text. Chevron is themed to --text-3 in each mode. */
+select.panel {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  padding-right: 2rem; background-repeat: no-repeat;
+  background-position: right 0.7rem center; background-size: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) { select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); } }
+:root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+:root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 </style>
 
 <!-- Apply the saved theme before first paint (no flash of the wrong theme). -->
 <script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
 
+<!-- Ambient grain overlay: barely-there texture so surfaces aren't sterile-flat. -->
+<div class="grain" aria-hidden="true"></div>
+
 <div class="min-h-[100dvh] px-5 py-10 md:px-10">
   <div class="max-w-5xl mx-auto">
 
     @if (!user)
-      <div id="auth-pending" class="text-center py-24 text-sm" style="color: var(--text-3)">Loading…</div>
+      <div id="auth-pending" class="text-center py-24 text-sm text-subtle">Loading…</div>
     @endif
 
     @if (user && needsOnboarding)
-      <div class="text-center py-24 text-sm" style="color: var(--text-3)">Setting up your workspace…</div>
+      <div class="text-center py-24 text-sm text-subtle">Setting up your workspace…</div>
       <script>window.location.replace('/projects/new')</script>
     @endif
 
@@ -309,8 +355,8 @@ summary::-webkit-details-marker { display: none; }
           <div class="panel flex flex-wrap items-center gap-3 px-5 py-3.5 mb-2.5" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" data-token="{{ inv.token }}">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="ml-auto flex items-center gap-2">
-              <button class="js-invite-join pill px-4 py-1.5 text-sm font-semibold border" style="color:#fff; background:var(--accent); border-color:var(--accent)">Join</button>
-              <button class="js-invite-dismiss pill px-3 py-1.5 text-sm border" style="color:var(--text-3); border-color:var(--border)" title="Hide for now">Dismiss</button>
+              <button class="js-invite-join pill px-4 py-1.5 text-sm font-semibold border bg-accent border-accent" style="color:#fff">Join</button>
+              <button class="js-invite-dismiss pill px-3 py-1.5 text-sm border text-subtle border-line" title="Hide for now">Dismiss</button>
             </div>
           </div>
         @endforeach
@@ -323,16 +369,16 @@ summary::-webkit-details-marker { display: none; }
         <a href="/projects" class="wordmark-link"><h1 class="wordmark text-2xl md:text-[28px] leading-none">loghq</h1></a>
         @if (projects.length > 1)
           <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
-                  class="panel mono px-3 py-1.5 text-sm" style="color: var(--text-2)">
+                  class="panel mono px-3 py-1.5 text-sm text-muted">
             @foreach (projects as p)
               <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
             @endforeach
           </select>
         @else
-          <span class="mono text-sm" style="color: var(--text-2)">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
+          <span class="mono text-sm text-muted">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
         @endif
-        <a href="/projects" class="pill px-3 py-1.5 text-sm font-medium border" style="color: var(--text-2); border-color: var(--border)">All apps</a>
-        <a href="/projects/new" class="pill px-3 py-1.5 text-sm font-medium border" style="color: var(--text-2); border-color: var(--border)">+ New app</a>
+        <a href="/projects" class="pill px-3 py-1.5 text-sm font-medium border text-muted border-line">All apps</a>
+        <a href="/projects/new" class="pill px-3 py-1.5 text-sm font-medium border text-muted border-line">+ New app</a>
         <button id="theme-toggle" class="icon-btn theme-btn" title="Toggle theme" aria-label="Toggle theme">
           <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -362,80 +408,82 @@ summary::-webkit-details-marker { display: none; }
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
       <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
              class="search-input mono flex-1 px-4 py-2.5 text-sm" />
-      <button type="submit" class="pill px-4 py-2.5 text-sm font-semibold border" style="color:#fff; background:var(--accent); border-color:var(--accent)">Search</button>
+      <button type="submit" class="pill px-4 py-2.5 text-sm font-semibold border bg-accent border-accent" style="color:#fff">Search</button>
       @if (search)
-        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="pill px-3 py-2.5 text-sm border" style="color: var(--text-3); border-color: var(--border)">Clear</a>
+        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="pill px-3 py-2.5 text-sm border text-subtle border-line">Clear</a>
       @endif
     </form>
 
     @if (!live)
-      <div class="panel px-4 py-3 mb-8 text-sm reveal" style="color: var(--text-2)">
-        <span class="font-semibold" style="color: var(--text)">Waiting for data.</span> Make sure Postgres is provisioned.
+      <div class="panel px-4 py-3 mb-8 text-sm reveal text-muted">
+        <span class="font-semibold text-ink">Waiting for data.</span> Make sure Postgres is provisioned.
       </div>
     @endif
 
-    <!-- Stats: hairline-separated, mono numerics -->
-    <div class="panel grid grid-cols-3 divide-x mb-8 reveal" style="border-color: var(--border)">
+    <!-- Stats: hairline-separated, mono numerics. The dot + number tint go live
+         only on a non-zero count, so severity reads at a glance. -->
+    <div class="panel grid grid-cols-3 divide-x mb-8 reveal border-line">
       @foreach (stats as s)
-        <div class="px-5 py-5" style="border-color: var(--border)">
-          <div class="text-xs font-medium uppercase tracking-wider mb-2" style="color: var(--text-3)">{{ s.label }}</div>
-          <div class="mono text-3xl font-semibold tracking-tight">{{ s.value }}</div>
+        <div class="px-5 py-5 border-line">
+          <div class="flex items-center gap-1.5 mb-2">
+            @if (s.dot)<span class="inline-block w-1.5 h-1.5 rounded-full shrink-0" style="background: {{ s.on ? s.color : 'var(--text-3)' }}; opacity: {{ s.on ? '1' : '0.35' }}"></span>@endif
+            <span class="text-xs font-medium uppercase tracking-wider text-subtle">{{ s.label }}</span>
+          </div>
+          <div class="mono text-3xl font-semibold tracking-tight" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
         </div>
       @endforeach
     </div>
 
     <section class="panel overflow-hidden reveal">
-      <div class="flex items-center justify-between px-5 py-3.5 border-b" style="border-color: var(--border)">
-        <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-3)">Stream</span>
-        <span class="mono text-xs" style="color: var(--text-3)">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-line">
+        <span class="text-xs font-semibold uppercase tracking-wider text-subtle">Stream</span>
+        <span class="mono text-xs text-subtle">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
       </div>
 
       @forelse (logs as entry)
-        <details class="border-b" style="border-color: var(--border)">
-          <summary class="log-row flex items-center gap-3 px-5 py-2.5">
-            <span class="w-1 self-stretch rounded-full shrink-0" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
-            <span class="mono text-xs shrink-0 tabular-nums" style="color: var(--text-3)" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
-            <span class="mono text-[11px] font-semibold uppercase shrink-0 w-16 text-center rounded px-1 py-0.5" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 12%, transparent)">{{ levelLabel(entry.level) }}</span>
-            @if (entry.channel)
-              <span class="mono text-[11px] shrink-0 max-w-28 truncate" style="color: var(--text-3)">{{ entry.channel }}</span>
-            @endif
-            <span class="mono text-sm min-w-0 flex-1 truncate" style="color: var(--text)">{{ entry.message }}</span>
+        <details class="border-b border-line">
+          <summary class="log-row px-5 py-2.5">
+            <span class="self-stretch rounded-full" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
+            <span class="mono text-xs tabular-nums text-subtle" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
+            <span class="lvl-chip mono text-[11px] font-semibold rounded px-1 py-0.5" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
+            <span class="mono text-[11px] truncate text-subtle">{{ entry.channel || '' }}</span>
+            <span class="mono text-sm min-w-0 truncate text-ink">{{ entry.message }}</span>
           </summary>
           <div class="px-5 pb-4 pt-1" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs mono" style="color: var(--text-3)">
+            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs mono text-subtle">
               <span>{{ dayOf(entry.timestamp) }} {{ clockOf(entry.timestamp) }} UTC</span>
-              @if (entry.environment)<span>env: <span style="color: var(--text-2)">{{ entry.environment }}</span></span>@endif
-              @if (entry.framework)<span>via: <span style="color: var(--text-2)">{{ entry.framework }}</span></span>@endif
-              @if (entry.release)<span>release: <span style="color: var(--text-2)">{{ entry.release }}</span></span>@endif
-              @if (entry.host)<span>host: <span style="color: var(--text-2)">{{ entry.host }}</span></span>@endif
+              @if (entry.environment)<span>env: <span class="text-muted">{{ entry.environment }}</span></span>@endif
+              @if (entry.framework)<span>via: <span class="text-muted">{{ entry.framework }}</span></span>@endif
+              @if (entry.release)<span>release: <span class="text-muted">{{ entry.release }}</span></span>@endif
+              @if (entry.host)<span>host: <span class="text-muted">{{ entry.host }}</span></span>@endif
             </div>
-            <div class="mono text-sm mb-3" style="color: var(--text); white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
+            <div class="mono text-sm mb-3 text-ink" style="white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
             @if (entry.context)
-              <pre class="ctx-pre mono text-xs panel px-3 py-2.5 overflow-x-auto" style="color: var(--text-2)">{{ prettyContext(entry.context) }}</pre>
+              <pre class="ctx-pre mono text-xs panel px-3 py-2.5 overflow-x-auto text-muted">{{ prettyContext(entry.context) }}</pre>
             @endif
           </div>
         </details>
       @empty
         <div class="px-5 py-16 text-center">
           <div class="text-base font-medium mb-1">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
-          <div class="text-sm" style="color: var(--text-3)">Point an SDK at this project and its logs stream in here live.</div>
+          <div class="text-sm text-subtle">Point an SDK at this project and its logs stream in here live.</div>
         </div>
       @endforelse
 
       @if (pager.pages > 1)
         <div class="flex items-center justify-between px-5 py-3.5">
-          <span class="mono text-xs" style="color: var(--text-3)">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
+          <span class="mono text-xs text-subtle">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
           <div class="flex items-center gap-2">
             @if (pager.hasPrev)
-              <a href="{{ pager.prevHref }}" class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-2); border-color: var(--border)">&larr; Newer</a>
+              <a href="{{ pager.prevHref }}" class="pill px-3 py-1.5 text-xs font-medium border text-muted border-line">&larr; Newer</a>
             @else
-              <span class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-3); border-color: var(--border); opacity: 0.45">&larr; Newer</span>
+              <span class="pill px-3 py-1.5 text-xs font-medium border text-subtle border-line" style="opacity: 0.45">&larr; Newer</span>
             @endif
-            <span class="mono text-xs tabular-nums" style="color: var(--text-3)">{{ pager.page }} / {{ pager.pages }}</span>
+            <span class="mono text-xs tabular-nums text-subtle">{{ pager.page }} / {{ pager.pages }}</span>
             @if (pager.hasNext)
-              <a href="{{ pager.nextHref }}" class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-2); border-color: var(--border)">Older &rarr;</a>
+              <a href="{{ pager.nextHref }}" class="pill px-3 py-1.5 text-xs font-medium border text-muted border-line">Older &rarr;</a>
             @else
-              <span class="pill px-3 py-1.5 text-xs font-medium border" style="color: var(--text-3); border-color: var(--border); opacity: 0.45">Older &rarr;</span>
+              <span class="pill px-3 py-1.5 text-xs font-medium border text-subtle border-line" style="opacity: 0.45">Older &rarr;</span>
             @endif
           </div>
         </div>
@@ -444,12 +492,12 @@ summary::-webkit-details-marker { display: none; }
     @else
       <div class="text-center py-20">
         <a href="/projects" data-no-router class="wordmark-link"><h1 class="wordmark text-2xl mb-3">loghq</h1></a>
-        <p class="text-sm" style="color: var(--text-3)">Accept an invitation above to get started, or <a href="/projects/new" data-no-router style="color: var(--accent)">create your own app</a>.</p>
+        <p class="text-sm text-subtle">Accept an invitation above to get started, or <a href="/projects/new" data-no-router class="text-accent">create your own app</a>.</p>
       </div>
     @endif
     @endif
 
-    <footer class="mt-12 text-center text-xs" style="color: var(--text-3)">
+    <footer class="mt-12 text-center text-xs text-subtle">
       Log streaming on Stacks and Postgres. <span class="mono">loghq.org</span>
     </footer>
 
