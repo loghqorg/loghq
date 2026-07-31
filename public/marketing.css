@@ -151,6 +151,13 @@ a { color: inherit; text-decoration: none; }
 .subnav a { color: var(--text-2); transition: color 0.16s ease; }
 .subnav a:hover { color: var(--text); }
 .subnav .sep { color: var(--text-3); }
+/* The trail is an <ol> so its order is exposed to assistive tech. The list and
+  its items carry the flex layout the nav used to hold directly, so the visual
+  result is unchanged. `display: contents` would be shorter and is avoided
+  deliberately — several engines drop list items from the accessibility tree
+  when it is applied, which would undo the reason for using a list. */
+.subnav ol { display: flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.subnav li { display: flex; align-items: center; gap: 0.5rem; }
 
 /* code panel */
 .code { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }

@@ -19,13 +19,24 @@ useSeoMeta({
   ogImage: 'https://loghq.org/og.png',
 })
 useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/compare' }] })
+
+// Breadcrumb trail. One array drives two consumers — the rendered list in
+// the Breadcrumbs partial and the BreadcrumbList JSON-LD below — so the
+// markup and the structured data cannot disagree. The last crumb has no
+// href or url: it is this page.
+const crumbs = [
+  { label: 'Home', href: '/', url: 'https://loghq.org/' },
+  { label: 'Compare' },
+]
 </script>
 
 @section('content')
-<nav class="shell subnav" aria-label="Breadcrumb">
-  <a href="/">Home</a><span class="sep">/</span>
-  <span>Compare</span>
-</nav>
+@structuredData({
+  '@type': 'BreadcrumbList',
+  itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.label, item: c.url })),
+})
+
+@include('Breadcrumbs')
 
 <section class="feat-hero shell">
   <span class="kicker">Compare</span>

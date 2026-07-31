@@ -1,0 +1,30 @@
+{{-- Breadcrumb trail. Reads a `crumbs` array from the including page's server
+    block — @include does not accept inline data in this version (an
+    `['crumbs' => …]` argument leaves the variable undefined and the loop
+    reports "crumbs is not iterable"), and the page needs the array declared
+    anyway to drive its @structuredData BreadcrumbList from the same source.
+
+    Each crumb is { label, href?, url? }. The last has no href: it is the
+    current page.
+
+    Deliberately NOT the shipped Breadcrumb component. That component builds its
+    trail with @foreach(item in displayItems), and the loop parser only accepts
+    the ` as ` form — the ` in ` form is skipped outright, so the literal
+    directive text would ship to the browser on all 22 pages.
+
+    Ordered list, not a row of anchors: this is a sequence, the position is
+    meaningful, and assistive tech should say so. The separators are decorative
+    and hidden from it; the current page is marked aria-current. --}}
+<nav class="shell subnav" aria-label="Breadcrumb">
+  <ol>
+    @foreach (crumbs as c)
+      <li>
+        @if ($loop.last)
+          <span aria-current="page">{{ c.label }}</span>
+        @else
+          <a href="{{ c.href }}">{{ c.label }}</a><span class="sep" aria-hidden="true">/</span>
+        @endif
+      </li>
+    @endforeach
+  </ol>
+</nav>
