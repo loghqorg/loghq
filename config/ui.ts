@@ -110,12 +110,23 @@ export default {
   // shouldIntercept bails at client.js:796 and every link reverts to a full
   // document load. resources/layouts/default.stx owns the single <main>.
   //
-  // interceptAllLinks stays true until every internal anchor is an <StxLink>
-  // (guide ch.9.1) — stx-router's own default is false (client.js:9) while the
-  // serve path hardcodes true (serve.js:9764), so pin it rather than inherit it.
+  // interceptAllLinks is OFF, which is the point of converting every internal
+  // link to <StxLink>. With it on, the router grabs any anchor it can and then
+  // has to decide via shouldIntercept whether it should have — and that check
+  // bails on href === location.pathname, which silently full-reloaded the
+  // dashboard's default filter tabs. An StxLink is matched by [data-stx-link]
+  // before shouldIntercept is consulted at all.
+  //
+  // Pinned rather than inherited: stx-router's own default is false
+  // (client.js:9) while the serve path hardcodes true (serve.js:9764) before
+  // merging this object, so leaving it unset gives the opposite of the default.
+  //
+  // The four /api/auth/*/redirect anchors stay plain and keep data-no-router.
+  // They are server 302s: intercepting one fetches the redirect as a fragment
+  // instead of following it.
   router: {
     container: 'main',
-    interceptAllLinks: true,
+    interceptAllLinks: false,
   },
 
   // --- Document shell ------------------------------------------------------
