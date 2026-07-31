@@ -13,6 +13,15 @@
  *   bun browse.ts monitor    <url> [--ms 5000]
  *   bun browse.ts snapshot   <url>
  *
+ * Auth (any command, repeatable) — seeded before the document exists, so a page
+ * that reads them during hydration sees them:
+ *   --localstorage token=abc   --cookie loghq_token=abc
+ *
+ * Interaction (screenshot, repeatable, applied in order before capture) — proves
+ * a directive-bound handler actually runs, not merely that it is in the markup:
+ *   --fill "#dz-input=My Project"   --click ".dz-card .btn-danger"  [--settle 400]
+ * Actions run in the order given on the command line, interleaved.
+ *
  * Browser discovery order: $BROWSE_BROWSER → PATH (chromium, google-chrome, …)
  * → common macOS app bundles → a Playwright-cached chromium as last resort.
  */
@@ -221,7 +230,17 @@ export function kill(s: Session): void {
 
 interface PageState { consoleErrors: string[], console: string[], responses: { url: string, status: number, ms: number, type: string }[], mainStatus: number | null }
 
-async function gotoAndInstrument(cdp: Cdp, url: string, opts: { viewport?: { w: number, h: number }, scale?: number, timeoutMs?: number } = {}): Promise<PageState> {
+/** `k=v` pairs from a repeatable flag, e.g. --localstorage token=abc --localstorage user={...} */
+function parsePairs(value: unknown): [string, string][] {
+  const list = value == null ? [] : Array.isArray(value) ? value : [value]
+  return list.flatMap((raw) => {
+    const s = String(raw)
+    const i = s.indexOf('=')
+    return i === -1 ? [] : [[s.slice(0, i), s.slice(i + 1)] as [string, string]]
+  })
+}
+
+async function gotoAndInstrument(cdp: Cdp, url: string, opts: { viewport?: { w: number, h: number }, scale?: number, timeoutMs?: number, localStorage?: [string, string][], cookies?: [string, string][] } = {}): Promise<PageState> {
   const state: PageState = { consoleErrors: [], console: [], responses: [], mainStatus: null }
   const startById = new Map<string, number>()
 
@@ -229,6 +248,35 @@ async function gotoAndInstrument(cdp: Cdp, url: string, opts: { viewport?: { w: 
   await cdp.send('Runtime.enable')
   await cdp.send('Log.enable')
   await cdp.send('Network.enable')
+
+  // Seed auth BEFORE the document exists. An app that reads localStorage during
+  // hydration has already read it by the time Runtime.evaluate could run, so
+  // setting it after navigation is too late — the page renders logged-out and
+  // the check silently measures the wrong state.
+  //
+  // Cookies and localStorage are seeded together on purpose: this app writes the
+  // token to both (localStorage for client fetches, a mirrored cookie so
+  // server-rendered pages authenticate). Seeding only one yields a page that
+  // looks logged-out for reasons that read like a missing link rather than a
+  // missing credential.
+  if (opts.localStorage?.length) {
+    const script = opts.localStorage
+      .map(([k, v]) => `try{localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)})}catch(e){}`)
+      .join('')
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: script })
+  }
+  if (opts.cookies?.length) {
+    const { host, protocol } = new URL(url)
+    await cdp.send('Network.setCookies', {
+      cookies: opts.cookies.map(([name, value]) => ({
+        name,
+        value,
+        domain: host.split(':')[0],
+        path: '/',
+        secure: protocol === 'https:',
+      })),
+    })
+  }
 
   if (opts.viewport) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -304,16 +352,25 @@ async function captureScreenshot(cdp: Cdp, opts: { full?: boolean, element?: str
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
-function parseFlags(args: string[]): { positional: string[], flags: Record<string, string | boolean> } {
+function parseFlags(args: string[]): { positional: string[], flags: Record<string, string | boolean | string[]> } {
   const positional: string[] = []
-  const flags: Record<string, string | boolean> = {}
+  const flags: Record<string, string | boolean | string[]> = {}
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a.startsWith('--')) {
       const key = a.slice(2)
       const next = args[i + 1]
-      if (next && !next.startsWith('--')) { flags[key] = next; i++ }
-      else flags[key] = true
+      if (next && !next.startsWith('--')) {
+        // Repeats accumulate rather than overwrite, so `--localstorage a=1
+        // --localstorage b=2` keeps both. Silently dropping the first would
+        // seed half the credentials and render a page that looks logged-out.
+        const prev = flags[key]
+        if (prev === undefined) flags[key] = next
+        else if (Array.isArray(prev)) prev.push(next)
+        else flags[key] = [String(prev), next]
+        i++
+      }
+      else { flags[key] = true }
     }
     else { positional.push(a) }
   }
@@ -338,12 +395,16 @@ async function main() {
     process.exit(url ? 0 : 1)
   }
 
+  // Auth seeding is available to every command — a logged-out screenshot of an
+  // auth-gated page is not a smaller result, it is a different page.
+  const auth = { localStorage: parsePairs(flags.localstorage), cookies: parsePairs(flags.cookie) }
+
   const session = await launch()
   try {
     if (command === 'navigate' || command === 'go') {
       const cdp = await openPage(session.port)
       const t0 = performance.now()
-      const state = await gotoAndInstrument(cdp, url)
+      const state = await gotoAndInstrument(cdp, url, auth)
       const loadMs = Math.round(performance.now() - t0)
       console.log(JSON.stringify({
         browser: session.browser,
@@ -363,10 +424,48 @@ async function main() {
       const scale = flags.scale ? Number(flags.scale) : 1
       const out = (flags.out as string) || `.stacks/shots/${new URL(url).pathname.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home'}.png`
       mkdirSync(out.split('/').slice(0, -1).join('/') || '.', { recursive: true })
-      await gotoAndInstrument(cdp, url, { viewport: { w: vp[0], h: vp[1] }, scale })
+      await gotoAndInstrument(cdp, url, { viewport: { w: vp[0], h: vp[1] }, scale, ...auth })
+      // --click fires real DOM clicks before capturing, so a handler bound by a
+      // directive can be shown to RUN, not merely to be present in the markup.
+      // Repeatable, applied in order. Missing selectors are reported rather than
+      // ignored: a silent no-op would look identical to a handler that did
+      // nothing, which is the failure this flag exists to catch.
+      // Actions run in the ORDER GIVEN on the command line, interleaved. Grouping
+      // all fills before all clicks looks equivalent but is not: opening a modal
+      // often resets its own inputs, so a fill staged before that click is wiped
+      // and the run silently exercises the empty-input path instead.
+      const actions: { kind: 'click' | 'fill', sel: string, val?: string }[] = []
+      for (let i = 0; i < rest.length; i++) {
+        const a = rest[i]
+        if (a !== '--click' && a !== '--fill') continue
+        const raw = rest[i + 1]
+        if (!raw || raw.startsWith('--')) continue
+        if (a === '--click') { actions.push({ kind: 'click', sel: raw }) }
+        else {
+          const eq = raw.indexOf('=')
+          if (eq !== -1) actions.push({ kind: 'fill', sel: raw.slice(0, eq), val: raw.slice(eq + 1) })
+        }
+      }
+      const actionResults: { kind: string, selector: string, found: boolean }[] = []
+      for (const act of actions) {
+        const expr = act.kind === 'click'
+          ? `(() => { const el = document.querySelector(${JSON.stringify(act.sel)}); if (!el) return false; el.click(); return true })()`
+          : `(() => {
+              const el = document.querySelector(${JSON.stringify(act.sel)}); if (!el) return false
+              const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement
+              const setter = Object.getOwnPropertyDescriptor(proto.prototype, 'value')?.set
+              setter ? setter.call(el, ${JSON.stringify(act.val ?? '')}) : (el.value = ${JSON.stringify(act.val ?? '')})
+              el.dispatchEvent(new Event('input', { bubbles: true }))
+              el.dispatchEvent(new Event('change', { bubbles: true }))
+              return true
+            })()`
+        const r = await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true })
+        actionResults.push({ kind: act.kind, selector: act.sel, found: r.result?.value === true })
+        await Bun.sleep(Number(flags.settle) || 400)
+      }
       const png = await captureScreenshot(cdp, { full: !!flags.full, element: flags.element as string | undefined })
       await Bun.write(out, png)
-      console.log(JSON.stringify({ url, out, viewport: `${vp[0]}x${vp[1]}`, scale, full: !!flags.full, element: flags.element ?? null, bytes: png.length }, null, 2))
+      console.log(JSON.stringify({ url, out, viewport: `${vp[0]}x${vp[1]}`, scale, full: !!flags.full, element: flags.element ?? null, ...(actionResults.length ? { actions: actionResults } : {}), bytes: png.length }, null, 2))
       cdp.close()
     }
 
