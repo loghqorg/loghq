@@ -28,10 +28,18 @@
       "@/*": ["./resources/*"]
     }
   },
+  // `satisfies UiOptions` in config/ui.ts is only evaluated if tsc sees the
+  // file. It previously did not: this list covered nine project files and
+  // matched nothing under config/ or resources/, so the one place a typo costs
+  // an entire subsystem was unchecked. resources/stores/**/*.ts is here because
+  // the store loader transpiles stores with Bun.Transpiler, which erases types
+  // without checking them (store-loader.js:49).
   "include": [
     "*.ts",
     "*.d.ts",
     "types/**/*.d.ts",
+    "config/**/*.ts",
+    "resources/stores/**/*.ts",
     "app/Models/**/*.ts",
     "app/Services/**/*.ts",
     "app/Support/**/*.ts"
