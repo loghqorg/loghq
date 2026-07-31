@@ -167,8 +167,8 @@ async function post(url: string, payload: unknown): Promise<boolean> {
 export async function notifyChannels(projectId: string, issue: ChannelIssue, kind: AlertKind): Promise<void> {
   const rows = (await db.unsafe(
     `SELECT c.type, c.webhook_url, p.name AS project_name
-     FROM alert_channels c JOIN projects p ON p.id = c.project_id
-     WHERE c.project_id = $1 AND c.enabled = true`,
+    FROM alert_channels c JOIN projects p ON p.id = c.project_id
+    WHERE c.project_id = $1 AND c.enabled = true`,
     [projectId],
   )) ?? []
   if (!rows.length)
