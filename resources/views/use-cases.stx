@@ -1,96 +1,88 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Use cases - loghq</title>
-    <meta name="description" content="How frontend, backend, mobile, on-call, and agency teams put loghq error tracking to work in production.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('SiteNav')
+@extends('layouts/marketing')
 
-    <main>
-      <nav class="subnav shell" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
-        <span>Use cases</span>
-      </nav>
+<script server>
+useSeoMeta({
+  title: 'Use cases - loghq',
+  description: 'How frontend, backend, mobile, on-call, and agency teams put loghq error tracking to work in production.',
+  ogImage: 'https://loghq.org/og.png',
+})
+useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/use-cases' }] })
+</script>
 
-      <section class="feat-hero shell">
-        <span class="kicker">Use cases</span>
-        <h1>A net under every team that ships to production.</h1>
-        <p>The same SDK and the same triage fit a browser bundle, a background worker, or a native app. Here is how different teams lean on loghq, and which features do the work.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/register">Get started</a>
-          <a class="btn ghost" href="/docs">Read the docs</a>
-        </div>
-      </section>
+@section('content')
+<nav class="shell subnav" aria-label="Breadcrumb">
+  <a href="/">Home</a><span class="sep">/</span>
+  <span>Use cases</span>
+</nav>
 
-      <section class="section shell reveal" aria-label="Use cases">
-        <div class="usecases">
+<section class="feat-hero shell">
+  <span class="kicker">Use cases</span>
+  <h1>A net under every team that ships to production.</h1>
+  <p>The same SDK and the same triage fit a browser bundle, a background worker, or a native app. Here is how different teams lean on loghq, and which features do the work.</p>
+  <div class="hero-actions">
+    <a class="btn primary" href="/register">Get started</a>
+    <a class="btn ghost" href="/docs">Read the docs</a>
+  </div>
+</section>
 
-          <article class="usecase">
-            <img src="https://picsum.photos/seed/loghq-frontend-browser/720/340" alt="A web application open in a browser" width="720" height="340" loading="lazy">
-            <div class="usecase-body">
-              <h3>Frontend</h3>
-              <p>Catch the errors your users actually hit in the browser. Upload a source map and every minified frame resolves back to the component and line that threw.</p>
-              <a class="textlink" href="/use-cases/frontend">How teams use loghq for frontend</a>
-            </div>
-          </article>
+<section class="reveal section shell" aria-label="Use cases">
+  <div class="usecases">
 
-          <article class="usecase">
-            <img src="https://picsum.photos/seed/loghq-backend-api/720/340" alt="Server and API infrastructure" width="720" height="340" loading="lazy">
-            <div class="usecase-body">
-              <h3>Backend</h3>
-              <p>Server, edge, and job failures arrive with the request, release, and environment attached, so a 500 names the route and the deploy that broke it.</p>
-              <a class="textlink" href="/use-cases/backend">How teams use loghq for backend</a>
-            </div>
-          </article>
+    <article class="usecase">
+      <img src="https://picsum.photos/seed/loghq-frontend-browser/720/340" alt="A web application open in a browser" width="720" height="340" loading="lazy">
+      <div class="usecase-body">
+        <h3>Frontend</h3>
+        <p>Catch the errors your users actually hit in the browser. Upload a source map and every minified frame resolves back to the component and line that threw.</p>
+        <a class="textlink" href="/use-cases/frontend">How teams use loghq for frontend</a>
+      </div>
+    </article>
 
-          <article class="usecase">
-            <img src="https://picsum.photos/seed/loghq-mobile-app/720/340" alt="A mobile app on a phone" width="720" height="340" loading="lazy">
-            <div class="usecase-body">
-              <h3>Mobile</h3>
-              <p>Native crashes and JavaScript errors fold into one issue per build, so you see which release regressed and how many devices it reached.</p>
-              <a class="textlink" href="/use-cases/mobile">How teams use loghq for mobile</a>
-            </div>
-          </article>
+    <article class="usecase">
+      <img src="https://picsum.photos/seed/loghq-backend-api/720/340" alt="Server and API infrastructure" width="720" height="340" loading="lazy">
+      <div class="usecase-body">
+        <h3>Backend</h3>
+        <p>Server, edge, and job failures arrive with the request, release, and environment attached, so a 500 names the route and the deploy that broke it.</p>
+        <a class="textlink" href="/use-cases/backend">How teams use loghq for backend</a>
+      </div>
+    </article>
 
-          <article class="usecase">
-            <img src="https://picsum.photos/seed/loghq-oncall-sre/720/340" alt="An on-call engineer reviewing alerts" width="720" height="340" loading="lazy">
-            <div class="usecase-body">
-              <h3>On-call and SRE</h3>
-              <p>Alerts fire for new and spiking issues, not for every known warning. Triage by release and affected-user count instead of scrolling a raw log.</p>
-              <a class="textlink" href="/use-cases/on-call">How on-call teams use loghq</a>
-            </div>
-          </article>
+    <article class="usecase">
+      <img src="https://picsum.photos/seed/loghq-mobile-app/720/340" alt="A mobile app on a phone" width="720" height="340" loading="lazy">
+      <div class="usecase-body">
+        <h3>Mobile</h3>
+        <p>Native crashes and JavaScript errors fold into one issue per build, so you see which release regressed and how many devices it reached.</p>
+        <a class="textlink" href="/use-cases/mobile">How teams use loghq for mobile</a>
+      </div>
+    </article>
 
-          <article class="usecase">
-            <img src="https://picsum.photos/seed/loghq-agency-clients/720/340" alt="Multiple client projects on a board" width="720" height="340" loading="lazy">
-            <div class="usecase-body">
-              <h3>Agencies</h3>
-              <p>Keep each client site as its own project with its own issues, releases, and members, so you know exactly which build on which site started erroring.</p>
-              <a class="textlink" href="/use-cases/agencies">How agencies use loghq</a>
-            </div>
-          </article>
+    <article class="usecase">
+      <img src="https://picsum.photos/seed/loghq-oncall-sre/720/340" alt="An on-call engineer reviewing alerts" width="720" height="340" loading="lazy">
+      <div class="usecase-body">
+        <h3>On-call and SRE</h3>
+        <p>Alerts fire for new and spiking issues, not for every known warning. Triage by release and affected-user count instead of scrolling a raw log.</p>
+        <a class="textlink" href="/use-cases/on-call">How on-call teams use loghq</a>
+      </div>
+    </article>
 
-        </div>
-      </section>
+    <article class="usecase">
+      <img src="https://picsum.photos/seed/loghq-agency-clients/720/340" alt="Multiple client projects on a board" width="720" height="340" loading="lazy">
+      <div class="usecase-body">
+        <h3>Agencies</h3>
+        <p>Keep each client site as its own project with its own issues, releases, and members, so you know exactly which build on which site started erroring.</p>
+        <a class="textlink" href="/use-cases/agencies">How agencies use loghq</a>
+      </div>
+    </article>
 
-      <section class="section shell reveal" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Ship with a net under you.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/register">Get started</a>
-            <a class="btn ghost" href="/docs">Read the docs</a>
-          </div>
-        </div>
-      </section>
-    </main>
+  </div>
+</section>
 
-    @include('SiteFooter')
-  </body>
-</html>
+<section class="reveal section shell" aria-label="Get started">
+  <div class="cta-band">
+    <h2>Ship with a net under you.</h2>
+    <div class="cta-actions">
+      <a class="btn primary" href="/register">Get started</a>
+      <a class="btn ghost" href="/docs">Read the docs</a>
+    </div>
+  </div>
+</section>
+@endsection

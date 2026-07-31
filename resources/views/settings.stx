@@ -1,17 +1,17 @@
 <script server>
-// Per-project settings (owner-only admin surface): the API key, team members,
+// Per-project settings (owner-only admin surface): the ingest key, team members,
 // Slack/Discord alerts, and deletion. Authenticates from the loghq_token cookie
 // and resolves the active project from the loghq_project cookie (same browsing
 // preference the dashboard uses), scoped to projects the user OWNS — members can
-// view/triage issues but only an owner administers a project. Reads happen here
+// read the log stream but only an owner administers a project. Reads happen here
 // server-side; mutations go client-side to the owner-scoped /api endpoints.
-const meta = { title: 'loghq - Settings', description: 'Error tracking' }
+const meta = { title: 'loghq - Settings', description: 'Log management' }
 
 const { db } = await import('@stacksjs/database')
 const { appUrl, ingestUrl } = await import('../../app/Support/urls')
-// APP_BASE is the web app (join links); INGEST_BASE is where /sdk.js + /errors
-// are served (a separate host in local dev). Both are absolute and env-driven,
-// falling back to the local servers. See app/Support/urls.ts.
+// APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
+// (a separate host in local dev). Both are absolute and env-driven, falling
+// back to the local servers. See app/Support/urls.ts.
 const APP_BASE = appUrl()
 const INGEST_BASE = ingestUrl()
 
@@ -49,18 +49,18 @@ if (user) {
   if (activeProject) {
     channels = (await db.unsafe(
       `SELECT id, type, label, webhook_url, enabled, created_at
-       FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
+      FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
       [activeProject.id],
     )) ?? []
     members = (await db.unsafe(
       `SELECT m.id, m.email, m.role FROM project_members m
-       WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
+      WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
       [activeProject.id],
     )) ?? []
     invites = (await db.unsafe(
       `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
-       FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
-       WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
+      FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
+      WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
       [activeProject.id],
     )) ?? []
   }
@@ -94,32 +94,490 @@ const keyMask = maskKey(keyFull)
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
-// TEMPORARY: the snippet src points at the local ingest; switch to https://loghq.org/sdk.js at launch.
+//
+// Every snippet below is plain HTTP against POST /logs, because that is the only
+// integration path that exists today. Native SDKs are in progress and NOT
+// published: do not put `bun add @loghq/*` or `composer require loghq/*` back
+// here until the package is actually installable, and do not reference a
+// `/sdk.js` loader until a route serves it. Handing someone an install command
+// that 404s is worse than handing them ten lines of fetch.
+//
+// The wire contract these snippets implement is docs/ingest.md.
+const INGEST_ENDPOINT = `${INGEST_BASE}/logs`
+
 function installGuide(platform, key) {
   const p = String(platform || 'javascript').toLowerCase()
-  const scriptTag = `<script src="${INGEST_BASE}/sdk.js"\n        data-key="${key}"><\/script>`
-  if (p === 'vue')
-    return { label: 'Vue', install: 'bun add @loghq/vue', code: `import LogHQ from '@loghq/vue'\n\napp.use(LogHQ, { key: '${key}' })` }
-  if (p === 'nuxt')
-    return { label: 'Nuxt', install: 'bun add @loghq/nuxt', code: `// nuxt.config.ts\nexport default defineNuxtConfig({\n  modules: ['@loghq/nuxt'],\n  loghq: { key: '${key}' },\n})` }
-  if (p === 'node')
-    return { label: 'Node.js', install: 'bun add @loghq/sdk', code: `import { loghq } from '@loghq/sdk'\n\nloghq.init({ key: '${key}' })` }
-  if (p === 'react')
-    return { label: 'React', install: 'bun add @loghq/sdk', code: `import { loghq } from '@loghq/sdk'\n\nloghq.init({ key: '${key}' })\n// then capture render errors from an ErrorBoundary` }
+
+  // Shared JS transport. Deliberately fire-and-forget and un-awaited: logging
+  // must never block, and never reject into the caller's code path.
+  const jsSend = `async function loghq(message, level = 'info', context) {\n`
+    + `  try {\n`
+    + `    await fetch('${INGEST_ENDPOINT}', {\n`
+    + `      method: 'POST',\n`
+    + `      headers: { 'Content-Type': 'application/json', 'X-LogHQ-Key': '${key}' },\n`
+    + `      body: JSON.stringify({ logs: [{ message, level, context }] }),\n`
+    + `    })\n`
+    + `  }\n`
+    + `  catch {} // never let logging break the app\n`
+    + `}`
+
+  const browserCapture = `${jsSend}\n\n`
+    + `// uncaught errors and rejections\n`
+    + `addEventListener('error', e => loghq(e.message, 'error', { stack: e.error?.stack }))\n`
+    + `addEventListener('unhandledrejection', e => loghq(String(e.reason), 'error'))\n\n`
+    + `// or explicitly\n`
+    + `loghq('checkout failed', 'error', { cartId: 'cart_123' })`
+
+  if (p === 'vue') {
+    return {
+      label: 'Vue',
+      install: '',
+      code: `${jsSend}\n\n`
+        + `// main.ts — route Vue's error handler into loghq\n`
+        + `app.config.errorHandler = (err, _instance, info) =>\n`
+        + `  loghq(String(err), 'error', { info, stack: err?.stack })`,
+    }
+  }
+  if (p === 'nuxt') {
+    return {
+      label: 'Nuxt',
+      install: '',
+      code: `// plugins/loghq.client.ts\n`
+        + `${jsSend}\n\n`
+        + `export default defineNuxtPlugin((nuxtApp) => {\n`
+        + `  nuxtApp.hook('vue:error', err => loghq(String(err), 'error', { stack: err?.stack }))\n`
+        + `})`,
+    }
+  }
+  if (p === 'node') {
+    return {
+      label: 'Node.js',
+      install: '',
+      code: `${jsSend}\n\n`
+        + `process.on('uncaughtException', e => loghq(e.message, 'critical', { stack: e.stack }))\n`
+        + `process.on('unhandledRejection', r => loghq(String(r), 'error'))\n\n`
+        + `await loghq('service started', 'info', { pid: process.pid })`,
+    }
+  }
+  if (p === 'react') {
+    return {
+      label: 'React',
+      install: '',
+      code: `${browserCapture}\n\n`
+        + `// render errors need an ErrorBoundary — call loghq() from componentDidCatch`,
+    }
+  }
   if (p === 'javascript' || p === 'browser')
-    return { label: 'JavaScript', install: '', code: scriptTag }
-  if (p === 'laravel')
-    return { label: 'Laravel', install: 'composer require loghq/loghq-laravel', code: `# .env\nLOGHQ_KEY=${key}\n\n# exceptions, failed jobs, and breadcrumbs are captured automatically` }
-  if (p === 'php')
-    return { label: 'PHP', install: 'composer require loghq/loghq', code: `use LogHQ\\LogHQ;\n\nLogHQ::init(['key' => '${key}']);` }
-  return { label: 'HTML', install: '', code: scriptTag }
+    return { label: 'JavaScript', install: '', code: browserCapture }
+
+  if (p === 'laravel') {
+    return {
+      label: 'Laravel',
+      install: '',
+      code: `// app/Logging/LogHQHandler.php\n`
+        + `use Illuminate\\Support\\Facades\\Http;\n`
+        + `use Monolog\\Handler\\AbstractProcessingHandler;\n`
+        + `use Monolog\\LogRecord;\n\n`
+        + `class LogHQHandler extends AbstractProcessingHandler\n`
+        + `{\n`
+        + `    protected function write(LogRecord $record): void\n`
+        + `    {\n`
+        + `        Http::withHeaders(['X-LogHQ-Key' => '${key}'])\n`
+        + `            ->post('${INGEST_ENDPOINT}', ['logs' => [[\n`
+        + `                'message' => $record->message,\n`
+        + `                'level'   => strtolower($record->level->getName()),\n`
+        + `                'channel' => $record->channel,\n`
+        + `                'context' => $record->context,\n`
+        + `            ]]]);\n`
+        + `    }\n`
+        + `}\n\n`
+        + `// config/logging.php — Monolog levels are RFC 5424, so they map 1:1\n`
+        + `'loghq' => ['driver' => 'monolog', 'handler' => App\\Logging\\LogHQHandler::class],`,
+    }
+  }
+  if (p === 'php') {
+    return {
+      label: 'PHP',
+      install: '',
+      code: `function loghq(string $message, string $level = 'info', array $context = []): void\n`
+        + `{\n`
+        + `    $ch = curl_init('${INGEST_ENDPOINT}');\n`
+        + `    curl_setopt_array($ch, [\n`
+        + `        CURLOPT_POST           => true,\n`
+        + `        CURLOPT_RETURNTRANSFER => true,\n`
+        + `        CURLOPT_TIMEOUT        => 2,\n`
+        + `        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'X-LogHQ-Key: ${key}'],\n`
+        + `        CURLOPT_POSTFIELDS     => json_encode(['logs' => [compact('message', 'level', 'context')]]),\n`
+        + `    ]);\n`
+        + `    curl_exec($ch);\n`
+        + `    curl_close($ch);\n`
+        + `}`,
+    }
+  }
+  return { label: 'HTML', install: '', code: browserCapture }
 }
 const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { label: '', install: '', code: '' }
+
+// Values the client block needs verbatim. JSON-encoded on purpose: stx renders a
+// bare `{{ str }}` inside a script as a BACKTICK template literal, which a
+// backtick or `${` in the payload would break out of. `JSON.parse({{ json }})`
+// survives any content.
+const guideInstallJson = JSON.stringify(guide.install)
+const guideCodeJson = JSON.stringify(guide.code)
+const keyFullJson = JSON.stringify(keyFull)
+const keyMaskJson = JSON.stringify(keyMask)
+const projectIdJson = JSON.stringify(projectId)
+const projectNameJson = JSON.stringify(activeProject?.name || '')
+const projectActiveJson = JSON.stringify(activeProject ? activeProject.is_active !== false : true)
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<script client>
+// Settings page. Replaces ~295 lines of imperative DOM work: element lookups,
+// delegated listeners doing className sniffing, manual button-label swaps, and
+// row.remove() calls. Every one of those is now state plus a binding.
+//
+// Server values arrive JSON-encoded (see the server block) because stx renders a
+// bare {{ str }} inside a script as a backtick template literal, which a backtick
+// or ${ in the payload would escape from.
+const projectId = JSON.parse({{ projectIdJson }})
+const projectName = JSON.parse({{ projectNameJson }})
+const projectActive = JSON.parse({{ projectActiveJson }})
+const installText = JSON.parse({{ guideInstallJson }})
+const codeText = JSON.parse({{ guideCodeJson }})
+
+// ---- theme (mirrors the root element; the pre-paint script owns the truth) ----
+const theme = state(
+  document.documentElement.getAttribute('data-theme')
+  || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+)
+function toggleTheme() {
+  const next = theme() === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', next)
+  try { localStorage.setItem('loghq_theme', next) }
+  catch {}
+  theme.set(next)
+}
+
+const authHeaders = () => ({
+  'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  'Content-Type': 'application/json',
+})
+const projUrl = `/api/projects/${encodeURIComponent(projectId || '')}`
+const chBase = `${projUrl}/channels`
+
+/** Read a JSON body without throwing on an empty or non-JSON response. */
+async function readJson(res) {
+  try { return await res.json() }
+  catch { return {} }
+}
+
+// ---- copy buttons ----
+const copiedInstall = state(false)
+const copiedCode = state(false)
+const copiedKey = state(false)
+
+async function copyText(text, flag) {
+  try { await navigator.clipboard.writeText(text) }
+  catch {}
+  flag.set(true)
+  setTimeout(() => flag.set(false), 1400)
+}
+
+// ---- project switcher ----
+function switchProject(e) {
+  document.cookie = `loghq_project=${encodeURIComponent(e.target.value)}; path=/; max-age=31536000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
+  window.location.href = '/settings'
+}
+
+// ---- ingest key ----
+const keyFull = state(JSON.parse({{ keyFullJson }}))
+const keyMask = state(JSON.parse({{ keyMaskJson }}))
+const keyRevealed = state(false)
+const rotating = state(false)
+const keyNote = state('')
+const keyNoteOk = state(true)
+
+const keyShown = () => (keyRevealed() ? keyFull() : keyMask())
+
+function note(msgSig, okSig, msg, ok) {
+  msgSig.set(msg)
+  okSig.set(ok)
+}
+
+async function rotateKey() {
+  const ask = window.stxConfirm
+    ? window.stxConfirm('The current key stops working immediately — anything still sending it will get 401 until you update it. Continue?', { title: 'Rotate ingest key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
+    : Promise.resolve(window.confirm('Rotate the ingest key? The current key stops working immediately.'))
+  if (!(await Promise.resolve(ask)))
+    return
+  rotating.set(true)
+  try {
+    const res = await fetch(`${projUrl}/rotate-key`, { method: 'POST', headers: authHeaders() })
+    const body = await readJson(res)
+    rotating.set(false)
+    if (!res.ok) {
+      note(keyNote, keyNoteOk, body.error || 'Rotate failed.', false)
+      return
+    }
+    keyFull.set(body.ingest_key)
+    keyRevealed.set(true)
+    note(keyNote, keyNoteOk, 'New key generated. Update anything sending the old one.', true)
+  }
+  catch {
+    rotating.set(false)
+    note(keyNote, keyNoteOk, 'Network error.', false)
+  }
+}
+
+// ---- members and invites ----
+const inviteEmail = state('')
+const inviting = state(false)
+const inviteNote = state('')
+const inviteNoteOk = state(true)
+const removedMembers = state([])
+const removingMember = state('')
+const copiedJoin = state('')
+
+const isMemberRemoved = id => removedMembers().includes(id)
+const memberBtnLabel = id => (removingMember() === id ? 'Removing…' : 'Remove')
+const joinBtnLabel = id => (copiedJoin() === id ? 'Copied ✓' : 'Copy link')
+
+async function copyJoin(id, link) {
+  try { await navigator.clipboard.writeText(link) }
+  catch {}
+  copiedJoin.set(id)
+  setTimeout(() => copiedJoin.set(''), 1600)
+}
+
+async function addInvite() {
+  const email = inviteEmail().trim()
+  if (!email) {
+    note(inviteNote, inviteNoteOk, 'Enter an email address.', false)
+    return
+  }
+  inviting.set(true)
+  try {
+    const res = await fetch(`${projUrl}/members`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ email }) })
+    const body = await readJson(res)
+    inviting.set(false)
+    if (!res.ok) {
+      note(inviteNote, inviteNoteOk, body.error || 'Could not invite.', false)
+      return
+    }
+    window.location.reload()
+  }
+  catch {
+    inviting.set(false)
+    note(inviteNote, inviteNoteOk, 'Network error.', false)
+  }
+}
+
+async function removeMember(id) {
+  if (removingMember())
+    return
+  removingMember.set(id)
+  try {
+    const res = await fetch(`${projUrl}/members/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+    removingMember.set('')
+    if (res.ok)
+      removedMembers.set([...removedMembers(), id])
+  }
+  catch {
+    removingMember.set('')
+  }
+}
+
+// ---- alert channels ----
+const chType = state('slack')
+const whUrl = state('')
+const whLabel = state('')
+const adding = state(false)
+const whNote = state('')
+const whNoteOk = state(true)
+const removedChannels = state([])
+const channelBusy = state({})
+const channelOn = state({})
+
+const PLACEHOLDERS = { slack: 'https://hooks.slack.com/services/…', discord: 'https://discord.com/api/webhooks/…' }
+const HELPS = {
+  slack: 'In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the hooks.slack.com/services/… URL.',
+  discord: 'In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
+}
+const whPlaceholder = () => PLACEHOLDERS[chType()]
+const whHelp = () => HELPS[chType()]
+
+const isChannelRemoved = id => removedChannels().includes(id)
+const testLabel = id => channelBusy()[id] || 'Test'
+const deleteLabel = id => (channelBusy()[id] === 'Removing…' ? 'Removing…' : 'Remove')
+/** Enabled state, defaulting to the server-rendered value until toggled. */
+const isChannelOn = (id, initial) => (id in channelOn() ? channelOn()[id] : initial)
+
+function setBusy(id, value) {
+  channelBusy.set({ ...channelBusy(), [id]: value })
+}
+
+async function addChannel() {
+  const url = whUrl().trim()
+  if (!url) {
+    note(whNote, whNoteOk, 'Paste a webhook URL first.', false)
+    return
+  }
+  adding.set(true)
+  note(whNote, whNoteOk, 'Adding…', true)
+  try {
+    const res = await fetch(chBase, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ type: chType(), webhook_url: url, label: whLabel().trim() }) })
+    const body = await readJson(res)
+    if (!res.ok) {
+      adding.set(false)
+      note(whNote, whNoteOk, body.error || 'Could not add that channel.', false)
+      return
+    }
+    window.location.reload()
+  }
+  catch {
+    adding.set(false)
+    note(whNote, whNoteOk, 'Network error. Try again.', false)
+  }
+}
+
+async function testChannel(id) {
+  if (channelBusy()[id])
+    return
+  setBusy(id, 'Sending…')
+  try {
+    const res = await fetch(`${chBase}/${encodeURIComponent(id)}/test`, { method: 'POST', headers: authHeaders() })
+    setBusy(id, res.ok ? 'Sent ✓' : 'Failed')
+  }
+  catch {
+    setBusy(id, 'Failed')
+  }
+  setTimeout(() => setBusy(id, ''), 2400)
+}
+
+async function toggleChannel(id, initial) {
+  const next = !isChannelOn(id, initial)
+  channelOn.set({ ...channelOn(), [id]: next })
+  try {
+    const res = await fetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ enabled: next }) })
+    if (!res.ok)
+      channelOn.set({ ...channelOn(), [id]: !next })
+  }
+  catch {
+    // Roll back so the switch never claims a state the server rejected.
+    channelOn.set({ ...channelOn(), [id]: !next })
+  }
+}
+
+async function deleteChannel(id) {
+  if (channelBusy()[id])
+    return
+  setBusy(id, 'Removing…')
+  try {
+    const res = await fetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+    setBusy(id, '')
+    if (res.ok)
+      removedChannels.set([...removedChannels(), id])
+  }
+  catch {
+    setBusy(id, '')
+  }
+}
+
+// ---- danger zone: type-to-confirm modal ----
+const modalKind = state('')
+const modalInput = state('')
+const modalBusy = state(false)
+const modalNote = state('')
+const archiving = state(false)
+
+const modalOpen = () => modalKind() !== ''
+const modalTitle = () => (modalKind() === 'delete' ? `Delete ${projectName}?` : `Archive ${projectName}?`)
+const modalDesc = () => (modalKind() === 'delete'
+  ? 'This permanently deletes the project and all of its log entries, alert channels, members, and invites. This cannot be undone.'
+  : 'loghq will stop accepting new log entries for this project. Everything already stored is kept, and you can unarchive anytime.')
+const modalConfirmLabel = () => {
+  if (modalBusy())
+    return modalKind() === 'delete' ? 'Deleting…' : 'Archiving…'
+  return modalKind() === 'delete' ? 'Delete project' : 'Archive project'
+}
+/** The type-to-confirm gate: the typed name must match exactly. */
+const modalReady = () => modalInput().trim() === projectName && !modalBusy()
+
+function closeModal() {
+  modalKind.set('')
+  modalInput.set('')
+  modalNote.set('')
+  modalBusy.set(false)
+}
+
+function openArchive() {
+  // Unarchiving is non-destructive, so it skips the confirm entirely.
+  if (!projectActive) {
+    unarchive()
+    return
+  }
+  modalInput.set('')
+  modalNote.set('')
+  modalKind.set('archive')
+}
+
+function openDelete() {
+  modalInput.set('')
+  modalNote.set('')
+  modalKind.set('delete')
+}
+
+async function unarchive() {
+  archiving.set(true)
+  try {
+    const res = await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: false }) })
+    if (res.ok) {
+      window.location.reload()
+      return
+    }
+    archiving.set(false)
+  }
+  catch {
+    archiving.set(false)
+  }
+}
+
+async function confirmModal() {
+  if (!modalReady())
+    return
+  modalBusy.set(true)
+  const kind = modalKind()
+  try {
+    const res = kind === 'delete'
+      ? await fetch(projUrl, { method: 'DELETE', headers: authHeaders() })
+      : await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: true }) })
+    if (!res.ok) {
+      modalBusy.set(false)
+      modalNote.set(kind === 'delete' ? 'Delete failed.' : 'Archive failed.')
+      return
+    }
+    if (kind === 'delete') {
+      document.cookie = 'loghq_project=; path=/; max-age=0'
+      window.location.assign('/projects')
+    }
+    else {
+      window.location.reload()
+    }
+  }
+  catch {
+    modalBusy.set(false)
+    modalNote.set('Network error.')
+  }
+}
+
+// Escape closes the modal. Bound to the document because no element owns the
+// keyboard globally — this is a listener on a thing no component owns, not
+// render wiring.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modalOpen())
+    closeModal()
+})
+</script>
 
 <style>
 :root {
@@ -140,6 +598,8 @@ const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { 
 html { scroll-behavior: smooth; }
 body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 .mono { font-family: var(--mono); }
+.lnk { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border); transition: color 0.15s ease, text-decoration-color 0.15s ease; }
+.lnk:hover { color: var(--text); text-decoration-color: currentColor; }
 .wordmark { font-weight: 700; letter-spacing: -0.03em; }
 .wordmark-link { color: inherit; text-decoration: none; transition: opacity 0.15s ease; }
 .wordmark-link:hover { opacity: 0.75; }
@@ -191,25 +651,25 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 @keyframes dz-pop { from { opacity: 0; transform: translateY(6px) scale(0.98) } to { opacity: 1; transform: none } }
 </style>
 
-<!-- Apply the saved theme before first paint (no flash of the wrong theme). -->
+{{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
 <script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
 
-<div class="min-h-[100dvh] px-5 py-10 md:px-10">
-  <div class="max-w-2xl mx-auto">
+<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
+  <div class="mx-auto max-w-2xl">
 
-    <header class="flex items-center justify-between gap-4 mb-7">
-      <a href="/projects" data-no-router class="wordmark-link"><h1 class="wordmark text-2xl leading-none">loghq</h1></a>
-      <div class="flex items-center gap-2">
-        <button id="theme-toggle" class="icon-btn theme-btn" title="Toggle theme" aria-label="Toggle theme">
+    <header class="flex gap-4 items-center justify-between mb-7">
+      <a href="/projects" data-no-router class="wordmark-link"><h1 class="leading-none text-2xl wordmark">loghq</h1></a>
+      <div class="flex gap-2 items-center">
+        <button :data-t="theme()" @click="toggleTheme" class="icon-btn theme-btn" title="Toggle theme" aria-label="Toggle theme">
           <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
-        <a href="/dashboard" data-no-router class="btn-ghost px-3.5 py-2 text-sm font-medium">← Dashboard</a>
+        <a href="/dashboard" data-no-router class="px-3.5 py-2 font-medium text-sm btn-ghost">← Dashboard</a>
       </div>
     </header>
 
     @if (!user)
-      <div class="text-center py-24 text-sm text-subtle">Loading…</div>
+      <div class="py-24 text-center text-sm text-subtle">Loading…</div>
     @endif
 
     @if (needsOnboarding)
@@ -218,22 +678,22 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     @if (user && activeProject)
       <div class="mb-6">
-        <div class="flex items-center gap-3 flex-wrap">
-          <h2 class="text-xl font-semibold" style="letter-spacing:-0.02em">Settings</h2>
+        <div class="flex flex-wrap gap-3 items-center">
+          <h2 class="font-semibold text-xl" style="letter-spacing:-0.02em">Settings</h2>
           @if (projects.length > 1)
-            <select id="proj-switch" class="panel mono px-3 py-1.5 text-sm text-muted">
+            <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm mono panel">
               @foreach (projects as p)
                 <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}</option>
               @endforeach
             </select>
           @else
-            <span class="mono text-sm text-muted">{{ activeProject.name }}</span>
+            <span class="text-muted text-sm mono">{{ activeProject.name }}</span>
           @endif
         </div>
-        <p class="text-sm mt-1.5 text-subtle">Manage the API key, team, alerts, and deletion for this project.</p>
+        <p class="mt-1.5 text-sm text-subtle">Manage the API key, team, alerts, and deletion for this project.</p>
       </div>
 
-      <nav class="tabnav flex items-center gap-2 mb-8 text-sm">
+      <nav class="flex gap-2 items-center mb-8 text-sm tabnav">
         <a href="#install" class="px-3 py-1.5 font-medium">Install</a>
         <a href="#keys" class="px-3 py-1.5 font-medium">Keys</a>
         <a href="#members" class="px-3 py-1.5 font-medium">Members</a>
@@ -241,182 +701,198 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         <a href="#danger" class="px-3 py-1.5 font-medium">Danger</a>
       </nav>
 
-      <!-- ============================ INSTALL ============================ -->
-      <section id="install" class="sec mb-10">
-        <div class="sec-title mb-3">Install</div>
-        <div class="panel px-5 py-5">
-          <div class="flex items-center justify-between gap-3 mb-3.5">
-            <p class="text-sm text-subtle">Wire loghq into <span class="mono text-muted">{{ activeProject.name }}</span> to start capturing errors — they group into issues automatically.</p>
-            <span class="badge badge-soft shrink-0">{{ guide.label }}</span>
+      {{-- ============================ INSTALL ============================ --}}
+      <section id="install" class="mb-10 sec">
+        <div class="mb-3 sec-title">Install</div>
+        <div class="px-5 py-5 panel">
+          <div class="flex gap-3 items-center justify-between mb-3.5">
+            <p class="text-sm text-subtle">Send logs to <span class="text-muted mono">{{ activeProject.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
+            <span class="shrink-0 badge badge-soft">{{ guide.label }}</span>
           </div>
           @if (guide.install)
             <div class="relative mb-2">
               <div class="code-block">{{ guide.install }}</div>
-              <button type="button" class="copy-btn" data-copy>Copy</button>
+              <button type="button" @click="copyText(installText, copiedInstall)" class="copy-btn" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
             </div>
           @endif
           <div class="relative">
             <div class="code-block" style="white-space: pre">{{ guide.code }}</div>
-            <button type="button" class="copy-btn" data-copy>Copy</button>
+            <button type="button" @click="copyText(codeText, copiedCode)" class="copy-btn" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
+          <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+            Native SDKs are in progress. Until then this is the whole integration — the
+            <a href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md" class="lnk" target="_blank" rel="noreferrer">ingest spec</a>
+            documents every field, limit, and retry rule if you want batching or backoff.
+          </p>
         </div>
       </section>
 
-      <!-- ============================ KEYS ============================ -->
-      <section id="keys" class="sec mb-10">
-        <div class="sec-title mb-3">API key</div>
-        <div class="panel px-5 py-5">
-          <p class="text-sm mb-4 text-subtle">
-            This key authorizes error reports for <span class="mono text-muted">{{ activeProject.name }}</span>.
-            It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project a report belongs to.
+      {{-- ============================ KEYS ============================ --}}
+      <section id="keys" class="mb-10 sec">
+        <div class="mb-3 sec-title">API key</div>
+        <div class="px-5 py-5 panel">
+          <p class="mb-4 text-sm text-subtle">
+            This key authorizes log ingest for <span class="text-muted mono">{{ activeProject.name }}</span>.
+            It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
           </p>
-          <div class="flex items-center gap-2 flex-wrap">
-            <code id="key-view" data-full="{{ keyFull }}" data-mask="{{ keyMask }}" class="field mono px-3.5 py-2.5 text-sm flex-1 min-w-[220px] truncate" style="letter-spacing:0.01em">{{ keyMask }}</code>
-            <button id="key-reveal" class="btn-ghost px-3 py-2 text-sm font-medium">Reveal</button>
-            <button id="key-copy" class="btn-ghost px-3 py-2 text-sm font-medium">Copy</button>
-            <button id="key-rotate" class="btn-danger px-3 py-2 text-sm font-medium">Rotate</button>
+          <div class="flex flex-wrap gap-2 items-center">
+            <code class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm truncate field mono" style="letter-spacing:0.01em" :text="keyShown()">{{ keyMask }}</code>
+            <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-sm btn-ghost" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
+            <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-sm btn-ghost" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
+            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm btn-danger">Rotate</button>
           </div>
-          <p class="text-xs mt-3.5 leading-relaxed text-subtle">
-            Rotating generates a new key and <span style="color: var(--warn)">invalidates the current one immediately</span> — any SDK still sending the old key will get 401 until you update its config (<span class="mono">LOGHQ_KEY</span> / <span class="mono">data-key</span>).
+          <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+            Rotating generates a new key and <span style="color: var(--warn)">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="mono">X-LogHQ-Key</span>).
           </p>
-          <span id="key-note" class="note text-xs mt-2"></span>
+          <span class="mt-2 text-xs note show" :show="!!keyNote()" :style="keyNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ keyNote() }}</span>
         </div>
       </section>
 
-      <!-- ============================ MEMBERS ============================ -->
-      <section id="members" class="sec mb-10">
-        <div class="sec-title mb-3">Members</div>
-        <div id="member-list" class="flex flex-col gap-2.5 mb-4">
-          <!-- Owner (always first, not removable) -->
-          <div class="panel flex items-center gap-3.5 px-4 py-3.5">
-            <span class="w-8 h-8 rounded-lg shrink-0 grid place-items-center font-semibold badge-owner">{{ (ownerEmail || '?').charAt(0).toUpperCase() }}</span>
-            <div class="min-w-0 flex-1">
-              <div class="text-sm font-medium truncate">{{ ownerEmail }}</div>
-              <div class="text-xs mt-0.5 text-subtle">Full access</div>
+      {{-- ============================ MEMBERS ============================ --}}
+      <section id="members" class="mb-10 sec">
+        <div class="mb-3 sec-title">Members</div>
+        <div class="flex flex-col gap-2.5 mb-4">
+          {{-- Owner (always first, not removable) --}}
+          <div class="flex gap-3.5 items-center px-4 py-3.5 panel">
+            <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold rounded-lg badge-owner">{{ (ownerEmail || '?').charAt(0).toUpperCase() }}</span>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-sm truncate">{{ ownerEmail }}</div>
+              <div class="mt-0.5 text-subtle text-xs">Full access</div>
             </div>
             <span class="badge badge-owner">Owner</span>
           </div>
           @foreach (memberView as m)
-            <div class="panel flex items-center gap-3.5 px-4 py-3.5" data-member="{{ m.id }}">
-              <span class="w-8 h-8 rounded-lg shrink-0 grid place-items-center font-semibold text-muted" style="background: color-mix(in srgb, var(--text-3) 16%, var(--panel))">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
-              <div class="min-w-0 flex-1">
-                <div class="text-sm font-medium truncate">{{ m.email }}</div>
-                <div class="text-xs mt-0.5 text-subtle">Can view &amp; triage issues</div>
+            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isMemberRemoved('{{ m.id }}')">
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted rounded-lg" style="background: color-mix(in srgb, var(--text-3) 16%, var(--panel))">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate">{{ m.email }}</div>
+                <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
               </div>
               <span class="badge badge-soft">Member</span>
-              <button class="js-member-remove btn-danger px-2.5 py-1.5 text-xs font-medium" title="Remove">Remove</button>
+              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-xs btn-danger" title="Remove">Remove</button>
             </div>
           @endforeach
           @foreach (inviteView as i)
-            <div class="panel flex items-center gap-3.5 px-4 py-3.5" data-member="{{ i.id }}" data-join="{{ i.join }}">
-              <span class="w-8 h-8 rounded-lg shrink-0 grid place-items-center font-semibold text-subtle" style="background: color-mix(in srgb, var(--text-3) 12%, var(--panel))">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
-              <div class="min-w-0 flex-1">
-                <div class="text-sm font-medium truncate">{{ i.email }}</div>
-                <div class="text-xs mt-0.5 text-subtle">{{ i.registered ? 'Has an account — pending accept' : 'Invite sent — awaiting sign-up' }}</div>
+            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isMemberRemoved('{{ i.id }}')">
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle rounded-lg" style="background: color-mix(in srgb, var(--text-3) 12%, var(--panel))">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate">{{ i.email }}</div>
+                <div class="mt-0.5 text-subtle text-xs">{{ i.registered ? 'Has an account — pending accept' : 'Invite sent — awaiting sign-up' }}</div>
               </div>
               <span class="badge badge-pending" title="Pending — becomes a member once they accept">Invited</span>
-              <button class="js-copy-join btn-ghost px-2.5 py-1.5 text-xs font-medium" title="Copy join link">Copy link</button>
-              <button class="js-member-remove btn-danger px-2.5 py-1.5 text-xs font-medium" title="Revoke invite">Remove</button>
+              <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-xs btn-ghost" title="Copy join link">Copy link</button>
+              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-xs btn-danger" title="Revoke invite">Remove</button>
             </div>
           @endforeach
         </div>
-        <div class="panel px-5 py-5">
-          <div class="text-sm font-semibold mb-3">Invite a teammate</div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <input id="invite-email" type="email" class="field flex-1 min-w-[220px] px-3.5 py-2.5 text-sm" placeholder="teammate@company.com" autocomplete="off">
-            <button id="invite-add" class="btn px-4 py-2.5 text-sm font-semibold">Invite</button>
+        <div class="px-5 py-5 panel">
+          <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
+          <div class="flex flex-wrap gap-2 items-center">
+            <input :model="inviteEmail" type="email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm field" placeholder="teammate@company.com" autocomplete="off">
+            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm btn" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
           </div>
-          <span id="invite-note" class="note text-xs mt-2.5"></span>
-          <p class="text-xs mt-3.5 leading-relaxed text-subtle">
-            We email them a join link. They sign up (or log in) with that email, then accept from a banner in the app. Members can view and triage issues; only you can manage keys, members, and deletion.
+          <span class="mt-2.5 text-xs note show" :show="!!inviteNote()" :style="inviteNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ inviteNote() }}</span>
+          <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+            We email them a join link. They sign up (or log in) with that email, then accept from a banner in the app. Members can read the log stream; only you can manage keys, members, and deletion.
           </p>
         </div>
       </section>
 
-      <!-- ============================ ALERTS ============================ -->
-      <section id="alerts" class="sec mb-10">
-        <div class="sec-title mb-3">Alerts</div>
-        <p class="text-sm mb-4 text-subtle">
-          Get pinged in Slack or Discord on a new issue or a regression. The project owner is always emailed too.
+      {{-- ============================ ALERTS ============================ --}}
+      <section id="alerts" class="mb-10 sec">
+        <div class="mb-3 sec-title">Alerts</div>
+        <p class="mb-4 text-sm text-subtle">
+          Add a Slack or Discord webhook and send a test to verify it. Automatic delivery isn't live yet —
+          channels you add here are saved and testable, but loghq won't fire on its own until log-based alert rules ship.
         </p>
-        <div id="channel-list" class="flex flex-col gap-2.5 mb-4">
+        <div class="flex flex-col gap-2.5 mb-4">
           @forelse (channelView as c)
-            <div class="panel flex items-center gap-3.5 px-4 py-3.5" data-id="{{ c.id }}">
+            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isChannelRemoved('{{ c.id }}')">
               <span class="badge badge-{{ c.type }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
-              <div class="min-w-0 flex-1">
-                <div class="text-sm font-medium truncate">{{ c.label }}</div>
-                <div class="text-xs mono truncate mt-0.5 text-subtle">{{ c.mask }}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate">{{ c.label }}</div>
+                <div class="mt-0.5 text-subtle text-xs truncate mono">{{ c.mask }}</div>
               </div>
-              <button class="js-test btn-ghost px-2.5 py-1.5 text-xs font-medium" title="Send a test message">Test</button>
-              <div class="js-toggle tgl" data-on="{{ c.enabled ? '1' : '0' }}" role="switch" aria-checked="{{ c.enabled ? 'true' : 'false' }}" title="Enable / disable"></div>
-              <button class="js-delete btn-danger px-2.5 py-1.5 text-xs font-medium" title="Remove">Remove</button>
+              <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs btn-ghost" title="Send a test message">Test</button>
+              <div class="tgl" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" role="switch" title="Enable / disable"></div>
+              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs btn-danger" title="Remove">Remove</button>
             </div>
           @empty
-            <div class="panel px-5 py-8 text-center">
-              <div class="text-sm font-medium mb-1">No chat alerts yet</div>
-              <div class="text-xs text-subtle">Add a Slack or Discord webhook below to start getting pinged.</div>
+            <div class="px-5 py-8 text-center panel">
+              <div class="mb-1 font-medium text-sm">No chat alerts yet</div>
+              <div class="text-subtle text-xs">Add a Slack or Discord webhook below to start getting pinged.</div>
             </div>
           @endforelse
         </div>
-        <div class="panel px-5 py-5">
-          <div class="text-sm font-semibold mb-3.5">Add a channel</div>
-          <div class="grid grid-cols-2 gap-2 mb-3">
-            <button type="button" id="pick-slack" class="seg seg-slack px-3 py-2.5 text-sm font-medium" data-sel="1">Slack</button>
-            <button type="button" id="pick-discord" class="seg seg-discord px-3 py-2.5 text-sm font-medium" data-sel="0">Discord</button>
+        <div class="px-5 py-5 panel">
+          <div class="mb-3.5 font-semibold text-sm">Add a channel</div>
+          <div class="grid gap-2 grid-cols-2 mb-3">
+            <button type="button" @click="chType.set('slack')" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg seg-slack">Slack</button>
+            <button type="button" @click="chType.set('discord')" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg seg-discord">Discord</button>
           </div>
-          <input id="wh-url" type="url" class="field w-full px-3.5 py-2.5 text-sm mono mb-2" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
-          <input id="wh-label" type="text" class="field w-full px-3.5 py-2.5 text-sm mb-3" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
-          <div class="flex items-center gap-3">
-            <button id="wh-add" class="btn px-4 py-2.5 text-sm font-semibold">Add channel</button>
-            <span id="wh-note" class="note text-xs"></span>
+          <input :model="whUrl" :placeholder="whPlaceholder()" type="url" class="mb-2 px-3.5 py-2.5 w-full text-sm field mono" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
+          <input :model="whLabel" type="text" class="mb-3 px-3.5 py-2.5 w-full text-sm field" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
+          <div class="flex gap-3 items-center">
+            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm btn" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <span class="text-xs note show" :show="!!whNote()" :style="whNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ whNote() }}</span>
           </div>
-          <p id="wh-help" class="text-xs mt-3.5 leading-relaxed text-subtle">
+          <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
             In Slack: <span class="text-muted">Apps → Incoming Webhooks → Add to a channel</span>, then paste the <span class="mono">hooks.slack.com/services/…</span> URL.
           </p>
         </div>
       </section>
 
-      <!-- ============================ DANGER ============================ -->
-      <section id="danger" class="sec mb-6">
-        <div class="sec-title mb-3" style="color: var(--warn)">Danger zone</div>
-        <div class="panel danger-panel" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
-          <!-- Archive / Unarchive -->
-          <div class="flex items-center justify-between gap-4 px-5 py-4">
+      {{-- ============================ DANGER ============================ --}}
+      <section id="danger" class="mb-6 sec">
+        <div class="mb-3 sec-title" style="color: var(--warn)">Danger zone</div>
+        <div class="danger-panel panel" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
+          {{-- Archive / Unarchive --}}
+          <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
               @if (activeProject.is_active === false)
-                <div class="text-sm font-semibold mb-0.5">Unarchive this project</div>
-                <p class="text-sm text-subtle"><span class="mono text-muted">{{ activeProject.name }}</span> is archived and isn’t capturing new errors. Unarchiving resumes ingestion right away.</p>
+                <div class="mb-0.5 font-semibold text-sm">Unarchive this project</div>
+                <p class="text-sm text-subtle"><span class="text-muted mono">{{ activeProject.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
               @else
-                <div class="text-sm font-semibold mb-0.5">Archive this project</div>
-                <p class="text-sm text-subtle">Stops capturing new errors and pauses alerts for <span class="mono text-muted">{{ activeProject.name }}</span>. Existing issues and events are kept — you can unarchive anytime.</p>
+                <div class="mb-0.5 font-semibold text-sm">Archive this project</div>
+                <p class="text-sm text-subtle">Rejects new log entries for <span class="text-muted mono">{{ activeProject.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
               @endif
             </div>
-            <button id="archive-btn" class="btn-danger px-4 py-2.5 text-sm font-semibold whitespace-nowrap flex-none">{{ activeProject.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm whitespace-nowrap btn-danger">{{ activeProject.is_active === false ? 'Unarchive' : 'Archive' }}</button>
           </div>
           <div class="dz-div"></div>
-          <!-- Delete -->
-          <div class="flex items-center justify-between gap-4 px-5 py-4">
+          {{-- Delete --}}
+          <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
-              <div class="text-sm font-semibold mb-0.5">Delete this project</div>
-              <p class="text-sm text-subtle">Permanently deletes <span class="mono text-muted">{{ activeProject.name }}</span> and all of its issues, events, alert channels, and members. This cannot be undone.</p>
+              <div class="mb-0.5 font-semibold text-sm">Delete this project</div>
+              <p class="text-sm text-subtle">Permanently deletes <span class="text-muted mono">{{ activeProject.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
             </div>
-            <button id="delete-btn" class="btn-danger px-4 py-2.5 text-sm font-semibold whitespace-nowrap flex-none">Delete</button>
+            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm whitespace-nowrap btn-danger">Delete</button>
           </div>
         </div>
       </section>
 
-      <!-- Confirm modal (archive / delete): type the project name to confirm -->
-      <div id="dz-modal" class="dz-overlay" hidden>
-        <div class="dz-card panel" role="dialog" aria-modal="true" aria-labelledby="dz-title">
-          <div id="dz-title" class="text-base font-semibold mb-1"></div>
-          <p id="dz-desc" class="text-sm mb-4 text-muted"></p>
-          <label class="block text-xs mb-1.5 text-subtle">Type <span class="mono text-muted" id="dz-name"></span> to confirm</label>
-          <input id="dz-input" type="text" class="field w-full px-3.5 py-2.5 text-sm mono mb-4" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <div class="flex items-center justify-end gap-2">
-            <button id="dz-cancel" type="button" class="btn-ghost px-4 py-2.5 text-sm font-medium">Cancel</button>
-            <button id="dz-confirm" type="button" class="btn-danger px-4 py-2.5 text-sm font-semibold" disabled></button>
+      {{-- Type-to-confirm modal (archive / delete). Was built by hand: toggling
+          the hidden attribute, writing title/desc/label text, and flipping a
+          disabled flag on input. It is one modalKind signal now — '' means
+          closed.
+
+          This is an stx comment rather than an HTML one, deliberately. An HTML
+          comment ships to the browser verbatim and is then re-read by four
+          separate consumers: a backtick in one flips the merged setup function
+          into template-literal mode, and the name of the root element or of a
+          script tag in one silently disables the document shell. Describe
+          syntax in prose here; never quote it. --}}
+      <div class="dz-overlay" :show="modalOpen()" @click="closeModal">
+        <div class="dz-card panel" role="dialog" aria-modal="true" @click.stop>
+          <div class="mb-1 font-semibold text-base">{{ modalTitle() }}</div>
+          <p class="mb-4 text-muted text-sm">{{ modalDesc() }}</p>
+          <label class="block mb-1.5 text-subtle text-xs">Type <span class="text-muted mono">{{ projectName }}</span> to confirm</label>
+          <input :model="modalInput" type="text" class="mb-4 px-3.5 py-2.5 w-full text-sm field mono" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="flex gap-2 items-center justify-end">
+            <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-sm btn-ghost">Cancel</button>
+            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm btn-danger"></button>
           </div>
-          <span id="dz-note" class="note text-xs mt-2.5"></span>
+          <span class="mt-2.5 text-xs note show" :show="!!modalNote()" style="color: var(--accent)">{{ modalNote() }}</span>
         </div>
       </div>
     @endif
@@ -424,6 +900,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   </div>
 </div>
 
+{{-- Auth guard. Navigation only, renders nothing, and must run before the page
+    is usable — a directive would hydrate too late and flash the settings UI to
+    a signed-out visitor. --}}
 <script>
 (function () {
   var t = localStorage.getItem('token')
@@ -431,292 +910,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   if (!/(^|;)\s*loghq_token=/.test(document.cookie)) {
     document.cookie = 'loghq_token=' + t + '; path=/; max-age=2592000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
     window.location.reload()
-    return
-  }
-
-  // Theme toggle (light/dark, persisted per device).
-  var themeBtn = document.getElementById('theme-toggle')
-  if (themeBtn) {
-    var mq = window.matchMedia('(prefers-color-scheme: dark)')
-    var effTheme = function () { return document.documentElement.getAttribute('data-theme') || (mq.matches ? 'dark' : 'light') }
-    var paintTheme = function () { themeBtn.setAttribute('data-t', effTheme()) }
-    paintTheme()
-    themeBtn.addEventListener('click', function () {
-      var next = effTheme() === 'dark' ? 'light' : 'dark'
-      document.documentElement.setAttribute('data-theme', next)
-      try { localStorage.setItem('loghq_theme', next) } catch (e) {}
-      paintTheme()
-    })
-  }
-
-  var projectId = {{ projectId ? `'${projectId}'` : 'null' }}
-  if (!projectId) return
-  var auth = { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' }
-  var proj = '/api/projects/' + encodeURIComponent(projectId)
-  var chBase = proj + '/channels'
-
-  function flash(el, msg, ok) {
-    el.textContent = msg
-    el.style.color = ok ? 'var(--ok)' : 'var(--accent)'
-    el.classList.add('show')
-  }
-
-  // ---- Install: copy buttons ----
-  document.querySelectorAll('.copy-btn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var code = b.previousElementSibling ? b.previousElementSibling.textContent : ''
-      if (navigator.clipboard && code) {
-        navigator.clipboard.writeText(code).then(function () {
-          var prev = b.textContent
-          b.textContent = 'Copied'
-          setTimeout(function () { b.textContent = prev }, 1200)
-        })
-      }
-    })
-  })
-
-  // ---- Project switcher (owner's own projects) ----
-  var sw = document.getElementById('proj-switch')
-  if (sw) sw.addEventListener('change', function () {
-    document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
-    window.location.href = '/settings'
-  })
-
-  // ---- Keys: reveal / copy / rotate ----
-  var keyView = document.getElementById('key-view')
-  var keyReveal = document.getElementById('key-reveal')
-  var keyCopy = document.getElementById('key-copy')
-  var keyRotate = document.getElementById('key-rotate')
-  var keyNote = document.getElementById('key-note')
-  // Read the key from data-attributes (HTML-escaped, not JS-quoted like a
-  // {{ }} inside <script>, which stx JSON-encodes and would double-quote).
-  var fullKey = keyView ? keyView.getAttribute('data-full') : ''
-  var maskVal = keyView ? keyView.getAttribute('data-mask') : ''
-  var revealed = false
-  keyReveal.addEventListener('click', function () {
-    revealed = !revealed
-    keyView.textContent = revealed ? fullKey : maskVal
-    keyReveal.textContent = revealed ? 'Hide' : 'Reveal'
-  })
-  keyCopy.addEventListener('click', function () {
-    var done = function () { var o = keyCopy.textContent; keyCopy.textContent = 'Copied'; setTimeout(function () { keyCopy.textContent = o }, 1400) }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(fullKey).then(done, done)
-    else done()
-  })
-  keyRotate.addEventListener('click', function () {
-    var ask = window.stxConfirm
-      ? window.stxConfirm('The current key stops working immediately — any SDK still sending it will get 401 until you update its config. Continue?', { title: 'Rotate API key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
-      : Promise.resolve(window.confirm('Rotate the API key? The current key stops working immediately.'))
-    Promise.resolve(ask).then(function (ok) {
-      if (!ok) return
-      keyRotate.disabled = true
-      fetch(proj + '/rotate-key', { method: 'POST', headers: auth })
-        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
-        .then(function (res) {
-          keyRotate.disabled = false
-          if (!res.ok) { flash(keyNote, res.b.error || 'Rotate failed.', false); return }
-          fullKey = res.b.ingest_key
-          revealed = true
-          keyView.textContent = fullKey
-          keyReveal.textContent = 'Hide'
-          flash(keyNote, 'New key generated. Update your SDK config with it.', true)
-        })
-        .catch(function () { keyRotate.disabled = false; flash(keyNote, 'Network error.', false) })
-    })
-  })
-
-  // ---- Members: invite / remove ----
-  var inviteEmail = document.getElementById('invite-email')
-  var inviteAdd = document.getElementById('invite-add')
-  var inviteNote = document.getElementById('invite-note')
-  inviteAdd.addEventListener('click', function () {
-    var email = (inviteEmail.value || '').trim()
-    if (!email) { flash(inviteNote, 'Enter an email address.', false); return }
-    inviteAdd.disabled = true
-    fetch(proj + '/members', { method: 'POST', headers: auth, body: JSON.stringify({ email: email }) })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
-      .then(function (res) {
-        inviteAdd.disabled = false
-        if (!res.ok) { flash(inviteNote, res.b.error || 'Could not invite.', false); return }
-        window.location.reload()
-      })
-      .catch(function () { inviteAdd.disabled = false; flash(inviteNote, 'Network error.', false) })
-  })
-  document.getElementById('member-list').addEventListener('click', function (e) {
-    var row = e.target.closest('[data-member]')
-    if (!row) return
-
-    // Copy the join link for a pending invite (handy when email isn't delivered).
-    if (e.target.classList.contains('js-copy-join')) {
-      var cbtn = e.target, link = row.getAttribute('data-join') || ''
-      var done = function () { var o = cbtn.textContent; cbtn.textContent = 'Copied ✓'; setTimeout(function () { cbtn.textContent = o }, 1600) }
-      if (navigator.clipboard && link) navigator.clipboard.writeText(link).then(done, done)
-      else done()
-      return
-    }
-
-    if (e.target.classList.contains('js-member-remove')) {
-      var btn = e.target
-      btn.disabled = true; btn.textContent = 'Removing…'
-      fetch(proj + '/members/' + encodeURIComponent(row.getAttribute('data-member')), { method: 'DELETE', headers: auth })
-        .then(function (r) { if (r.ok) row.remove(); else { btn.disabled = false; btn.textContent = 'Remove' } })
-        .catch(function () { btn.disabled = false; btn.textContent = 'Remove' })
-    }
-  })
-
-  // ---- Alerts: provider picker + add + row actions (test/toggle/delete) ----
-  var type = 'slack'
-  var slackBtn = document.getElementById('pick-slack')
-  var discordBtn = document.getElementById('pick-discord')
-  var urlInput = document.getElementById('wh-url')
-  var help = document.getElementById('wh-help')
-  var placeholders = { slack: 'https://hooks.slack.com/services/…', discord: 'https://discord.com/api/webhooks/…' }
-  var helps = {
-    slack: 'In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the hooks.slack.com/services/… URL.',
-    discord: 'In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
-  }
-  function pick(next) {
-    type = next
-    slackBtn.setAttribute('data-sel', next === 'slack' ? '1' : '0')
-    discordBtn.setAttribute('data-sel', next === 'discord' ? '1' : '0')
-    urlInput.setAttribute('placeholder', placeholders[next])
-    help.textContent = helps[next]
-  }
-  slackBtn.addEventListener('click', function () { pick('slack') })
-  discordBtn.addEventListener('click', function () { pick('discord') })
-
-  var whNote = document.getElementById('wh-note')
-  var addBtn = document.getElementById('wh-add')
-  var labelInput = document.getElementById('wh-label')
-  addBtn.addEventListener('click', function () {
-    var url = (urlInput.value || '').trim()
-    if (!url) { flash(whNote, 'Paste a webhook URL first.', false); return }
-    addBtn.disabled = true
-    flash(whNote, 'Adding…', true)
-    fetch(chBase, { method: 'POST', headers: auth, body: JSON.stringify({ type: type, webhook_url: url, label: (labelInput.value || '').trim() }) })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
-      .then(function (res) {
-        if (!res.ok) { addBtn.disabled = false; flash(whNote, res.b.error || 'Could not add that channel.', false); return }
-        window.location.reload()
-      })
-      .catch(function () { addBtn.disabled = false; flash(whNote, 'Network error. Try again.', false) })
-  })
-  document.getElementById('channel-list').addEventListener('click', function (e) {
-    var row = e.target.closest('[data-id]')
-    if (!row) return
-    var one = chBase + '/' + encodeURIComponent(row.getAttribute('data-id'))
-    if (e.target.classList.contains('js-test')) {
-      var b1 = e.target; b1.disabled = true; b1.textContent = 'Sending…'
-      fetch(one + '/test', { method: 'POST', headers: auth })
-        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
-        .then(function (res) { b1.textContent = res.ok ? 'Sent ✓' : 'Failed'; setTimeout(function () { b1.disabled = false; b1.textContent = 'Test' }, 2400) })
-        .catch(function () { b1.disabled = false; b1.textContent = 'Test' })
-      return
-    }
-    if (e.target.classList.contains('js-toggle')) {
-      var tgl = e.target
-      var next = tgl.getAttribute('data-on') === '1' ? 0 : 1
-      tgl.setAttribute('data-on', String(next)); tgl.setAttribute('aria-checked', next ? 'true' : 'false')
-      fetch(one, { method: 'PATCH', headers: auth, body: JSON.stringify({ enabled: !!next }) })
-        .catch(function () { tgl.setAttribute('data-on', next ? '0' : '1') })
-      return
-    }
-    if (e.target.classList.contains('js-delete')) {
-      var b2 = e.target; b2.disabled = true; b2.textContent = 'Removing…'
-      fetch(one, { method: 'DELETE', headers: auth })
-        .then(function (r) { if (r.ok) row.remove(); else { b2.disabled = false; b2.textContent = 'Remove' } })
-        .catch(function () { b2.disabled = false; b2.textContent = 'Remove' })
-    }
-  })
-
-  // ---- Danger zone: archive / delete behind a type-to-confirm modal ----
-  var dzPanel = document.querySelector('.danger-panel')
-  if (dzPanel) {
-    var projectName = dzPanel.getAttribute('data-project-name') || ''
-    var isActive = dzPanel.getAttribute('data-active') !== '0'
-    var modal = document.getElementById('dz-modal')
-    var mTitle = document.getElementById('dz-title')
-    var mDesc = document.getElementById('dz-desc')
-    var mName = document.getElementById('dz-name')
-    var mInput = document.getElementById('dz-input')
-    var mConfirm = document.getElementById('dz-confirm')
-    var mCancel = document.getElementById('dz-cancel')
-    var mNote = document.getElementById('dz-note')
-    var mAction = null
-
-    function closeModal() {
-      modal.setAttribute('hidden', '')
-      mInput.value = ''; mConfirm.disabled = true
-      mNote.classList.remove('show'); mAction = null
-    }
-    function openModal(opts) {
-      mTitle.textContent = opts.title
-      mDesc.textContent = opts.desc
-      mName.textContent = projectName
-      mConfirm.textContent = opts.confirmText
-      mConfirm.setAttribute('data-label', opts.confirmText)
-      mInput.value = ''; mConfirm.disabled = true
-      mNote.classList.remove('show')
-      mAction = opts.onConfirm
-      modal.removeAttribute('hidden')
-      setTimeout(function () { mInput.focus() }, 20)
-    }
-    mInput.addEventListener('input', function () { mConfirm.disabled = (this.value.trim() !== projectName) })
-    mCancel.addEventListener('click', closeModal)
-    modal.addEventListener('click', function (e) { if (e.target === modal) closeModal() })
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal() })
-    mConfirm.addEventListener('click', function () {
-      if (mInput.value.trim() !== projectName || !mAction) return
-      mConfirm.disabled = true
-      mAction()
-    })
-    function failConfirm(msg) {
-      mConfirm.disabled = false
-      mConfirm.textContent = mConfirm.getAttribute('data-label')
-      flash(mNote, msg, false)
-    }
-
-    var archiveBtn = document.getElementById('archive-btn')
-    archiveBtn.addEventListener('click', function () {
-      if (isActive) {
-        openModal({
-          title: 'Archive ' + projectName + '?',
-          desc: 'loghq will stop capturing new errors and pause alerts for this project. Existing issues and events are kept, and you can unarchive anytime.',
-          confirmText: 'Archive project',
-          onConfirm: function () {
-            mConfirm.textContent = 'Archiving…'
-            fetch(proj + '/archive', { method: 'POST', headers: auth, body: JSON.stringify({ archived: true }) })
-              .then(function (r) { if (r.ok) window.location.reload(); else failConfirm('Archive failed.') })
-              .catch(function () { failConfirm('Network error.') })
-          },
-        })
-      } else {
-        // Unarchive is non-destructive — no confirmation needed.
-        archiveBtn.disabled = true; archiveBtn.textContent = 'Unarchiving…'
-        fetch(proj + '/archive', { method: 'POST', headers: auth, body: JSON.stringify({ archived: false }) })
-          .then(function (r) { if (r.ok) window.location.reload(); else { archiveBtn.disabled = false; archiveBtn.textContent = 'Unarchive' } })
-          .catch(function () { archiveBtn.disabled = false; archiveBtn.textContent = 'Unarchive' })
-      }
-    })
-
-    document.getElementById('delete-btn').addEventListener('click', function () {
-      openModal({
-        title: 'Delete ' + projectName + '?',
-        desc: 'This permanently deletes the project and all of its issues, events, alert channels, and members. This cannot be undone.',
-        confirmText: 'Delete project',
-        onConfirm: function () {
-          mConfirm.textContent = 'Deleting…'
-          fetch(proj, { method: 'DELETE', headers: auth })
-            .then(function (r) {
-              if (r.ok) {
-                document.cookie = 'loghq_project=; path=/; max-age=0'
-                window.location.assign('/projects')
-              } else { failConfirm('Delete failed.') }
-            })
-            .catch(function () { failConfirm('Network error.') })
-        },
-      })
-    })
   }
 })()
 </script>

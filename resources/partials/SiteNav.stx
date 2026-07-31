@@ -1,13 +1,31 @@
-<!-- Shared marketing nav, included on every marketing page via the stx include
-     directive with the name SiteNav. One source of truth for the top nav, with
-     two CSS-only mega-menu dropdowns (Features, Use cases). No JS: panels reveal
-     on hover and on keyboard focus via :focus-within. The .mega styles live in
-     the style block below (public/marketing.css is out of scope for this change)
-     and reuse loghq's existing design tokens so the nav matches the whole site. -->
+<script client>
+// Auth-aware nav. Login/register write the token to localStorage (and mirror it
+// to a cookie so server-rendered pages authenticate), so this reads it once at
+// hydration. Not reactive to a login in another tab — logging in navigates, so
+// the next render picks it up.
+//
+// This lives in the partial rather than in each page on purpose. It used to be a
+// script in index.stx only, which meant a logged-in visitor saw "Dashboard" on
+// the homepage and "Log in / Sign up" on all 20+ other pages that include this
+// nav. One source of truth for the markup deserves one for its state.
+const isAuthed = state(!!localStorage.getItem('token'))
+//
+// NOTE ON COMMENTS IN THIS FILE: use JS comments inside this script block, as
+// here, and plain markup below. Do NOT add an stx template comment anywhere in
+// this file. Verified against the shipped renderer: a partial that contains a
+// client script never has its template comments stripped, at any position in
+// the file, so the comment text ships in the response body on all 23 pages that
+// include this nav. It is removed again by the client runtime before paint, so
+// it is invisible rather than broken — but it is dead bytes on every page and
+// the kind of thing that stops being invisible the moment it contains anything
+// the renderer re-reads. The prose that used to live here is in
+// resources/layouts/marketing.stx, whose comments strip correctly.
+</script>
+
 <nav class="nav">
   <div class="nav-inner shell">
     <a class="brand" href="/" aria-label="loghq home">
-      <span class="brand-mark">b</span>
+      <span class="brand-mark">l</span>
       <span class="brand-name">loghq</span>
     </a>
 
@@ -41,8 +59,8 @@
       <a href="https://github.com/stacksjs/loghq">GitHub</a>
     </div>
 
-    <a class="nav-login" data-auth-login href="/login">Log in</a>
-    <a class="btn nav-cta primary sm" data-auth-signup href="/register">Sign up</a>
+    <a class="nav-login" :href="isAuthed() ? '/dashboard' : '/login'">{{ isAuthed() ? 'Dashboard' : 'Log in' }}</a>
+    <a class="btn nav-cta primary sm" :show="!isAuthed()" href="/register">Sign up</a>
 
     <details class="nav-menu">
       <summary aria-label="Open menu"><span class="burger" aria-hidden="true"></span></summary>
@@ -67,8 +85,8 @@
         <a href="/pricing">Pricing</a>
         <a href="/docs">Docs</a>
         <a href="https://github.com/stacksjs/loghq">GitHub</a>
-        <a data-auth-login href="/login">Log in</a>
-        <a class="btn primary sm" data-auth-signup href="/register">Sign up</a>
+        <a :href="isAuthed() ? '/dashboard' : '/login'">{{ isAuthed() ? 'Dashboard' : 'Log in' }}</a>
+        <a class="btn primary sm" :show="!isAuthed()" href="/register">Sign up</a>
       </div>
     </details>
   </div>
@@ -76,7 +94,7 @@
 
 <style>
   /* CSS-only mega menu. Reveal on hover + keyboard focus (:focus-within).
-     Tokens are the same variables the rest of marketing.css uses. */
+    Tokens are the same variables the rest of marketing.css uses. */
   .mega { position: relative; display: inline-flex; align-items: center; }
   .mega-trigger { display: inline-flex; align-items: center; gap: 0.32rem; cursor: pointer; }
   .mega-trigger::after {

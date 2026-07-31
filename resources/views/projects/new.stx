@@ -59,10 +59,6 @@ async function handleSubmit(e) {
 }
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-
 <style>
 :root {
   --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
@@ -88,29 +84,29 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
 </style>
 
-<div class="min-h-[100dvh] flex items-center justify-center px-5 py-12">
-  <div class="w-full max-w-md">
-    <div class="text-center mb-8">
-      <a href="/" class="wordmark text-2xl">loghq</a>
+<div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
+  <div class="max-w-md w-full">
+    <div class="mb-8 text-center">
+      <a href="/" class="text-2xl wordmark">loghq</a>
     </div>
 
-    <div class="text-center mb-8">
-      <h1 class="text-xl font-semibold tracking-tight">Create your first app</h1>
-      <p class="text-sm mt-2 text-subtle">Each app gets its own error stream and ingest key.</p>
+    <div class="mb-8 text-center">
+      <h1 class="font-semibold text-xl tracking-tight">Create your first app</h1>
+      <p class="mt-2 text-sm text-subtle">Each app gets its own log stream and ingest key.</p>
     </div>
 
     <form @submit="handleSubmit" class="space-y-4">
       @if (error())
-        <div class="err text-sm rounded-lg px-3 py-2">{{ error() }}</div>
+        <div class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
       @endif
 
       <div>
-        <label class="block text-xs font-medium mb-1.5 text-muted">App name</label>
-        <input name="name" type="text" required autofocus placeholder="Acme Web" class="field w-full px-3.5 py-2.5 text-sm">
+        <label class="block mb-1.5 font-medium text-muted text-xs">App name</label>
+        <input name="name" type="text" required autofocus placeholder="Acme Web" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
-        <label class="block text-xs font-medium mb-1.5 text-muted">Platform</label>
-        <select name="platform" class="field w-full px-3.5 py-2.5 text-sm">
+        <label class="block mb-1.5 font-medium text-muted text-xs">Platform</label>
+        <select name="platform" class="px-3.5 py-2.5 w-full text-sm field">
           <option value="javascript">JavaScript / Browser</option>
           <option value="node">Node.js</option>
           <option value="react">React</option>
@@ -122,7 +118,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         </select>
       </div>
 
-      <button type="submit" :disabled="loading()" class="btn w-full py-2.5 text-sm font-semibold">
+      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
         {{ loading() ? 'Creating…' : 'Create app' }}
       </button>
     </form>

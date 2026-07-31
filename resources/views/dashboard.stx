@@ -72,16 +72,16 @@ if (user) {
   projects = (await db.unsafe(
     `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.created_at, p.is_active,
             (p.owner_id = $1) AS is_owner
-     FROM projects p
-     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
-     WHERE p.owner_id = $1 OR m.email IS NOT NULL
-     ORDER BY p.created_at DESC NULLS LAST, p.id`,
+    FROM projects p
+    LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
+    WHERE p.owner_id = $1 OR m.email IS NOT NULL
+    ORDER BY p.created_at DESC NULLS LAST, p.id`,
     [Number(user.id), userEmail],
   )) ?? []
   pendingInvites = (await db.unsafe(
     `SELECT i.token, p.name AS project_name FROM project_invites i
-     JOIN projects p ON p.id = i.project_id
-     WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
+    JOIN projects p ON p.id = i.project_id
+    WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
     [userEmail],
   )) ?? []
   if (projects.length === 0 && pendingInvites.length === 0)
@@ -149,7 +149,7 @@ async function loadData() {
 
   logs = (await db.unsafe(
     `SELECT id, level, message, channel, environment, release, framework, host, context, timestamp
-     FROM log_entries WHERE ${where} ORDER BY timestamp DESC, id DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+    FROM log_entries WHERE ${where} ORDER BY timestamp DESC, id DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
     params,
   )) ?? []
 
@@ -174,7 +174,7 @@ async function loadData() {
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE level = 'warning') AS warnings,
             COUNT(*) FILTER (WHERE level IN ('error','critical','alert','emergency')) AS errors
-     FROM log_entries WHERE ${cconds.join(' AND ')}`,
+    FROM log_entries WHERE ${cconds.join(' AND ')}`,
     [projectId],
   ))?.[0]
   counts = { total: Number(c?.total ?? 0), warnings: Number(c?.warnings ?? 0), errors: Number(c?.errors ?? 0) }
@@ -242,14 +242,98 @@ const stats = [
 ]
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<script client>
+// Dashboard chrome: theme toggle, plan badge, logout, and the invite banner.
+//
+// The logout and Upgrade controls used to be built in JS and mounted on the
+// document body. Body-mounted nodes survive an SPA view swap, so
+// they outlived this page and painted stale chrome over the next one. They are
+// declarative markup inside the page container now, which the router replaces
+// along with everything else.
+const pro = state(false)
+
+// `theme` mirrors the root element's data-theme — the root is owned by no
+// component, and the pre-paint script sets it before hydration to avoid a flash.
+const theme = state(
+  document.documentElement.getAttribute('data-theme')
+  || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+)
+
+function toggleTheme() {
+  const next = theme() === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', next)
+  try { localStorage.setItem('loghq_theme', next) }
+  catch {}
+  theme.set(next)
+}
+
+function signOut() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  document.cookie = 'loghq_token=; path=/; max-age=0'
+  window.location.assign('/login')
+}
+
+// Invite banner. Was one delegated listener on the container doing className
+// sniffing and row.remove(); each row now owns its own handlers and the state
+// is keyed by invite token.
+const dismissed = state([])
+const joining = state('')
+
+const isDismissed = t => dismissed().includes(t)
+const joinLabel = t => (joining() === t ? 'Joining…' : 'Join')
+
+function dismissInvite(token) {
+  dismissed.set([...dismissed(), token])
+}
+
+async function joinInvite(token) {
+  if (joining())
+    return
+  joining.set(token)
+  try {
+    const res = await fetch('/api/invites/accept', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const body = await res.json()
+    if (!res.ok) {
+      joining.set('')
+      return
+    }
+    document.cookie = `loghq_project=${encodeURIComponent(body.project)}; path=/; max-age=31536000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
+    window.location.assign('/dashboard')
+  }
+  catch {
+    joining.set('')
+  }
+}
+
+async function loadPlan() {
+  const token = localStorage.getItem('token')
+  if (!token)
+    return
+  try {
+    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
+    if (res.status === 401) {
+      signOut()
+      return
+    }
+    const data = res.ok ? await res.json() : null
+    if (data?.pro)
+      pro.set(true)
+  }
+  catch {}
+}
+
+loadPlan()
+</script>
 
 <style>
 /* loghq - Space Grotesk display + JetBrains Mono for numerics/code/log lines.
-   One accent (indigo — chrome/navigation only; severity has its own semantic
-   colors), off-black/off-white, auto light+dark, radius lock 12px. */
+  One accent (indigo — chrome/navigation only; severity has its own semantic
+  colors), off-black/off-white, auto light+dark, radius lock 12px. */
 :root {
   --bg: #fbfbfd; --panel: #ffffff; --border: rgba(15,23,42,0.09);
   --text: #0b0f19; --text-2: #4b5565; --text-3: #97a1b2; --accent: #4f46e5;
@@ -282,11 +366,16 @@ summary::-webkit-details-marker { display: none; }
 .search-input { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; color: var(--text); outline: none; transition: border-color 0.15s ease; }
 .search-input:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
 .search-input::placeholder { color: var(--text-3); }
-.chrome-logout { border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
+/* Position was an inline style string assembled in JS. It lives here now, so
+  the chrome is styleable and themeable like everything else. */
+.chrome-logout, .chrome-upgrade { position: fixed; top: 16px; z-index: 60; padding: 8px 13px; border-radius: 9px; font-size: 13px; line-height: 1; font-family: var(--sans, ui-sans-serif); }
+.chrome-logout { right: 18px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
 .chrome-logout:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.chrome-upgrade { background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
+.chrome-upgrade { right: 112px; font-weight: 600; text-decoration: none; background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
 .chrome-upgrade:hover { filter: brightness(1.12); }
 .chrome-upgrade:active { transform: translateY(1px); }
+/* Pro is a status, not an action: no link, no hover lift. */
+.chrome-pro, .chrome-pro:hover { background: transparent; color: var(--accent); border: 1px solid var(--accent); cursor: default; filter: none; }
 .reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
 @keyframes reveal { to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
@@ -298,7 +387,7 @@ summary::-webkit-details-marker { display: none; }
 .theme-btn[data-t="dark"] .ic-moon { display: block; }
 .ctx-pre { white-space: pre-wrap; word-break: break-word; }
 /* Keyboard focus — a visible ring on every interactive control (accessibility,
-   not optional). Search gets an inset ring so it doesn't clash with its pill. */
+  not optional). Search gets an inset ring so it doesn't clash with its pill. */
 a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
 }
@@ -310,14 +399,14 @@ summary:focus-visible { outline-offset: -2px; }
 .log-row { display: grid; grid-template-columns: 3px 4.75rem 3.75rem 6rem minmax(0, 1fr); align-items: center; column-gap: 0.75rem; }
 .lvl-chip { display: inline-block; text-align: center; white-space: nowrap; }
 /* Subtle grain so the flat surfaces don't read as sterile. Fixed, non-blocking,
-   barely-there; sits under the floating chrome (z-60). */
+  barely-there; sits under the floating chrome (z-60). */
 .grain { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.03;
   background-size: 170px 170px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 @media (prefers-reduced-motion: no-preference) { .grain { opacity: 0.032; } }
 /* Project dropdown: the native select chevron hugged the rounded border. Reset
-   the native appearance and draw our own with a comfortable inset + room for the
-   value text. Chevron is themed to --text-3 in each mode. */
+  the native appearance and draw our own with a comfortable inset + room for the
+  value text. Chevron is themed to --text-3 in each mode. */
 select.panel {
   -webkit-appearance: none; -moz-appearance: none; appearance: none;
   padding-right: 2rem; background-repeat: no-repeat;
@@ -329,34 +418,41 @@ select.panel {
 :root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 </style>
 
-<!-- Apply the saved theme before first paint (no flash of the wrong theme). -->
+{{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
 <script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
 
-<!-- Ambient grain overlay: barely-there texture so surfaces aren't sterile-flat. -->
+{{-- Ambient grain overlay: barely-there texture so surfaces aren't sterile-flat. --}}
 <div class="grain" aria-hidden="true"></div>
 
-<div class="min-h-[100dvh] px-5 py-10 md:px-10">
-  <div class="max-w-5xl mx-auto">
+<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
+  {{-- Fixed-position chrome. Inside the page container, not document.body, so an
+      SPA view swap takes it with the rest of the page. Position is fixed, so
+      where it sits in the DOM does not affect layout. --}}
+  <a class="chrome-upgrade" href="/pricing" :show="!pro()">Upgrade</a>
+  <span class="chrome-pro chrome-upgrade" :show="pro()">Pro</span>
+  <button class="chrome-logout" @click="signOut">Log out</button>
+
+  <div class="mx-auto max-w-5xl">
 
     @if (!user)
-      <div id="auth-pending" class="text-center py-24 text-sm text-subtle">Loading…</div>
+      <div id="auth-pending" class="py-24 text-center text-sm text-subtle">Loading…</div>
     @endif
 
     @if (user && needsOnboarding)
-      <div class="text-center py-24 text-sm text-subtle">Setting up your workspace…</div>
+      <div class="py-24 text-center text-sm text-subtle">Setting up your workspace…</div>
       <script>window.location.replace('/projects/new')</script>
     @endif
 
     @if (user && !needsOnboarding)
 
     @if (pendingInvites.length)
-      <div id="invite-banner" class="mb-7">
+      <div class="mb-7">
         @foreach (pendingInvites as inv)
-          <div class="panel flex flex-wrap items-center gap-3 px-5 py-3.5 mb-2.5" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" data-token="{{ inv.token }}">
+          <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 panel" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" :show="!isDismissed('{{ inv.token }}')">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
-            <div class="ml-auto flex items-center gap-2">
-              <button class="js-invite-join pill px-4 py-1.5 text-sm font-semibold border bg-accent border-accent" style="color:#fff">Join</button>
-              <button class="js-invite-dismiss pill px-3 py-1.5 text-sm border text-subtle border-line" title="Hide for now">Dismiss</button>
+            <div class="flex gap-2 items-center ml-auto">
+              <button class="px-4 py-1.5 font-semibold text-sm bg-accent border border-accent js-invite-join pill" style="color:#fff" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
+              <button class="px-3 py-1.5 text-sm text-subtle border border-line js-invite-dismiss pill" title="Hide for now" @click="dismissInvite('{{ inv.token }}')">Dismiss</button>
             </div>
           </div>
         @endforeach
@@ -364,22 +460,22 @@ select.panel {
     @endif
 
     @if (projectId)
-    <header class="flex flex-wrap items-end justify-between gap-5 mb-8">
-      <div class="flex items-center gap-3">
-        <a href="/projects" class="wordmark-link"><h1 class="wordmark text-2xl md:text-[28px] leading-none">loghq</h1></a>
+    <header class="flex flex-wrap gap-5 items-end justify-between mb-8">
+      <div class="flex gap-3 items-center">
+        <a href="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark">loghq</h1></a>
         @if (projects.length > 1)
           <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
-                  class="panel mono px-3 py-1.5 text-sm text-muted">
+                  class="px-3 py-1.5 text-muted text-sm mono panel">
             @foreach (projects as p)
               <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
             @endforeach
           </select>
         @else
-          <span class="mono text-sm text-muted">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
+          <span class="text-muted text-sm mono">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
         @endif
-        <a href="/projects" class="pill px-3 py-1.5 text-sm font-medium border text-muted border-line">All apps</a>
-        <a href="/projects/new" class="pill px-3 py-1.5 text-sm font-medium border text-muted border-line">+ New app</a>
-        <button id="theme-toggle" class="icon-btn theme-btn" title="Toggle theme" aria-label="Toggle theme">
+        <a href="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</a>
+        <a href="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</a>
+        <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" title="Toggle theme" aria-label="Toggle theme">
           <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -387,125 +483,129 @@ select.panel {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </a>
       </div>
-      <nav class="flex flex-wrap items-center gap-1.5">
+      <nav class="flex flex-wrap gap-1.5 items-center">
         @foreach (levelTabs as f)
           <a href="{{ f.href }}"
-             class="pill px-3.5 py-1.5 text-sm font-medium border"
-             style="{{ f.key === levelFilter ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ f.label }}</a>
+            class="px-3.5 py-1.5 font-medium text-sm border pill"
+            style="{{ f.key === levelFilter ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ f.label }}</a>
         @endforeach
-        <span class="w-px h-4 mx-1.5 shrink-0 bg-line" aria-hidden="true"></span>
+        <span class="shrink-0 mx-1.5 h-4 w-px bg-line" aria-hidden="true"></span>
         @foreach (rangeTabs as r)
           <a href="{{ r.href }}"
-             class="pill mono px-3 py-1.5 text-xs font-medium border"
-             style="{{ r.key === rangeFilter ? 'color: var(--accent); border-color: var(--accent)' : 'color: var(--text-3); border-color: var(--border)' }}">{{ r.label }}</a>
+            class="px-3 py-1.5 font-medium text-xs border mono pill"
+            style="{{ r.key === rangeFilter ? 'color: var(--accent); border-color: var(--accent)' : 'color: var(--text-3); border-color: var(--border)' }}">{{ r.label }}</a>
         @endforeach
       </nav>
     </header>
 
-    <!-- Search: plain GET form, preserves level + range via hidden fields. -->
-    <form method="get" action="/dashboard" class="mb-6 flex items-center gap-2">
+    {{-- Search: plain GET form, preserves level + range via hidden fields. --}}
+    <form method="get" action="/dashboard" class="flex gap-2 items-center mb-6">
       @if (levelFilter !== 'all')<input type="hidden" name="level" value="{{ levelFilter }}">@endif
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
       <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
-             class="search-input mono flex-1 px-4 py-2.5 text-sm" />
-      <button type="submit" class="pill px-4 py-2.5 text-sm font-semibold border bg-accent border-accent" style="color:#fff">Search</button>
+            class="flex-1 px-4 py-2.5 text-sm mono search-input" />
+      <button type="submit" class="px-4 py-2.5 font-semibold text-sm bg-accent border border-accent pill" style="color:#fff">Search</button>
       @if (search)
-        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="pill px-3 py-2.5 text-sm border text-subtle border-line">Clear</a>
+        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</a>
       @endif
     </form>
 
     @if (!live)
-      <div class="panel px-4 py-3 mb-8 text-sm reveal text-muted">
+      <div class="mb-8 px-4 py-3 text-muted text-sm panel reveal">
         <span class="font-semibold text-ink">Waiting for data.</span> Make sure Postgres is provisioned.
       </div>
     @endif
 
-    <!-- Stats: hairline-separated, mono numerics. The dot + number tint go live
-         only on a non-zero count, so severity reads at a glance. -->
-    <div class="panel grid grid-cols-3 divide-x mb-8 reveal border-line">
+    {{-- Stats: hairline-separated, mono numerics. The dot + number tint go live
+        only on a non-zero count, so severity reads at a glance. --}}
+    <div class="grid grid-cols-3 mb-8 border-line divide-x panel reveal">
       @foreach (stats as s)
         <div class="px-5 py-5 border-line">
-          <div class="flex items-center gap-1.5 mb-2">
-            @if (s.dot)<span class="inline-block w-1.5 h-1.5 rounded-full shrink-0" style="background: {{ s.on ? s.color : 'var(--text-3)' }}; opacity: {{ s.on ? '1' : '0.35' }}"></span>@endif
-            <span class="text-xs font-medium uppercase tracking-wider text-subtle">{{ s.label }}</span>
+          <div class="flex gap-1.5 items-center mb-2">
+            @if (s.dot)<span class="inline-block shrink-0 h-1.5 w-1.5 rounded-full" style="background: {{ s.on ? s.color : 'var(--text-3)' }}; opacity: {{ s.on ? '1' : '0.35' }}"></span>@endif
+            <span class="font-medium text-subtle text-xs tracking-wider uppercase">{{ s.label }}</span>
           </div>
-          <div class="mono text-3xl font-semibold tracking-tight" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
+          <div class="font-semibold text-3xl tracking-tight mono" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
         </div>
       @endforeach
     </div>
 
-    <section class="panel overflow-hidden reveal">
+    <section class="overflow-hidden panel reveal">
       <div class="flex items-center justify-between px-5 py-3.5 border-b border-line">
-        <span class="text-xs font-semibold uppercase tracking-wider text-subtle">Stream</span>
-        <span class="mono text-xs text-subtle">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
+        <span class="font-semibold text-subtle text-xs tracking-wider uppercase">Stream</span>
+        <span class="text-subtle text-xs mono">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
       </div>
 
       @forelse (logs as entry)
         <details class="border-b border-line">
-          <summary class="log-row px-5 py-2.5">
+          <summary class="px-5 py-2.5 log-row">
             <span class="self-stretch rounded-full" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
-            <span class="mono text-xs tabular-nums text-subtle" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
-            <span class="lvl-chip mono text-[11px] font-semibold rounded px-1 py-0.5" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
-            <span class="mono text-[11px] truncate text-subtle">{{ entry.channel || '' }}</span>
-            <span class="mono text-sm min-w-0 truncate text-ink">{{ entry.message }}</span>
+            <span class="tabular-nums text-subtle text-xs mono" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
+            <span class="px-1 py-0.5 font-semibold text-[11px] rounded lvl-chip mono" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
+            <span class="text-[11px] text-subtle truncate mono">{{ entry.channel || '' }}</span>
+            <span class="min-w-0 text-ink text-sm truncate mono">{{ entry.message }}</span>
           </summary>
-          <div class="px-5 pb-4 pt-1" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-xs mono text-subtle">
+          <div class="pb-4 pt-1 px-5" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
+            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-subtle text-xs mono">
               <span>{{ dayOf(entry.timestamp) }} {{ clockOf(entry.timestamp) }} UTC</span>
               @if (entry.environment)<span>env: <span class="text-muted">{{ entry.environment }}</span></span>@endif
               @if (entry.framework)<span>via: <span class="text-muted">{{ entry.framework }}</span></span>@endif
               @if (entry.release)<span>release: <span class="text-muted">{{ entry.release }}</span></span>@endif
               @if (entry.host)<span>host: <span class="text-muted">{{ entry.host }}</span></span>@endif
             </div>
-            <div class="mono text-sm mb-3 text-ink" style="white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
+            <div class="mb-3 text-ink text-sm mono" style="white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
             @if (entry.context)
-              <pre class="ctx-pre mono text-xs panel px-3 py-2.5 overflow-x-auto text-muted">{{ prettyContext(entry.context) }}</pre>
+              <pre class="overflow-x-auto px-3 py-2.5 text-muted text-xs ctx-pre mono panel">{{ prettyContext(entry.context) }}</pre>
             @endif
           </div>
         </details>
       @empty
         <div class="px-5 py-16 text-center">
-          <div class="text-base font-medium mb-1">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
+          <div class="mb-1 font-medium text-base">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
           <div class="text-sm text-subtle">Point an SDK at this project and its logs stream in here live.</div>
         </div>
       @endforelse
 
       @if (pager.pages > 1)
         <div class="flex items-center justify-between px-5 py-3.5">
-          <span class="mono text-xs text-subtle">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
-          <div class="flex items-center gap-2">
+          <span class="text-subtle text-xs mono">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
+          <div class="flex gap-2 items-center">
             @if (pager.hasPrev)
-              <a href="{{ pager.prevHref }}" class="pill px-3 py-1.5 text-xs font-medium border text-muted border-line">&larr; Newer</a>
+              <a href="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newer</a>
             @else
-              <span class="pill px-3 py-1.5 text-xs font-medium border text-subtle border-line" style="opacity: 0.45">&larr; Newer</span>
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">&larr; Newer</span>
             @endif
-            <span class="mono text-xs tabular-nums text-subtle">{{ pager.page }} / {{ pager.pages }}</span>
+            <span class="tabular-nums text-subtle text-xs mono">{{ pager.page }} / {{ pager.pages }}</span>
             @if (pager.hasNext)
-              <a href="{{ pager.nextHref }}" class="pill px-3 py-1.5 text-xs font-medium border text-muted border-line">Older &rarr;</a>
+              <a href="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</a>
             @else
-              <span class="pill px-3 py-1.5 text-xs font-medium border text-subtle border-line" style="opacity: 0.45">Older &rarr;</span>
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">Older &rarr;</span>
             @endif
           </div>
         </div>
       @endif
     </section>
     @else
-      <div class="text-center py-20">
-        <a href="/projects" data-no-router class="wordmark-link"><h1 class="wordmark text-2xl mb-3">loghq</h1></a>
+      <div class="py-20 text-center">
+        <a href="/projects" data-no-router class="wordmark-link"><h1 class="mb-3 text-2xl wordmark">loghq</h1></a>
         <p class="text-sm text-subtle">Accept an invitation above to get started, or <a href="/projects/new" data-no-router class="text-accent">create your own app</a>.</p>
       </div>
     @endif
     @endif
 
-    <footer class="mt-12 text-center text-xs text-subtle">
+    <footer class="mt-12 text-center text-subtle text-xs">
       Log streaming on Stacks and Postgres. <span class="mono">loghq.org</span>
     </footer>
 
   </div>
 </div>
 
-<!-- Client guard: enforce the bearer token, mirror it into the cookie the
-     server authenticates from, and add the logout / plan chrome. -->
+{{-- Client guard: enforce the bearer token and mirror it into the cookie the
+    server authenticates from. Navigation only — it renders nothing, and it has
+    to run before the page is usable, so it stays a plain script rather than
+    hydrating with the rest.
+    The chrome and invite banner it used to build now live in the client block
+    at the top of this file. --}}
 <script>
 (function () {
   var t = localStorage.getItem('token')
@@ -515,19 +615,16 @@ select.panel {
     window.location.reload()
     return
   }
+  // The server renders #auth-pending when the cookie did not authenticate. This
+  // has to be read here, after the cookie mirror above — moving it into the
+  // server's own `@if (!user)` branch would fire before the cookie is set and
+  // bounce a first-visit user in a loop.
   if (document.getElementById('auth-pending')) {
     localStorage.removeItem('token'); localStorage.removeItem('user')
     document.cookie = 'loghq_token=; path=/; max-age=0'
     window.location.replace('/login')
     return
   }
-
-  function signOut() {
-    localStorage.removeItem('token'); localStorage.removeItem('user')
-    document.cookie = 'loghq_token=; path=/; max-age=0'
-    window.location.assign('/login')
-  }
-  var auth = { headers: { Authorization: 'Bearer ' + t } }
 
   var qs = new URLSearchParams(window.location.search)
   if (qs.get('project')) {
@@ -537,58 +634,5 @@ select.panel {
     window.history.replaceState(null, '', window.location.pathname + (rest ? '?' + rest : ''))
   }
 
-  var inviteBanner = document.getElementById('invite-banner')
-  if (inviteBanner) inviteBanner.addEventListener('click', function (e) {
-    var row = e.target.closest('[data-token]')
-    if (!row) return
-    if (e.target.classList.contains('js-invite-dismiss')) { row.remove(); return }
-    if (!e.target.classList.contains('js-invite-join')) return
-    var jbtn = e.target
-    jbtn.disabled = true; jbtn.textContent = 'Joining…'
-    fetch('/api/invites/accept', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: row.getAttribute('data-token') }) })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b } }) })
-      .then(function (res) {
-        if (!res.ok) { jbtn.disabled = false; jbtn.textContent = 'Join'; return }
-        document.cookie = 'loghq_project=' + encodeURIComponent(res.b.project) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
-        window.location.assign('/dashboard')
-      })
-      .catch(function () { jbtn.disabled = false; jbtn.textContent = 'Join' })
-  })
-
-  var themeBtn = document.getElementById('theme-toggle')
-  if (themeBtn) {
-    var mq = window.matchMedia('(prefers-color-scheme: dark)')
-    var effTheme = function () { return document.documentElement.getAttribute('data-theme') || (mq.matches ? 'dark' : 'light') }
-    var paintTheme = function () { themeBtn.setAttribute('data-t', effTheme()) }
-    paintTheme()
-    themeBtn.addEventListener('click', function () {
-      var next = effTheme() === 'dark' ? 'light' : 'dark'
-      document.documentElement.setAttribute('data-theme', next)
-      try { localStorage.setItem('loghq_theme', next) } catch (e) {}
-      paintTheme()
-    })
-  }
-
-  var btn = document.createElement('button')
-  btn.textContent = 'Log out'
-  btn.className = 'chrome-logout'
-  btn.style.cssText = 'position:fixed;top:16px;right:18px;font:500 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;cursor:pointer;z-index:60'
-  btn.addEventListener('click', signOut)
-  var up = document.createElement('a')
-  up.textContent = 'Upgrade'; up.href = '/pricing'
-  up.className = 'chrome-upgrade'
-  up.style.cssText = 'position:fixed;top:16px;right:112px;font:600 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;text-decoration:none;z-index:60'
-  document.body.appendChild(up); document.body.appendChild(btn)
-
-  fetch('/api/me', auth)
-    .then(function (r) { if (r.status === 401) { signOut(); return null } return r.ok ? r.json() : null })
-    .then(function (d) {
-      if (d && d.pro) {
-        up.textContent = 'Pro'; up.removeAttribute('href')
-        up.style.background = 'transparent'; up.style.color = 'var(--accent)'
-        up.style.border = '1px solid var(--accent)'; up.style.cursor = 'default'
-      }
-    })
-    .catch(function () {})
 })()
 </script>

@@ -1,9 +1,15 @@
-<!-- Shared marketing footer used on every marketing page.
-     One source of truth for the site-wide footer, mirroring how SiteNav is shared.
-     Adds an ohdear.com-style multi-column layout with a dedicated "Compare" column
-     that links the alternatives index plus one page per competitor. Styles live in
-     the scoped <style> block below (public/marketing.css is out of scope for this
-     change) and reuse loghq's existing design tokens so the footer matches the site. -->
+<script client>
+// Same auth signal as SiteNav — each partial owns its own, since a partial's
+// client scope does not reach across includes. See SiteNav.stx for why this
+// lives in the partial rather than in the pages.
+const isAuthed = state(!!localStorage.getItem('token'))
+//
+// Comment style here follows SiteNav.stx: JS comments inside this block, never
+// an stx template comment anywhere in the file, because a partial containing a
+// client script never has its template comments stripped. The prose lives in
+// resources/layouts/marketing.stx.
+</script>
+
 <footer class="footer shell">
   <div class="footer-cols">
     <div class="footer-col">
@@ -44,14 +50,14 @@
       <a href="/docs">Docs</a>
       <a href="/pricing">Pricing</a>
       <a href="https://github.com/stacksjs/loghq">GitHub</a>
-      <a data-auth-login href="/login">Log in</a>
-      <a data-auth-signup href="/register">Get started</a>
+      <a :href="isAuthed() ? '/dashboard' : '/login'">{{ isAuthed() ? 'Dashboard' : 'Log in' }}</a>
+      <a :show="!isAuthed()" href="/register">Get started</a>
     </div>
   </div>
 
   <div class="footer-bottom">
     <a class="brand" href="/" aria-label="loghq home">
-      <span class="brand-mark">b</span>
+      <span class="brand-mark">l</span>
       <span class="brand-name">loghq</span>
     </a>
     <span>Open source log streaming, built on Stacks and Postgres.</span>

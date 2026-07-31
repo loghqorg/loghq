@@ -1,15 +1,82 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="@yield('description')">
-    <title>@yield('title')</title>
-  </head>
-  <body>
-    @include('SiteNav')
-    @yield('content')
-    @yield('footer')
-    @stack('scripts')
-  </body>
-</html>
+{{-- Marketing chrome. Layout group 'marketing'.
+
+    A FRAGMENT, not a document. This file used to open with a doctype, and that
+    one line was the root of most of this app's structural debt: process.js:311
+    gates ALL layout resolution on the absence of one, and document-shell.js:64
+    makes a doctype-bearing result skip shell generation entirely. A layout with
+    a doctype poisons every page that extends it exactly as if each page had
+    written one — which is why nothing could safely extend this file and all 23
+    marketing pages hand-rolled their own document instead.
+
+    It also declared title and description as string slots via yield. Those are
+    gone: a page sets both with useSeoMeta() in a server script, which
+    additionally derives the og and twitter tags from the same two strings so
+    they cannot drift. The footer yield and scripts stack are gone too — no page
+    ever filled them, and an unfilled slot renders '' silently, reading as
+    structure while doing nothing.
+
+    The group name matters to the router, not just to readers. deriveLayoutGroup
+    (stx-router layout-metadata.js:1-6) turns 'layouts/marketing' into group
+    'marketing', and 'layouts/default' into 'default'. Different groups make
+    checkLayoutChange (client.js:255) do a full-document swap when crossing
+    between the marketing site and the app — and client.js:568-580, the only
+    code that carries stylesheet links across a navigation, runs ONLY on that
+    full-document path. Same group would mean a fragment swap, which harvests
+    inline styles and never links, and a marketing page reached from the app
+    would arrive without marketing.css.
+
+    Do not add an extends directive here. A nested layout stamps the BASE
+    layout's name into the marker (process.js:405-421), so both shells would
+    report one group and the distinction above collapses.
+
+    THE CHROME. SiteNav and SiteFooter are included below rather than repeated
+    per page, so the nav and footer are declared once for the whole group.
+    SiteNav carries the two CSS-only mega-menu dropdowns (Features, Use cases):
+    no JS, panels reveal on hover and on keyboard focus via :focus-within.
+    SiteFooter carries the multi-column layout with the "Compare" column that
+    links the alternatives index plus one page per competitor. Both scope their
+    own rules in a style block at the bottom of their own file and reuse the
+    design tokens from marketing.css.
+
+    COMMENTS. Three rules, each learned by shipping the bug:
+
+    1. Use stx comments, not HTML ones. An HTML comment survives into the
+        response and is then re-read by several consumers that do not know it is
+        a comment.
+    2. Never spell out a tag name inside a comment. The orphan-style extraction
+        pass lifts a literal style tag out of the middle of a comment, which
+        separates the opening delimiter from the closing one; the comment then
+        fails to match the strip pass and ships as page text.
+    3. Never quote the comment delimiters inside a comment body — that ends the
+        comment early and everything after it becomes page text.
+
+    And one exception, verified against the shipped renderer: a partial that
+    contains a client script never has its template comments stripped, at any
+    position in the file. That is why SiteNav.stx and SiteFooter.stx document
+    themselves with JS comments inside their script blocks, and why their prose
+    lives here instead. --}}
+
+@head
+{{-- Marketing-only stylesheet, deliberately NOT in config/ui.ts app.head: app
+    pages never linked it and define their own conflicting .btn and .panel
+    rules. The shared fonts, charset, viewport and favicon DO live in app.head —
+    they are genuinely site-wide, and injectConfigHeadTags dedupes by exact href
+    so nothing doubles up. --}}
+<link rel="stylesheet" href="/marketing.css">
+{{-- Page-local CSS arrives here, inside the document head, via @push('styles').
+    A bare style block in a page would instead be swept into the BODY by
+    process.js:373-384 and then swapped away by the router on the next
+    navigation. --}}
+@stack('styles')
+@endhead
+
+@include('SiteNav')
+
+{{-- The single router container (config/ui.ts router.container). Pages must not
+    declare their own: the server slices the fragment between the first opening
+    tag and the last closing one, so a second one makes the span ambiguous. --}}
+<main>
+@yield('content')
+</main>
+
+@include('SiteFooter')

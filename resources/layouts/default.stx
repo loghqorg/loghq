@@ -1,5 +1,40 @@
+{{-- App and auth chrome. Layout group 'default'.
+
+    A FRAGMENT, not a document. stx synthesises the doctype, the html/head/body
+    elements and their contents from config/ui.ts `app.head` merged with each
+    page's useSeoMeta() (process.js:205-233 → document-shell.js). Writing a
+    document here would make hasDocumentShell() true (document-shell.js:64),
+    turn ensureDocumentShell() into a no-op, and silently drop every page's
+    title, description and og tags on the floor.
+
+    This layout owns the single router container, and that is load-bearing
+    rather than cosmetic. config/ui.ts pins `router.container: 'main'`;
+    getContainer() (stx-router client.js:193-195) returns the FIRST match, and
+    when it returns null shouldIntercept bails at client.js:796 and swap()
+    falls back to a full location assignment at client.js:395 — every link
+    becomes a full document load and the SPA router is inert. That was this
+    app's actual state until recently: the layout declared no container and
+    neither did any app page, so interceptAllLinks had nothing to swap into.
+
+    Pages MUST NOT declare their own container element. Two of them make the
+    swap target ambiguous in both directions: the server slices the fragment
+    between the first opening tag and the last closing one
+    (serve.js:10148-10166), and the client re-injects nav, container and footer
+    inside it, duplicating the chrome. Use a div for page-level wrappers.
+
+    Comments here use the stx form, and they describe tag names in prose rather
+    than spelling them out. Both rules are load-bearing: an HTML comment ships
+    to the browser verbatim and hasDocumentShell's html test is unanchored, so
+    the literal word in a comment disables the document shell; and the
+    orphan-style extraction pass will lift a literal style tag out of the middle
+    of a comment, splitting its delimiters apart so the whole comment renders as
+    visible page text. See resources/partials/SiteNav.stx.
+
+    No footer yield and no scripts stack: both were declared here and filled by
+    no page anywhere in the repo. An unfilled yield resolves to '' and an
+    unfilled stack renders '' — silently, with no warning — so they read as
+    structure while doing nothing. Add a slot when a page pushes to it, not
+    before. --}}
+<main>
 @yield('content')
-
-@yield('footer')
-
-@stack('scripts')
+</main>

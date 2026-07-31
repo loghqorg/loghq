@@ -1,6 +1,71 @@
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script client>
+// Account page. The profile is fetched client-side from /api/me and was
+// previously painted onto the DOM by hand — ~17 element lookups setting text,
+// classes, visibility, and one raw HTML insertion. It is all one object, so it
+// is one signal now and the markup reads from it.
+const user = state(null)
+const pro = state(false)
+const loaded = state(false)
+
+function initial(s) {
+  return (s || '?').trim().charAt(0).toUpperCase()
+}
+
+function fmtDate(v) {
+  if (!v)
+    return '--'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime())
+    ? '--'
+    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+// Derived reads. Plain functions rather than computed(): each is called from a
+// binding, which re-evaluates when the signal it reads changes.
+const displayName = () => user()?.name || 'Your account'
+const email = () => user()?.email || ''
+const avatarUrl = () => user()?.avatar || ''
+const avatarInitial = () => initial(user()?.name || user()?.email)
+const provider = () => user()?.provider || ''
+const memberSince = () => fmtDate(user()?.created_at)
+
+async function logout() {
+  const token = localStorage.getItem('token')
+  // Fire-and-forget: the session is being discarded locally either way, so a
+  // failed revoke must not strand the user on a page they've logged out of.
+  try {
+    await fetch('/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  }
+  catch {}
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  document.cookie = 'loghq_token=; path=/; max-age=0'
+  window.location.assign('/login')
+}
+
+async function loadAccount() {
+  const token = localStorage.getItem('token')
+  if (!token)
+    return
+  try {
+    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
+    if (res.status === 401) {
+      localStorage.removeItem('token')
+      window.location.replace('/login')
+      return
+    }
+    const data = await res.json()
+    if (!data?.user)
+      return
+    user.set(data.user)
+    pro.set(data.pro === true)
+    loaded.set(true)
+  }
+  catch {}
+}
+
+loadAccount()
+</script>
 
 <style>
 :root {
@@ -35,114 +100,73 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 </style>
 
 <div class="min-h-[100dvh]">
-  <header class="max-w-3xl mx-auto flex items-center justify-between px-5 md:px-6 h-16">
-    <a href="/" data-no-router class="wordmark text-lg">loghq</a>
-    <div class="flex items-center gap-2.5">
-      <a href="/dashboard" data-no-router class="btn btn-ghost px-3.5 py-2 text-sm">Dashboard</a>
-      <button id="logout" class="btn btn-ghost px-3.5 py-2 text-sm">Log out</button>
+  <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
+    <a href="/" data-no-router class="text-lg wordmark">loghq</a>
+    <div class="flex gap-2.5 items-center">
+      <a href="/dashboard" data-no-router class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</a>
+      <button @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
     </div>
   </header>
 
-  <main class="max-w-3xl mx-auto px-5 md:px-6 py-8">
-    <h1 class="wordmark text-2xl mb-6">Account</h1>
+  {{-- A plain div, deliberately not the main element: resources/layouts/default.stx
+      owns the single router container. A second one makes the fragment span
+      ambiguous, because the server slices between the first opening main tag
+      and the last closing one. Tag names are described rather than spelled
+      here — see the note in resources/partials/SiteNav.stx. --}}
+  <div class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
+    <h1 class="mb-6 text-2xl wordmark">Account</h1>
 
-    <section class="card p-6 mb-5">
-      <div class="flex items-center gap-4">
-        <img id="avatar" class="avatar w-14 h-14" alt="" width="56" height="56" style="display:none">
-        <div id="avatar-fallback" class="avatar w-14 h-14 grid place-items-center text-accent" style="font-weight: 700; font-size: 1.25rem"></div>
+    <section class="mb-5 p-6 card">
+      <div class="flex gap-4 items-center">
+        <img class="h-14 w-14 avatar" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
+        <div class="grid place-items-center h-14 w-14 text-accent avatar" :show="!avatarUrl()" style="font-weight: 700; font-size: 1.25rem">{{ avatarInitial() }}</div>
         <div class="min-w-0">
-          <div id="name" class="skeleton" style="width: 160px; height: 20px"></div>
-          <div id="email" class="text-sm mt-1.5 text-muted"></div>
+          {{-- Skeleton and value are separate elements rather than one element
+              swapping classes: :class works but logs on every bind, and the
+              skeleton needs a fixed box the real text must not inherit. --}}
+          <div class="skeleton" :show="!loaded()" style="width: 160px; height: 20px"></div>
+          <div class="font-semibold text-lg" :show="loaded()">{{ displayName() }}</div>
+          <div class="mt-1.5 text-muted text-sm">{{ email() }}</div>
         </div>
-        <span id="provider" class="badge px-2.5 py-1 ml-auto" style="display:none"></span>
+        <span class="ml-auto px-2.5 py-1 badge" :show="!!provider()">{{ provider() }}</span>
       </div>
     </section>
 
-    <section class="card mb-5">
+    <section class="mb-5 card">
       <div class="flex items-center justify-between px-6 py-4">
         <div>
-          <div class="text-xs uppercase tracking-wide text-subtle" style="font-family: var(--mono)">Plan</div>
-          <div id="plan" class="text-base font-semibold mt-1">Free</div>
+          <div class="text-subtle text-xs tracking-wide uppercase" style="font-family: var(--mono)">Plan</div>
+          <div class="mt-1 font-semibold text-base">
+            {{ pro() ? 'Pro' : 'Free' }}<span class="ml-1 px-2 py-0.5 badge badge-pro" :show="pro()">active</span>
+          </div>
         </div>
-        <a id="plan-cta" href="/pricing" data-no-router class="btn btn-primary px-4 py-2 text-sm">Upgrade to Pro</a>
+        {{-- Two anchors rather than one rewritten in place: the pro and free CTAs
+            differ in destination, label and variant, so branching the markup is
+            clearer than mutating three attributes. --}}
+        <a href="/pricing" data-no-router class="px-4 py-2 text-sm btn btn-primary" :show="!pro()">Upgrade to Pro</a>
+        <a href="/pricing" data-no-router class="px-4 py-2 text-sm btn btn-ghost" :show="pro()">Manage plan</a>
       </div>
-      <div class="row flex items-center justify-between px-6 py-4">
+      <div class="flex items-center justify-between px-6 py-4 row">
         <div>
-          <div class="text-xs uppercase tracking-wide text-subtle" style="font-family: var(--mono)">Member since</div>
-          <div id="since" class="text-base mt-1 text-muted">--</div>
+          <div class="text-subtle text-xs tracking-wide uppercase" style="font-family: var(--mono)">Member since</div>
+          <div class="mt-1 text-base text-muted">{{ memberSince() }}</div>
         </div>
-        <a href="/dashboard" data-no-router class="btn btn-ghost px-4 py-2 text-sm">Open dashboard</a>
+        <a href="/dashboard" data-no-router class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</a>
       </div>
     </section>
 
     <p class="text-sm text-subtle">
       Signed in with a private token. <a href="/" data-no-router class="text-accent">Back to site</a>
     </p>
-  </main>
+  </div>
 </div>
 
+{{-- Auth guard. Navigation only, renders nothing, and must run before the page is
+    usable — a directive would hydrate too late and flash the account shell to a
+    signed-out visitor. --}}
 <script>
 (function () {
-  var token = localStorage.getItem('token')
-  if (!token) { window.location.replace('/login'); return }
-
-  document.getElementById('logout').addEventListener('click', function () {
-    try {
-      fetch('/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } })
-    } catch (e) {}
-    localStorage.removeItem('token'); localStorage.removeItem('user')
-    document.cookie = 'loghq_token=; path=/; max-age=0'
-    window.location.assign('/login')
-  })
-
-  function initial(s) { return (s || '?').trim().charAt(0).toUpperCase() }
-  function fmtDate(v) {
-    if (!v) return '--'
-    var d = new Date(v)
-    if (isNaN(d.getTime())) return '--'
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-  }
-
-  fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
-    .then(function (r) {
-      if (r.status === 401) { localStorage.removeItem('token'); window.location.replace('/login'); return null }
-      return r.json()
-    })
-    .then(function (d) {
-      if (!d || !d.user) return
-      var u = d.user
-      var nameEl = document.getElementById('name')
-      nameEl.className = 'text-lg font-semibold'
-      nameEl.style.width = 'auto'; nameEl.style.height = 'auto'
-      nameEl.textContent = u.name || 'Your account'
-      document.getElementById('email').textContent = u.email || ''
-      document.getElementById('since').textContent = fmtDate(u.created_at)
-
-      if (u.avatar) {
-        var img = document.getElementById('avatar')
-        img.src = u.avatar; img.style.display = 'block'
-        document.getElementById('avatar-fallback').style.display = 'none'
-      } else {
-        document.getElementById('avatar-fallback').textContent = initial(u.name || u.email)
-      }
-
-      if (u.provider) {
-        var p = document.getElementById('provider')
-        p.textContent = u.provider
-        p.style.display = 'inline-block'
-      }
-
-      var isPro = d.pro === true
-      var plan = document.getElementById('plan')
-      plan.textContent = isPro ? 'Pro' : 'Free'
-      var cta = document.getElementById('plan-cta')
-      if (isPro) {
-        plan.className = 'text-base font-semibold mt-1'
-        plan.insertAdjacentHTML('beforeend', ' <span class="badge badge-pro px-2 py-0.5 ml-1">active</span>')
-        cta.textContent = 'Manage plan'
-        cta.className = 'btn btn-ghost px-4 py-2 text-sm'
-      }
-    })
-    .catch(function () {})
+  if (!localStorage.getItem('token'))
+    window.location.replace('/login')
 })()
 </script>
