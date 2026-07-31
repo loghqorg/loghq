@@ -95,3 +95,8 @@ storage/framework/cache/
 # Local backups of env files (may contain secrets) — never commit
 .env*.bak
 .env.corrupted*
+
+# Runtime output from MAIL_MAILER=log — captured emails, not source.
+# Root-anchored: a bare `logs/` also matches app/Logs/, which is real source
+# (the filesystem here is case-insensitive).
+/logs/
