@@ -16,6 +16,14 @@ const databaseConfig = dialect === 'sqlite'
 
 export default {
   verbose: true,
+
+  // Required by QueryBuilderConfig (bun-query-builder types.d.ts:228) and was
+  // missing — invisible until `config/` entered tsconfig's `include`. '.qb' is
+  // the value the CLI already falls back to (`config.snapshotDir || '.qb'`), and
+  // the directory exists in the working tree, so stating it changes nothing at
+  // runtime and stops the config from being structurally invalid.
+  snapshotDir: '.qb',
+
   dialect,
   database: databaseConfig,
   timestamps: {

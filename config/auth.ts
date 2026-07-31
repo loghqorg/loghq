@@ -90,8 +90,19 @@ export default {
      * TEMPORARY: absolute local URL for the local-dev phase; switch to the
      * path template '/reset-password?token={token}&email={email}' at launch
      * so it resolves against the deployed app URL.
+     *
+     * Two fixes here, both previously invisible because `config/` was outside
+     * tsconfig's `include`:
+     *   - `env.*` is typed `string | number | true`, so the raw value did not
+     *     satisfy `string | undefined`. Coerced explicitly.
+     *   - the local fallback was hardcoded to :3100, a hundred off the port the
+     *     views server actually binds (config/ports.ts `frontend: env.PORT ??
+     *     3000`). Every emailed reset link in local dev pointed at a port
+     *     nothing listens on. Derived from the same env var now, matching
+     *     app/Support/urls.ts `appUrl()`.
      */
-    url: env.AUTH_PASSWORD_RESET_URL || `${/^https?:\/\//.test(String(env.APP_URL || '')) ? String(env.APP_URL).replace(/\/$/, '') : 'http://localhost:3100'}/reset-password?token={token}&email={email}`,
+    url: String(env.AUTH_PASSWORD_RESET_URL || '')
+      || `${/^https?:\/\//.test(String(env.APP_URL || '')) ? String(env.APP_URL).replace(/\/$/, '') : `http://localhost:${env.PORT ?? 3000}`}/reset-password?token={token}&email={email}`,
 
     /**
      * Token expiration time in minutes.

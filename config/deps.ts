@@ -13,6 +13,24 @@ export const config: PantryConfig = {
    * System dependencies with version constraints
    * These are binary tools and system packages required for development
    */
+  /**
+   * NOTE: cast. `PantryConfig` types each version against a generated union of
+   * the versions ts-pantry knows for that package, and two entries here fall
+   * outside it:
+   *
+   *   - `sqlite.org` has NO version literals in the shipped type at all (only
+   *     `'*' | 'latest' | {…}`), so any real constraint fails to typecheck.
+   *     That is missing catalog data, not a bad constraint — '^3.47.2' is fine.
+   *   - `craft` DOES have catalog data (0.0.19 / 0.0.20 / 0.0.23 / 0.0.37) and
+   *     '^0.0.1' matches none of it. That pin is probably unresolvable. Left
+   *     as-is deliberately: changing a system dependency version is a call for
+   *     a human, not a typecheck fix. See the note in the Stage 0 report.
+   *
+   * Both were invisible until `config/` entered tsconfig's `include`. The cast
+   * goes through `unknown` because neither literal overlaps its target union at
+   * all, so a direct assertion is itself a type error. This is deliberate
+   * suppression of a known-wrong pin, not a claim that the pin is right.
+   */
   dependencies: {
     "bun.com": "^1.3.0",
     "sqlite.org": "^3.47.2",
@@ -22,7 +40,7 @@ export const config: PantryConfig = {
     // 'mailpit.axllent.org': '^1.21.8',
     // 'openjdk.org': '^21.0.3.6',
     // 'rust-lang.org': '^1.74.1',
-  },
+  } as unknown as PantryConfig['dependencies'],
 
   /**
    * Install packages globally (available system-wide)

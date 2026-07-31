@@ -1,8 +1,21 @@
 import type { UserConfig } from 'cz-git'
-import { components, functions } from '@stacksjs/utils'
 import git from './git'
 
-const scopes = [...new Set([...git.scopes, ...components, ...functions])]
+/**
+ * Commit scopes.
+ *
+ * This used to spread `components` and `functions` from '@stacksjs/utils'.
+ * Neither is exported by the installed package — verified at runtime — so the
+ * import threw `Export named 'components' not found` and took the whole config
+ * down with it. It went unnoticed because `config/` was outside tsconfig's
+ * `include`, so `tsc --noEmit` never loaded this file.
+ *
+ * Those two exports were a monorepo convention: auto-derived scope names from
+ * `resources/components` and `resources/functions`. loghq has no such surface
+ * worth enumerating (11 dead scaffolding components, 2 orphan functions), so
+ * the declared list in config/git.ts is the single source of truth.
+ */
+const scopes = [...new Set(git.scopes)]
 
 export default {
   rules: {

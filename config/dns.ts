@@ -20,7 +20,10 @@ import { env } from '@stacksjs/env'
  * `APP_SERVER_IP` / `STAGING_SERVER_IP` (set in the encrypted .env.production)
  * pin the box IPs so this file never falls back to a stale address.
  */
-const boxIp = env.APP_SERVER_IP || '91.98.39.176'
+// String(): env values are typed `string | number | true`, and DnsConfig's
+// `address` is a plain `string`. Coerced explicitly rather than relying on the
+// value happening to be a string at runtime.
+const boxIp = String(env.APP_SERVER_IP || '91.98.39.176')
 
 export default {
   // Apex only — the deploy also upserts `@` and `www` to the box IP.
