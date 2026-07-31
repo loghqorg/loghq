@@ -362,6 +362,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease; }
 a.pill:hover, button.pill:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 a.pill:active, button.pill:active { transform: translateY(1px); }
+/* Filter-tab state. These were inline style ternaries on every tab, which
+  outrank the hover rules above and could not be themed. The two levels differ
+  because the severity tabs are the primary control and the range tabs are
+  secondary. */
+.pill-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+a.pill-on:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+.pill-off { color: var(--text-2); border-color: var(--border); }
+.pill-on-soft { color: var(--accent); border-color: var(--accent); }
+.pill-off-soft { color: var(--text-3); border-color: var(--border); }
 .log-row { transition: background-color 0.12s ease; }
 .log-row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
 details[open] > .log-row { background: color-mix(in srgb, var(--accent) 5%, transparent); }
@@ -432,7 +441,7 @@ select.panel {
   {{-- Fixed-position chrome. Inside the page container, not document.body, so an
       SPA view swap takes it with the rest of the page. Position is fixed, so
       where it sits in the DOM does not affect layout. --}}
-  <a class="chrome-upgrade" href="/pricing" :show="!pro()">Upgrade</a>
+  <StxLink class="chrome-upgrade" to="/pricing" :show="!pro()">Upgrade</StxLink>
   <span class="chrome-pro chrome-upgrade" :show="pro()">Pro</span>
   <button class="chrome-logout" @click="signOut">Log out</button>
 
@@ -466,7 +475,7 @@ select.panel {
     @if (projectId)
     <header class="flex flex-wrap gap-5 items-end justify-between mb-8">
       <div class="flex gap-3 items-center">
-        <a href="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark">loghq</h1></a>
+        <StxLink to="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark">loghq</h1></StxLink>
         @if (projects.length > 1)
           <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
                   class="px-3 py-1.5 text-muted text-sm mono panel">
@@ -477,27 +486,35 @@ select.panel {
         @else
           <span class="text-muted text-sm mono">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
         @endif
-        <a href="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</a>
-        <a href="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</a>
+        <StxLink to="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</StxLink>
+        <StxLink to="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</StxLink>
         <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" title="Toggle theme" aria-label="Toggle theme">
           <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
-        <a href="/settings" data-no-router class="icon-btn" title="Settings" aria-label="Settings">
+        <StxLink to="/settings" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </a>
+        </StxLink>
       </div>
       <nav class="flex flex-wrap gap-1.5 items-center">
+        {{-- `to` is interpolated raw here, and only here. Inside a loop the value
+            is escaped once by the loop and again when the component emits its
+            href, so `to="{{ … }}"` yields &amp;amp; and the browser sees a
+            literal "&amp;" in the query string — the second filter arrives as a
+            param named "amp;range". Outside a loop the same form is correct.
+            Safe because these hrefs come from pageUrl(), which builds them with
+            URLSearchParams: every value is already percent-encoded, so the only
+            literal ampersands are the separators and a quote cannot appear. --}}
         @foreach (levelTabs as f)
-          <a href="{{ f.href }}"
-            class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ f.key === levelFilter ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ f.label }}</a>
+          <StxLink to="{!! f.href !!}"
+            class="px-3.5 py-1.5 font-medium text-sm border pill {{ f.key === levelFilter ? 'pill-on' : 'pill-off' }}"
+            aria-current="{{ f.key === levelFilter ? 'page' : 'false' }}">{{ f.label }}</StxLink>
         @endforeach
         <span class="shrink-0 mx-1.5 h-4 w-px bg-line" aria-hidden="true"></span>
         @foreach (rangeTabs as r)
-          <a href="{{ r.href }}"
-            class="px-3 py-1.5 font-medium text-xs border mono pill"
-            style="{{ r.key === rangeFilter ? 'color: var(--accent); border-color: var(--accent)' : 'color: var(--text-3); border-color: var(--border)' }}">{{ r.label }}</a>
+          <StxLink to="{!! r.href !!}"
+            class="px-3 py-1.5 font-medium text-xs border mono pill {{ r.key === rangeFilter ? 'pill-on-soft' : 'pill-off-soft' }}"
+            aria-current="{{ r.key === rangeFilter ? 'page' : 'false' }}">{{ r.label }}</StxLink>
         @endforeach
       </nav>
     </header>
@@ -510,7 +527,7 @@ select.panel {
             class="flex-1 px-4 py-2.5 text-sm mono search-input" />
       <button type="submit" class="px-4 py-2.5 font-semibold text-sm bg-accent border border-accent pill" style="color:#fff">Search</button>
       @if (search)
-        <a href="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</a>
+        <StxLink to="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</StxLink>
       @endif
     </form>
 
@@ -575,13 +592,13 @@ select.panel {
           <span class="text-subtle text-xs mono">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
           <div class="flex gap-2 items-center">
             @if (pager.hasPrev)
-              <a href="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newer</a>
+              <StxLink to="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newer</StxLink>
             @else
               <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">&larr; Newer</span>
             @endif
             <span class="tabular-nums text-subtle text-xs mono">{{ pager.page }} / {{ pager.pages }}</span>
             @if (pager.hasNext)
-              <a href="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</a>
+              <StxLink to="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</StxLink>
             @else
               <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">Older &rarr;</span>
             @endif
@@ -591,8 +608,8 @@ select.panel {
     </section>
     @else
       <div class="py-20 text-center">
-        <a href="/projects" data-no-router class="wordmark-link"><h1 class="mb-3 text-2xl wordmark">loghq</h1></a>
-        <p class="text-sm text-subtle">Accept an invitation above to get started, or <a href="/projects/new" data-no-router class="text-accent">create your own app</a>.</p>
+        <StxLink to="/projects" class="wordmark-link"><h1 class="mb-3 text-2xl wordmark">loghq</h1></StxLink>
+        <p class="text-sm text-subtle">Accept an invitation above to get started, or <StxLink to="/projects/new" class="text-accent">create your own app</StxLink>.</p>
       </div>
     @endif
     @endif
