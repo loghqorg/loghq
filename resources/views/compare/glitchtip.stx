@@ -41,8 +41,8 @@ const crumbs = [
   <h1>loghq vs GlitchTip</h1>
   <p>GlitchTip is the other open-source name here, and a genuinely good one. It reimplements a Sentry-compatible API, so you can point existing Sentry SDKs straight at it, which is a real advantage if you are migrating off Sentry. loghq is a different bet: a Stacks-native, Postgres-only app with its own SDK and a tighter, more opinionated triage flow. If SDK compatibility is your priority, GlitchTip is hard to beat; if you want a self-contained app that matches this stack, loghq fits.</p>
   <div class="hero-actions">
-    <a class="btn primary" href="/register">Get started</a>
-    <a class="btn ghost" href="/compare">All alternatives</a>
+    <StxLink class="btn primary" to="/register">Get started</StxLink>
+    <StxLink class="btn ghost" to="/compare">All alternatives</StxLink>
   </div>
 </section>
 
@@ -132,18 +132,18 @@ const crumbs = [
     <h2 id="related-heading" class="section-title">More comparisons</h2>
   </div>
   <div class="related">
-    <a href="/compare/sentry">
+    <StxLink to="/compare/sentry">
       <div class="r-name">loghq vs Sentry</div>
       <div class="r-desc">The platform GlitchTip stays compatible with.</div>
-    </a>
-    <a href="/compare/datadog">
+    </StxLink>
+    <StxLink to="/compare/datadog">
       <div class="r-name">loghq vs Datadog</div>
       <div class="r-desc">Open self-hosting versus a hosted suite.</div>
-    </a>
-    <a href="/compare/bugsnag">
+    </StxLink>
+    <StxLink to="/compare/bugsnag">
       <div class="r-name">loghq vs Bugsnag</div>
       <div class="r-desc">Open versus closed stability monitoring.</div>
-    </a>
+    </StxLink>
   </div>
 </section>
 
@@ -151,8 +151,8 @@ const crumbs = [
   <div class="cta-band">
     <h2>Own your error tracking.</h2>
     <div class="cta-actions">
-      <a class="btn primary" href="/register">Get started</a>
-      <a class="btn ghost" href="/features/self-host">Read about self-hosting</a>
+      <StxLink class="btn primary" to="/register">Get started</StxLink>
+      <StxLink class="btn ghost" to="/features/self-host">Read about self-hosting</StxLink>
     </div>
   </div>
 </section>

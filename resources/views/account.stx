@@ -109,9 +109,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
 <div class="min-h-[100dvh]">
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
-    <a href="/" data-no-router class="text-lg wordmark">loghq</a>
+    <StxLink to="/" class="text-lg wordmark">loghq</StxLink>
     <div class="flex gap-2.5 items-center">
-      <a href="/dashboard" data-no-router class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</a>
+      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
       <button @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
     </div>
   </header>
@@ -151,20 +151,20 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         {{-- Two anchors rather than one rewritten in place: the pro and free CTAs
             differ in destination, label and variant, so branching the markup is
             clearer than mutating three attributes. --}}
-        <a href="/pricing" data-no-router class="px-4 py-2 text-sm btn btn-primary" :show="!pro()">Upgrade to Pro</a>
-        <a href="/pricing" data-no-router class="px-4 py-2 text-sm btn btn-ghost" :show="pro()">Manage plan</a>
+        <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary" :show="!pro()">Upgrade to Pro</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost" :show="pro()">Manage plan</StxLink>
       </div>
       <div class="flex items-center justify-between px-6 py-4 row">
         <div>
           <div class="text-subtle text-xs tracking-wide uppercase" style="font-family: var(--mono)">Member since</div>
           <div class="mt-1 text-base text-muted">{{ memberSince() }}</div>
         </div>
-        <a href="/dashboard" data-no-router class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</a>
+        <StxLink to="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</StxLink>
       </div>
     </section>
 
     <p class="text-sm text-subtle">
-      Signed in with a private token. <a href="/" data-no-router class="text-accent">Back to site</a>
+      Signed in with a private token. <StxLink to="/" class="text-accent">Back to site</StxLink>
     </p>
   </div>
 </div>

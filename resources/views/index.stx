@@ -85,11 +85,11 @@ const isAuthed = state(!!localStorage.getItem('token'))
     </div>
     <div class="bento">
       @foreach (featureCells as cell)
-        <a class="{{ cell.cls }}" href="/features/{{ cell.slug }}">
+        <StxLink class="{{ cell.cls }}" to="/features/{{ cell.slug }}">
           <h3>{{ cell.title }}</h3>
           <p>{{ cell.body }}</p>
           <span class="cell-more">View feature</span>
-        </a>
+        </StxLink>
       @endforeach
     </div>
   </section>
@@ -114,7 +114,7 @@ const isAuthed = state(!!localStorage.getItem('token'))
   <section class="reveal section" aria-label="Open source and self-hosting">
     <div class="open-band">
       <p><strong>Open source, and yours to run.</strong> Host loghq on your own Postgres so sensitive log data never leaves your infrastructure, or start on the hosted tier in a minute.</p>
-      <a class="btn ghost" href="/features/self-host">Read about self-hosting</a>
+      <StxLink class="btn ghost" to="/features/self-host">Read about self-hosting</StxLink>
     </div>
   </section>
 
@@ -123,7 +123,7 @@ const isAuthed = state(!!localStorage.getItem('token'))
       <h2>Stop tailing log files.</h2>
       <div class="cta-actions">
         <a class="btn primary" :href="isAuthed() ? '/dashboard' : '/register'">{{ isAuthed() ? 'Go to dashboard' : 'Get started' }}</a>
-        <a class="btn ghost" href="/use-cases">See use cases</a>
+        <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
       </div>
     </div>
   </section>

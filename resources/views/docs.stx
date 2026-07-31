@@ -31,7 +31,7 @@ const crumbs = [
   <h1>One HTTP request. Nothing to install.</h1>
   <p>loghq ingests structured logs over plain JSON. If your language can make an HTTP request, it can ship logs — no SDK, no build step, no lock-in. Start here, then dive into the topic you need.</p>
   <div class="hero-actions">
-    <a class="btn primary" href="/register">Create a project</a>
+    <StxLink class="btn primary" to="/register">Create a project</StxLink>
     <a class="btn ghost" href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md">Read the ingest spec</a>
   </div>
 </section>
@@ -94,11 +94,11 @@ curl -X POST https://loghq.org/logs \
     <h2 id="topics-heading" class="section-title">Read up by topic</h2>
   </div>
   <div class="bento">
-    <a class="cell" href="/features/capture">
+    <StxLink class="cell" to="/features/capture">
       <h3>Capturing logs</h3>
       <p>What an entry looks like on the wire, and how to batch without blocking your hot path.</p>
       <span class="cell-more">Read more</span>
-    </a>
+    </StxLink>
     <a class="cell tint" href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md">
       <h3>The ingest spec</h3>
       <p>Every field, every limit, and the retry rules for each status code. Enough to write a client from scratch.</p>
@@ -109,21 +109,21 @@ curl -X POST https://loghq.org/logs \
       <p>Correlation ids are join keys, not grouping keys. Pull every line emitted under one trace, in order.</p>
       <span class="cell-more">Read more</span>
     </a>
-    <a class="cell" href="/features/releases">
+    <StxLink class="cell" to="/features/releases">
       <h3>Releases and environments</h3>
       <p>Tag every entry with a release and environment so a regression names its own deploy.</p>
       <span class="cell-more">Read more</span>
-    </a>
-    <a class="cell tint" href="/features/alerts">
+    </StxLink>
+    <StxLink class="cell tint" to="/features/alerts">
       <h3>Alerts and channels</h3>
       <p>Route the levels that matter to email, Slack, or Discord, and stay quiet for the rest.</p>
       <span class="cell-more">Read more</span>
-    </a>
-    <a class="cell" href="/features/self-host">
+    </StxLink>
+    <StxLink class="cell" to="/features/self-host">
       <h3>Self-hosting</h3>
       <p>Run loghq on your own Postgres so sensitive log data never leaves your infrastructure.</p>
       <span class="cell-more">Read more</span>
-    </a>
+    </StxLink>
   </div>
 </section>
 
@@ -131,8 +131,8 @@ curl -X POST https://loghq.org/logs \
   <div class="cta-band">
     <h2>Ready to ship your first log?</h2>
     <div class="cta-actions">
-      <a class="btn primary" href="/register">Create a project</a>
-      <a class="btn ghost" href="/use-cases">See use cases</a>
+      <StxLink class="btn primary" to="/register">Create a project</StxLink>
+      <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
     </div>
   </div>
 </section>
