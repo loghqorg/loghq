@@ -115,10 +115,10 @@ function userEmail(user: any): string {
 async function canAccessProject(user: any, projectId: string): Promise<boolean> {
   const row = (await db.unsafe(
     `SELECT 1 FROM projects p
-     WHERE p.id = $1 AND (
-       p.owner_id = $2
-       OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
-     ) LIMIT 1`,
+    WHERE p.id = $1 AND (
+      p.owner_id = $2
+      OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
+    ) LIMIT 1`,
     [projectId, Number(user.id), userEmail(user)],
   ))?.[0]
   return !!row
@@ -133,10 +133,10 @@ route.get('/api/projects', async (request: any) => {
   const rows = await db.unsafe(
     `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.is_active, p.created_at,
             (p.owner_id = $1) AS is_owner
-     FROM projects p
-     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
-     WHERE p.owner_id = $1 OR m.email IS NOT NULL
-     ORDER BY p.created_at DESC NULLS LAST, p.id`,
+    FROM projects p
+    LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
+    WHERE p.owner_id = $1 OR m.email IS NOT NULL
+    ORDER BY p.created_at DESC NULLS LAST, p.id`,
     [Number(user.id), userEmail(user)],
   )
   return json({ projects: rows ?? [] })
@@ -192,8 +192,12 @@ route.post('/api/projects/{projectId}/rotate-key', async (request: any) => {
 }).skipCsrf()
 
 // Delete a project and everything under it. Owner-only. Removes children first
-// to satisfy the foreign keys (events -> issues -> project; channels/members ->
-// project), then the project row.
+// to satisfy the foreign keys (log entries/channels/members/invites -> project),
+// then the project row.
+//
+// `log_entries` is the one that actually blocks the parent delete — it carries
+// `project_id REFERENCES projects(id)` (database/migrations/0000000003) and can
+// hold every row the project ever ingested, so this is the slow statement here.
 route.delete('/api/projects/{projectId}', async (request: any) => {
   const user = await currentUser(request)
   if (!user)
@@ -202,9 +206,7 @@ route.delete('/api/projects/{projectId}', async (request: any) => {
   if (!(await ownsProject(user, projectId)))
     return json({ error: 'not found' }, 404)
 
-  await db.unsafe('DELETE FROM error_events WHERE project_id = $1', [projectId])
-  await db.unsafe('DELETE FROM autofix_runs WHERE project_id = $1', [projectId])
-  await db.unsafe('DELETE FROM issues WHERE project_id = $1', [projectId])
+  await db.unsafe('DELETE FROM log_entries WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM alert_channels WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM project_members WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM project_invites WHERE project_id = $1', [projectId])
@@ -213,8 +215,8 @@ route.delete('/api/projects/{projectId}', async (request: any) => {
 }).skipCsrf()
 
 // Archive / unarchive a project (owner-only). Archiving flips is_active off, so
-// the ingest endpoint rejects new events (see app/Errors/ingest.ts) and alerts
-// pause — but every issue, event, and member is kept. Fully reversible: pass
+// the ingest endpoint rejects new entries with a 403 (see app/Errors/ingest.ts)
+// — but every log entry and member is kept. Fully reversible: pass
 // { archived: false } to bring it back. Body defaults to archiving.
 route.post('/api/projects/{projectId}/archive', async (request: any) => {
   const user = await currentUser(request)
@@ -242,13 +244,13 @@ route.get('/api/projects/{projectId}/members', async (request: any) => {
 
   const members = (await db.unsafe(
     `SELECT m.id, m.email, m.role, m.created_at FROM project_members m
-     WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
+    WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
     [projectId],
   )) ?? []
   const invites = (await db.unsafe(
     `SELECT i.id, i.email, i.created_at, (u.id IS NOT NULL) AS registered
-     FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
-     WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
+    FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
+    WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
     [projectId],
   )) ?? []
   return json({
@@ -409,7 +411,7 @@ route.get('/api/projects/{projectId}/channels', async (request: any) => {
 
   const rows = (await db.unsafe(
     `SELECT id, type, label, webhook_url, enabled, created_at
-     FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
+    FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
     [projectId],
   )) ?? []
   const channels = rows.map((r: any) => ({
@@ -503,8 +505,8 @@ route.post('/api/projects/{projectId}/channels/{channelId}/test', async (request
 
   const row = (await db.unsafe(
     `SELECT c.type, c.webhook_url, p.name AS project_name
-     FROM alert_channels c JOIN projects p ON p.id = c.project_id
-     WHERE c.id = $1 AND c.project_id = $2 LIMIT 1`,
+    FROM alert_channels c JOIN projects p ON p.id = c.project_id
+    WHERE c.id = $1 AND c.project_id = $2 LIMIT 1`,
     [channelId, projectId],
   ))?.[0]
   if (!row)
