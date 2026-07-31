@@ -6,6 +6,13 @@ const services = (await import('../../config/services')).default
 const githubEnabled = !!services.github?.clientId
 const googleEnabled = !!services.google?.clientId
 const anyOauth = githubEnabled || googleEnabled
+
+useSeoMeta({
+  title: 'Create your account - loghq',
+  description: 'Create a loghq account and start streaming structured logs from any app that can make an HTTP request.',
+  ogImage: 'https://loghq.org/og.png',
+})
+useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/register' }] })
 </script>
 
 <script client>

@@ -1,3 +1,11 @@
+<script server>
+useSeoMeta({
+  title: 'New app - loghq',
+  description: 'Create an app to get an ingest key and start streaming logs.',
+  robots: 'noindex, nofollow',
+})
+</script>
+
 <script client>
 // Create-app screen. New users land here after signup. Creates a project via
 // the authenticated API (bearer from localStorage), then drops into that

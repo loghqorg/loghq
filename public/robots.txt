@@ -1,0 +1,16 @@
+User-agent: *
+
+# Auth-walled. These also set robots: noindex, nofollow via useSeoMeta, but a
+# meta tag only helps once a crawler has fetched the page; this stops the fetch.
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /account
+Disallow: /projects
+
+# Token-bearing URLs arriving from email. Nothing here should ever be indexed,
+# and the query strings carry single-use credentials.
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /join/
+
+Sitemap: https://loghq.org/sitemap.xml

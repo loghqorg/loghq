@@ -2,8 +2,6 @@
 // Projects list. Server-authenticates from the token cookie and shows the
 // user's own apps; each links into its dashboard. New users (or logged-out
 // visitors) are handled by the client guard at the bottom.
-const meta = { title: 'loghq - Your apps', description: 'Log management' }
-
 const { db } = await import('@stacksjs/database')
 
 const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
@@ -32,6 +30,12 @@ function fromNow(iso) {
   if (s < 86400) return Math.floor(s / 3600) + 'h ago'
   return Math.floor(s / 86400) + 'd ago'
 }
+
+useSeoMeta({
+  title: 'Your apps - loghq',
+  description: 'Every app you are streaming logs from, in one place.',
+  robots: 'noindex, nofollow',
+})
 </script>
 
 <script client>

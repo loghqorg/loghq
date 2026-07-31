@@ -5,8 +5,6 @@
 // preference the dashboard uses), scoped to projects the user OWNS — members can
 // read the log stream but only an owner administers a project. Reads happen here
 // server-side; mutations go client-side to the owner-scoped /api endpoints.
-const meta = { title: 'loghq - Settings', description: 'Log management' }
-
 const { db } = await import('@stacksjs/database')
 const { appUrl, ingestUrl } = await import('../../app/Support/urls')
 // APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
@@ -229,6 +227,12 @@ const keyMaskJson = JSON.stringify(keyMask)
 const projectIdJson = JSON.stringify(projectId)
 const projectNameJson = JSON.stringify(activeProject?.name || '')
 const projectActiveJson = JSON.stringify(activeProject ? activeProject.is_active !== false : true)
+
+useSeoMeta({
+  title: 'Settings - loghq',
+  description: 'Project settings: ingest key, team members, and alert channels.',
+  robots: 'noindex, nofollow',
+})
 </script>
 
 <script client>

@@ -3,8 +3,6 @@
 // (mirrored from localStorage by login/register), loads THEIR projects
 // owner-scoped, and renders the active one's log stream (newest first) with
 // level-threshold, time-range, and text-search filters. Reads via db.unsafe.
-const meta = { title: 'loghq - Logs', description: 'Log streaming' }
-
 const { db } = await import('@stacksjs/database')
 
 // Query params come from globalThis.__stxServeSearch (the dev server stashes
@@ -240,6 +238,12 @@ const stats = [
   { label: 'Warnings', value: counts.warnings.toLocaleString(), dot: true, on: counts.warnings > 0, color: '#f59e0b' },
   { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, on: counts.errors > 0, color: '#f43f5e' },
 ]
+
+useSeoMeta({
+  title: 'Logs - loghq',
+  description: 'Your live application log stream — filter by level, search messages, and inspect structured context.',
+  robots: 'noindex, nofollow',
+})
 </script>
 
 <script client>

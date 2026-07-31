@@ -1,3 +1,11 @@
+<script server>
+useSeoMeta({
+  title: 'Account - loghq',
+  description: 'Your loghq profile, plan, and sign-in method.',
+  robots: 'noindex, nofollow',
+})
+</script>
+
 <script client>
 // Account page. The profile is fetched client-side from /api/me and was
 // previously painted onto the DOM by hand — ~17 element lookups setting text,
