@@ -9,6 +9,10 @@ import { schema } from '@stacksjs/validation'
  * so there is no `issue_id`/`fingerprint` rollup here. `context`/`sdk`/
  * `user_context` hold the rich JSON blobs the SDK ships; the free-text
  * `message` is widened to the varchar cap so nothing truncates at storage.
+ *
+ * `trace_id`/`request_id` are join keys, not grouping: they answer "what else
+ * happened around this line?" without collapsing anything. Storage shaping for
+ * every field lives in app/Logs/normalize.ts.
  */
 export default defineModel({
   name: 'LogEntry',
@@ -26,6 +30,11 @@ export default defineModel({
     { name: 'le_project_timestamp', columns: ['project_id', 'timestamp'] },
     // Level facet within a project (filter to warnings+, errors, …).
     { name: 'le_project_level', columns: ['project_id', 'level'] },
+    // Correlation lookups. Declared partial (WHERE ... IS NOT NULL) in
+    // database/migrations/0000000010 — most rows carry no correlation id and
+    // indexing those nulls doubles the index for no lookup benefit.
+    { name: 'le_project_trace', columns: ['project_id', 'trace_id'] },
+    { name: 'le_project_request', columns: ['project_id', 'request_id'] },
   ],
 
   attributes: {
@@ -50,5 +59,10 @@ export default defineModel({
     user_context: { fillable: true, validation: { rule: schema.string().max(10485760).optional() } },
     // Client-supplied ISO-8601 timestamp of the log event.
     timestamp: { fillable: true, validation: { rule: schema.string().required() } },
+    // Distributed-trace id (W3C traceparent trace-id when the SDK has one).
+    // Groups every entry emitted while handling one operation, across services.
+    trace_id: { fillable: true, validation: { rule: schema.string().max(64).optional() } },
+    // Single inbound request within one service.
+    request_id: { fillable: true, validation: { rule: schema.string().max(64).optional() } },
   },
 })

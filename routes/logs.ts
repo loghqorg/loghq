@@ -13,21 +13,19 @@ import { db } from '@stacksjs/database'
 import { response, route } from '@stacksjs/router'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
+import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
 
 // Ingest abuse bounds. The public key gate is not enough on its own — a script
-// with the key (readable from any bundle) could flood the ingest.
+// with the key (readable from any bundle) could flood the ingest. Per-entry
+// storage caps (message/context size, batch length) live in app/Logs/normalize.
 const MAX_BODY_BYTES = 512 * 1024 // reject payloads larger than this outright (batches are bigger than single errors)
-const MAX_MESSAGE = 16 * 1024 // stored message cap
-const MAX_CONTEXT_BYTES = 96 * 1024 // stored context/sdk/user JSON cap
-const MAX_BATCH = 500 // most entries accepted in one POST
-// Fixed-window quotas (per process): per project, and per client IP across
-// projects. Logs are higher-volume than errors, so the per-project budget is
-// generous; it still kills a runaway loop.
+// Fixed-window quotas: per project, and per client IP across projects. Logs are
+// higher-volume than errors, so the per-project budget is generous; it still
+// kills a runaway loop. Shared across instances when Redis is configured, else
+// per-process (see app/Errors/limits.ts).
 const PROJECT_LIMIT = 2000
 const IP_LIMIT = 4000
 const RATE_WINDOW_MS = 10_000
-
-const LEVELS = new Set(['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'])
 
 const TRUSTED_PROXY_HOPS = Math.max(0, Number(process.env.TRUSTED_PROXY_HOPS ?? 1))
 
@@ -46,36 +44,8 @@ function clientIp(request: any): string {
   return direct
 }
 
-function clip(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max)}…[truncated]` : value
-}
-
-// Hard cap for varchar(255) columns — Postgres RAISES on overflow, aborting the
-// INSERT. Note plain clip() is unsafe here: its suffix pushes past 255.
-function col255(value: unknown): string | null {
-  if (value == null)
-    return null
-  const s = String(value)
-  return s.length > 255 ? `${s.slice(0, 254)}…` : s
-}
-
 function randomId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-}
-
-/** Serialize an object field to a JSON string, bounded, or null. */
-function jsonColumn(value: unknown, max = MAX_CONTEXT_BYTES): string | null {
-  if (value == null || typeof value !== 'object')
-    return null
-  try {
-    const s = JSON.stringify(value)
-    if (!s || s === '{}' || s === '[]')
-      return null
-    return s.length > max ? JSON.stringify({ _truncated: 'oversized context dropped' }) : s
-  }
-  catch {
-    return null
-  }
 }
 
 const CORS = {
@@ -116,10 +86,10 @@ function userEmail(user: any): string {
 async function ownsProject(user: any, projectId: string): Promise<boolean> {
   const row = (await db.unsafe(
     `SELECT 1 FROM projects p
-     WHERE p.id = $1 AND (
-       p.owner_id = $2
-       OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
-     ) LIMIT 1`,
+    WHERE p.id = $1 AND (
+      p.owner_id = $2
+      OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
+    ) LIMIT 1`,
     [projectId, Number(user.id), userEmail(user)],
   ))?.[0]
   return !!row
@@ -128,10 +98,10 @@ async function ownsProject(user: any, projectId: string): Promise<boolean> {
 async function ownsLog(user: any, logId: string): Promise<boolean> {
   const row = (await db.unsafe(
     `SELECT 1 FROM log_entries l JOIN projects p ON p.id = l.project_id
-     WHERE l.id = $1 AND (
-       p.owner_id = $2
-       OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
-     ) LIMIT 1`,
+    WHERE l.id = $1 AND (
+      p.owner_id = $2
+      OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
+    ) LIMIT 1`,
     [logId, Number(user.id), userEmail(user)],
   ))?.[0]
   return !!row
@@ -152,14 +122,12 @@ route.post('/logs', async (request: any) => {
   if (Buffer.byteLength(JSON.stringify(body)) > MAX_BODY_BYTES)
     return json({ error: 'payload too large' }, 413)
 
-  // Accept a batch (`{ logs: [...] }`) or a single entry object.
-  const rawEntries: any[] = Array.isArray(body.logs)
-    ? body.logs
-    : (body.message != null ? [body] : [])
+  // Accept a batch (`{ logs: [...] }`) or a single entry object. Overflow past
+  // MAX_BATCH is not trimmed here — normalizeBatch counts it so the response can
+  // report the loss instead of returning a success the client can't reconcile.
+  const rawEntries = extractEntries(body)
   if (!rawEntries.length)
     return json({ error: 'no log entries' }, 400)
-  if (rawEntries.length > MAX_BATCH)
-    rawEntries.length = MAX_BATCH // silently cap; the SDK batches well under this
 
   // Per-IP quota across all projects.
   const ip = clientIp(request)
@@ -183,51 +151,33 @@ route.post('/logs', async (request: any) => {
 
   const projectId = String(project.id)
 
-  // Per-project quota, charged once per batch record so a fat batch can't dodge it.
-  const projLimit = await rateLimit(`proj:${projectId}`, PROJECT_LIMIT, RATE_WINDOW_MS, rawEntries.length)
+  // Per-project quota, charged once per batch record so a fat batch can't dodge
+  // it — but only for the records we will actually store, since anything past
+  // MAX_BATCH is dropped without being read.
+  const charged = Math.min(rawEntries.length, MAX_BATCH)
+  const projLimit = await rateLimit(`proj:${projectId}`, PROJECT_LIMIT, RATE_WINDOW_MS, charged)
   if (!projLimit.ok)
     return json({ error: 'rate limited' }, 429, { 'Retry-After': String(projLimit.retryAfter) })
 
   const receivedAt = new Date().toISOString()
-  let stored = 0
+  const { rows, dropped, skipped } = normalizeBatch(body, { projectId, receivedAt, newId: randomId })
 
-  for (const raw of rawEntries) {
-    if (raw == null || raw.message == null)
-      continue
+  // One multi-row INSERT. Inserting per entry cost a round-trip each, so a full
+  // 500-record batch serialized into 500 of them.
+  if (rows.length)
+    await db.insertInto('log_entries').values(rows).execute()
 
-    const level = LEVELS.has(String(raw.level)) ? String(raw.level) : 'info'
-    const message = clip(String(raw.message), MAX_MESSAGE)
-    // A per-entry key/project in a batch is ignored: the whole batch is already
-    // authorized to `projectId`. `user` may arrive top-level or nested; store
-    // whichever is present.
-    const userContext = raw.user ?? raw.context?.user ?? null
-
-    await db.insertInto('log_entries').values({
-      id: randomId(),
-      project_id: projectId,
-      level: col255(level),
-      message,
-      channel: col255(raw.channel),
-      context: jsonColumn(raw.context),
-      environment: col255(raw.environment ?? 'production'),
-      release: col255(raw.release),
-      framework: col255(raw.framework),
-      host: col255(raw.host),
-      sdk: jsonColumn(raw.sdk, 4096),
-      user_context: jsonColumn(userContext),
-      timestamp: col255(raw.timestamp) ?? receivedAt,
-    }).execute()
-    stored++
-  }
-
-  return json({ ok: true, stored }, 201)
+  // `dropped` (over MAX_BATCH) and `skipped` (no usable message) are always
+  // reported: a client that believes it delivered 600 entries has no other way
+  // to notice that 100 never landed.
+  return json({ ok: true, stored: rows.length, dropped, skipped }, 201)
 }).skipCsrf() // public ingest: SDKs POST cross-origin with no CSRF cookie
 
 // ---------------------------------------------------------------------------
 // Stream API (dashboard)
 // ---------------------------------------------------------------------------
 
-const STREAM_COLS = 'id, level, message, channel, environment, release, framework, host, timestamp, created_at'
+const STREAM_COLS = 'id, level, message, channel, environment, release, framework, host, timestamp, created_at, trace_id, request_id'
 
 route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const projectId = request.params.projectId
@@ -260,6 +210,16 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
   if (q.environment) {
     params.push(String(q.environment))
     where.push(`environment = $${params.length}`)
+  }
+  // Correlation: "show me the rest of this trace / request". Both are backed by
+  // the partial indexes from migration 0000000010, so these stay cheap.
+  if (q.trace) {
+    params.push(String(q.trace).slice(0, MAX_CORRELATION))
+    where.push(`trace_id = $${params.length}`)
+  }
+  if (q.request) {
+    params.push(String(q.request).slice(0, MAX_CORRELATION))
+    where.push(`request_id = $${params.length}`)
   }
   // Full-text-ish search over the message.
   if (q.q) {
