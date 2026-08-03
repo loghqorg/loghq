@@ -51,7 +51,7 @@ const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 
 // login/register). A project the user does not own is never resolved, so no
 // tenant can read another tenant's logs by guessing a project id.
 const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
-let user = null
+let user: AuthUser | null = null
 if (token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
@@ -61,10 +61,10 @@ if (token) {
 }
 
 // Load the user's OWN projects (plus invited) and pick the active one.
-let projects = []
-let activeProject = null
+let projects: ProjectRow[] = []
+let activeProject: ProjectRow | null = null
 let needsOnboarding = false
-let pendingInvites = []
+let pendingInvites: PendingInvite[] = []
 if (user) {
   const userEmail = String(user.email || '').trim().toLowerCase()
   projects = (await db.unsafe(
@@ -110,7 +110,7 @@ function pageUrl(overrides) {
 const levelTabs = LEVEL_TABS.map(t => ({ ...t, href: pageUrl({ level: t.key, page: 1 }) }))
 const rangeTabs = RANGES.map(r => ({ ...r, href: pageUrl({ range: r.key, page: 1 }) }))
 
-let logs = []
+let logs: LogRow[] = []
 let counts = { total: 0, warnings: 0, errors: 0 }
 let live = false
 let pager = { from: 0, to: 0, total: 0, page: 1, pages: 1, hasPrev: false, hasNext: false, prevHref: '', nextHref: '' }
@@ -281,7 +281,7 @@ function signOut() {
 // Invite banner. Was one delegated listener on the container doing className
 // sniffing and row.remove(); each row now owns its own handlers and the state
 // is keyed by invite token.
-const dismissed = state([])
+const dismissed: StxSignal<string[]> = state([])
 const joining = state('')
 
 const isDismissed = t => dismissed().includes(t)

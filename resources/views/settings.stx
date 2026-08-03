@@ -18,7 +18,7 @@ const requestedProject = query.get('project')
 const cookieProject = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_project')) || ''
 
 const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
-let user = null
+let user: AuthUser | null = null
 if (token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
@@ -27,12 +27,12 @@ if (token) {
   catch { user = null }
 }
 
-let projects = []
-let activeProject = null
+let projects: ProjectRow[] = []
+let activeProject: ProjectRow | null = null
 let needsOnboarding = false
-let channels = []
-let members = []
-let invites = []
+let channels: AlertChannelRow[] = []
+let members: MemberRow[] = []
+let invites: InviteRow[] = []
 if (user) {
   // Owned projects only — settings is the owner's admin surface.
   projects = (await db.unsafe(
@@ -338,7 +338,7 @@ const inviteEmail = state('')
 const inviting = state(false)
 const inviteNote = state('')
 const inviteNoteOk = state(true)
-const removedMembers = state([])
+const removedMembers: StxSignal<string[]> = state([])
 const removingMember = state('')
 const copiedJoin = state('')
 
@@ -398,7 +398,7 @@ const whLabel = state('')
 const adding = state(false)
 const whNote = state('')
 const whNoteOk = state(true)
-const removedChannels = state([])
+const removedChannels: StxSignal<string[]> = state([])
 const channelBusy = state({})
 const channelOn = state({})
 

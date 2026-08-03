@@ -5,7 +5,7 @@
 const { db } = await import('@stacksjs/database')
 
 const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
-let user = null
+let user: AuthUser | null = null
 if (token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
@@ -14,7 +14,7 @@ if (token) {
   catch { user = null }
 }
 
-let projects = []
+let projects: ProjectRow[] = []
 if (user) {
   projects = (await db.unsafe(
     'SELECT id, name, platform, ingest_key, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',

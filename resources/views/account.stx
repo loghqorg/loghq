@@ -11,7 +11,7 @@ useSeoMeta({
 // previously painted onto the DOM by hand — ~17 element lookups setting text,
 // classes, visibility, and one raw HTML insertion. It is all one object, so it
 // is one signal now and the markup reads from it.
-const user = state(null)
+const user: StxSignal<MeUser | null> = state(null)
 const pro = state(false)
 const loaded = state(false)
 
