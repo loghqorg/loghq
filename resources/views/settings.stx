@@ -404,7 +404,7 @@ async function addInvite(): Promise<void> {
       note(inviteNote, inviteNoteOk, body.error || 'Could not invite.', false)
       return
     }
-    window.location.reload()
+    (navigate as StxNavigate)('/settings', true)
   }
   catch {
     inviting.set(false)
@@ -472,7 +472,7 @@ async function addChannel(): Promise<void> {
       note(whNote, whNoteOk, body.error || 'Could not add that channel.', false)
       return
     }
-    window.location.reload()
+    (navigate as StxNavigate)('/settings', true)
   }
   catch {
     adding.set(false)
@@ -572,7 +572,7 @@ async function unarchive(): Promise<void> {
   try {
     const res = await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: false }) })
     if (res.ok) {
-      window.location.reload()
+      (navigate as StxNavigate)('/settings', true)
       return
     }
     archiving.set(false)
@@ -601,7 +601,7 @@ async function confirmModal(): Promise<void> {
       navigate('/projects')
     }
     else {
-      window.location.reload()
+      (navigate as StxNavigate)('/settings', true)
     }
   }
   catch {

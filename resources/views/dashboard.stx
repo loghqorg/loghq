@@ -345,6 +345,29 @@ onMount(() => {
   if (needsOnboarding)
     (navigate as StxNavigate)('/projects/new', true)
 })
+
+// Project selection arrives as ?project=… from the apps list. This used to be a
+// pre-paint script, which it never needed to be: the server has already
+// rendered by the time it runs, so the cookie it writes only takes effect on
+// the NEXT request. Moving it here costs nothing and removes a raw cookie
+// write, a location read and a history rewrite — three DOM-guard violations.
+//
+// Names are described rather than spelled here on purpose: the strict
+// validator scans script bodies as raw text, comments included, so quoting a
+// prohibited API in a comment reports as a violation of it.
+//
+// The param is deliberately no longer stripped from the URL. useSearchParams
+// has no delete at runtime — it is declared with one, but the object returned
+// is { data, get, set, setAll } — and rewriting history by hand is exactly the
+// violation this change exists to remove. Leaving it is
+// harmless and arguably better: the server prefers the query param over the
+// cookie, so the URL stays shareable and pinned to that project, and it clears
+// itself on the first filter click because pageUrl() does not carry it.
+onMount(() => {
+  const requested = useSearchParams().get('project')
+  if (requested)
+    useStore('session').project.set(requested)
+})
 </script>
 
 <style>
@@ -639,19 +662,6 @@ select.panel {
     hydrating with the rest.
     The chrome and invite banner it used to build now live in the client block
     at the top of this file. --}}
-<script>
-(function () {
-  // Project selection arrives as ?project=… from the apps list. Not auth, so it
-  // stays here rather than moving into AuthGuard.
-  var qs = new URLSearchParams(window.location.search)
-  if (qs.get('project')) {
-    document.cookie = 'loghq_project=' + encodeURIComponent(qs.get('project')) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
-    qs.delete('project')
-    var rest = qs.toString()
-    window.history.replaceState(null, '', window.location.pathname + (rest ? '?' + rest : ''))
-  }
 
-})()
-</script>
 
 @include('AuthGuard')

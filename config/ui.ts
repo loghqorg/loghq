@@ -87,12 +87,19 @@ export default {
   // on every non-server <script> body; without this key it resolves to
   // { enabled: false } (script-validation.js:129) and reports nothing.
   //
-  // Warn-only for now: failOnViolation throws from inside the render, which on
-  // the SSR path is a 500 per request. Flip it once the burn-down is clean.
+  // Stays warn-only, and enforcement lives in scripts/check-dom-guard.ts
+  // instead. failOnViolation is all-or-nothing and throws from inside the
+  // render — a 500 per request on the SSR path — and its escape hatch,
+  // allowPatterns, is RULE-global: it substring-matches the message
+  // (script-validation.js:130-132), so exempting the pre-paint auth guard's
+  // four rules would switch those rules off across the entire repo and let the
+  // next accidental location.replace in a component through.
   //
-  // allowPatterns stays EMPTY on purpose. The filter is rule-global, not
-  // site-scoped (script-validation.js:130-132), and it substring-matches the
-  // message — so allowing 'location' would silently kill four rules at once.
+  // The gate script enforces per FILE instead, which is the granularity that
+  // was wanted: exactly one file is allowed to violate, a second one fails,
+  // and an exemption that stops being needed also fails so it cannot go stale.
+  //
+  // allowPatterns therefore stays EMPTY.
   strict: {
     enabled: true,
     failOnViolation: false,
