@@ -60,7 +60,9 @@ onMount(() => {
       <StxLink to="/pricing">Pricing</StxLink>
       <a href="https://github.com/stacksjs/loghq">GitHub</a>
       <StxLink to="/login" :show="!isAuthed()">Log in</StxLink>
-    <StxLink to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
+      {{-- Inline display:none is the `:show` initial state and cannot be a
+           `hidden` utility — see the explanation in SiteNav.stx. --}}
+      <StxLink to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
       <StxLink :show="!isAuthed()" to="/register">Get started</StxLink>
     </div>
   </div>

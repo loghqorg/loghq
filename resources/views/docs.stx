@@ -67,7 +67,7 @@ const crumbs = [
 </section>
 
 <section class="reveal section shell" aria-label="Send your first log">
-  <div class="code" style="max-width: 700px">
+  <div class="code max-w-[700px]">
     <div class="code-bar"><span class="chart-cap">send your first log</span></div>
     <pre class="code-body"><code># any language, any runtime — this is the whole integration
 curl -X POST https://loghq.org/logs \

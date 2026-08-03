@@ -79,7 +79,7 @@ onMount(() => {
       </div>
     </div>
 
-    <div class="hero-code reveal" style="animation-delay: 0.08s">
+    <div class="hero-code reveal [animation-delay:0.08s]">
       <div class="code-bar">
         <span class="dot" aria-hidden="true"></span>
         <span class="chart-cap">config/logging.php</span>

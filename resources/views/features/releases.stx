@@ -38,7 +38,7 @@ const crumbs = [
 </section>
 
 <section class="reveal section shell" aria-label="Releases and environments preview">
-  <div class="code" style="max-width: 700px">
+  <div class="code max-w-[700px]">
     <div class="code-bar"><span class="chart-cap">Tag events with a release and environment</span></div>
     <pre class="code-body"><code>// tag every entry as you send it
 body: JSON.stringify({

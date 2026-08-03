@@ -62,11 +62,17 @@ async function upgrade(): Promise<void> {
   <div class="mx-auto max-w-3xl">
     <header class="mb-10 text-center">
       <StxLink to="/" class="text-2xl wordmark">loghq</StxLink>
+      {{-- The inline letter-spacing stays until the <style> block above goes.
+           `.wordmark` sets -0.03em, and a `tracking-[-0.035em]` utility ties
+           with it on specificity and LOSES on order, because the page's own
+           <style> tag is emitted after the Crosswind sheet. Only the inline
+           declaration outranks the block, which is precisely the conflict
+           ch.11.1 describes. Convert the class and the attribute together. --}}
       <h1 class="mt-6 text-3xl md:text-4xl wordmark" style="letter-spacing:-0.035em">Simple, honest pricing</h1>
       <p class="mt-3 text-base text-subtle">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
       <div class="inline-flex gap-1 items-center mt-6 p-1 text-sm seg">
         <button @click="pick('monthly')" :class="interval() === 'monthly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Monthly</button>
-        <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Yearly <span style="opacity:.8">-17%</span></button>
+        <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Yearly <span class="opacity-80">-17%</span></button>
       </div>
     </header>
 

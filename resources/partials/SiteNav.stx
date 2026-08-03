@@ -69,6 +69,15 @@ onMount(() => {
     </div>
 
     <StxLink to="/login" class="nav-login" :show="!isAuthed()">Log in</StxLink>
+    {{-- `style="display:none"` is required here and must NOT become a `hidden`
+         utility, despite ch.11.5. It is the server-rendered initial state for
+         `:show`, and `:show` drives the inline declaration specifically: when
+         the expression turns true the runtime CLEARS the style attribute back
+         to "" rather than writing `display:block` (verified in the browser —
+         an authed page reports style="" on this link). A `hidden` class would
+         survive that clearing, so the link would never appear once signed in.
+         The default is hidden rather than shown so the link does not flash for
+         signed-out visitors during hydration. --}}
     <StxLink to="/dashboard" class="nav-login" :show="isAuthed()" style="display:none">Dashboard</StxLink>
     <StxLink class="btn nav-cta primary sm" :show="!isAuthed()" to="/register">Sign up</StxLink>
 
@@ -96,7 +105,8 @@ onMount(() => {
         <StxLink to="/docs">Docs</StxLink>
         <a href="https://github.com/stacksjs/loghq">GitHub</a>
         <StxLink to="/login" :show="!isAuthed()">Log in</StxLink>
-    <StxLink to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
+        {{-- Inline display:none, for the reason given on the desktop link above. --}}
+        <StxLink to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
         <StxLink class="btn primary sm" :show="!isAuthed()" to="/register">Sign up</StxLink>
       </div>
     </details>
