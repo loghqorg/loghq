@@ -1,0 +1,81 @@
+/* loghq design tokens — the single source for the app surface.
+ *
+ * Linked once from config/ui.ts `app.head.link`, so every page gets it without
+ * repeating it. Ten app views used to declare their own byte-similar copy of
+ * this block: 90 custom-property declarations in four subtly diverging
+ * variants, which is how the dashboard's `--mono` stack ended up one entry
+ * longer than everyone else's.
+ *
+ * It is NOT in config/crosswind.ts `preflights`, which is where the styling
+ * guide says design tokens belong. Verified against the installed build:
+ * `preflights` is spread into the generator config and then never emitted —
+ * toCSS() writes the built-in reset only. A probe token placed there appears
+ * nowhere in the served CSS on any route.
+ *
+ * These names are the contract config/crosswind.ts maps its semantic utilities
+ * onto — `bg-canvas`, `bg-panel`, `border-line`, `text-ink`, `text-muted`,
+ * `text-subtle`, `text-accent`. Renaming one here silently breaks the matching
+ * utility everywhere, because an undefined var() resolves to the property's
+ * initial value rather than erroring.
+ *
+ * Marketing pages additionally load /marketing.css, which arrives after this
+ * file and defines a richer set of its own (--surface, --accent-soft, --r, …).
+ * Where the two overlap the values agree; where they differ, marketing.css
+ * wins on marketing pages, which is the intent.
+ *
+ * Both the media query and the [data-theme] attribute are covered, and that
+ * pairing is deliberate: the attribute is what the pre-paint theme script and
+ * the theme store write, and it has to beat the OS preference so an explicit
+ * choice survives.
+ */
+
+:root {
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --border: rgba(15, 23, 42, 0.09);
+  --text: #0b0f19;
+  --text-2: #4b5565;
+  --text-3: #97a1b2;
+  --accent: #e11d48;
+  --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #090b11;
+    --panel: #10131c;
+    --border: rgba(148, 163, 184, 0.12);
+    --text: #f3f5f9;
+    --text-2: #b3bccb;
+    --text-3: #667085;
+    --accent: #fb7185;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #090b11;
+  --panel: #10131c;
+  --border: rgba(148, 163, 184, 0.12);
+  --text: #f3f5f9;
+  --text-2: #b3bccb;
+  --text-3: #667085;
+  --accent: #fb7185;
+}
+
+:root[data-theme='light'] {
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --border: rgba(15, 23, 42, 0.09);
+  --text: #0b0f19;
+  --text-2: #4b5565;
+  --text-3: #97a1b2;
+  --accent: #e11d48;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
