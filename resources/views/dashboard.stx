@@ -309,7 +309,7 @@ async function joinInvite(token: string): Promise<void> {
       return
     }
     useStore('session').project.set(body.project)
-    window.location.assign('/dashboard')
+    ;(navigate as StxNavigate)('/dashboard', true)
   }
   catch {
     joining.set('')
@@ -334,6 +334,17 @@ async function loadPlan(): Promise<void> {
 }
 
 loadPlan()
+
+// Onboarding bounce. The server block already computed needsOnboarding, and it
+// crosses to here through the server-to-client bridge, so this is not a second
+// decision — it is the same one, acted on somewhere cancellable and lintable.
+// It replaces a <script> tag emitted as page CONTENT, which is not a redirect:
+// it is a fully rendered page that then tears itself down, costing a paint and
+// a second document load on a route the server already knew was wrong.
+onMount(() => {
+  if (needsOnboarding)
+    (navigate as StxNavigate)('/projects/new', true)
+})
 </script>
 
 <style>
@@ -455,7 +466,6 @@ select.panel {
 
     @if (user && needsOnboarding)
       <div class="py-24 text-center text-sm text-subtle">Setting up your workspace…</div>
-      <script>window.location.replace('/projects/new')</script>
     @endif
 
     @if (user && !needsOnboarding)

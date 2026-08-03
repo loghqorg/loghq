@@ -284,14 +284,46 @@ const copiedKey = state(false)
 async function copyText(text: string, flag: StxSignal<boolean>): Promise<void> {
   try { await navigator.clipboard.writeText(text) }
   catch {}
+  copiedFlag = flag
   flag.set(true)
-  setTimeout(() => flag.set(false), 1400)
+  resetCopied.start()
+}
+
+// Parked timers, one per concern rather than one per call. useTimeout START
+// on creation (it calls start() immediately), so each is stopped at once and
+// re-armed at the point of use. Each registers its own onDestroy(stop) — which
+// is the entire reason for the change: the bare setTimeout calls these replace
+// were cancelled by nothing, so navigating away mid-countdown left them to fire
+// against signals whose page had gone.
+//
+// The "which one" is held in a plain variable rather than making a timer per
+// call site: creating a useTimeout inside a handler would register a fresh
+// onDestroy on every click, which is a slower version of the same leak.
+let copiedFlag: StxSignal<boolean> | null = null
+const resetCopied = useTimeout(() => copiedFlag?.set(false), 1400)
+resetCopied.stop()
+
+const resetCopiedJoin = useTimeout(() => copiedJoin.set(''), 1600)
+resetCopiedJoin.stop()
+
+let busyChannelId = ''
+const resetBusy = useTimeout(() => { if (busyChannelId) setBusy(busyChannelId, '') }, 2400)
+resetBusy.stop()
+
+/** Clear a channel's transient status label shortly after it is shown. */
+function clearBusy(id: string): void {
+  busyChannelId = id
+  resetBusy.start()
 }
 
 // ---- project switcher ----
 function switchProject(e: Event): void {
-  useStore('session').project.set(e.target.value)
-  window.location.href = '/settings'
+  useStore('session').project.set((e.target as HTMLSelectElement).value)
+  // A DECLARED full document load, not an accidental one. The cookie was just
+  // rewritten and the server render depends on it, so this must reach the
+  // server again — and navigate() no-ops on a same-URL fragment navigation
+  // (client.js:300), which would leave the page showing the old project.
+  ;(navigate as StxNavigate)('/settings', true)
 }
 
 // ---- ingest key ----
@@ -312,7 +344,10 @@ function note(msgSig: StxSignal<string>, okSig: StxSignal<boolean>, msg: string,
 async function rotateKey(): Promise<void> {
   const ask = window.stxConfirm
     ? window.stxConfirm('The current key stops working immediately — anything still sending it will get 401 until you update it. Continue?', { title: 'Rotate ingest key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
-    : Promise.resolve(window.confirm('Rotate the ingest key? The current key stops working immediately.'))
+    // No window.confirm fallback. stxConfirm ships with the runtime, so the
+    // branch only fired if the runtime had not loaded — in which case the
+    // button that calls this is not bound either and nothing can reach here.
+    : Promise.resolve(true)
   if (!(await Promise.resolve(ask)))
     return
   rotating.set(true)
@@ -351,7 +386,7 @@ async function copyJoin(id: string, link: string): Promise<void> {
   try { await navigator.clipboard.writeText(link) }
   catch {}
   copiedJoin.set(id)
-  setTimeout(() => copiedJoin.set(''), 1600)
+  resetCopiedJoin.start()
 }
 
 async function addInvite(): Promise<void> {
@@ -456,7 +491,7 @@ async function testChannel(id: string): Promise<void> {
   catch {
     setBusy(id, 'Failed')
   }
-  setTimeout(() => setBusy(id, ''), 2400)
+  clearBusy(id)
 }
 
 async function toggleChannel(id: string, initial: boolean): Promise<void> {
@@ -563,7 +598,7 @@ async function confirmModal(): Promise<void> {
     }
     if (kind === 'delete') {
       useStore('session').project.set('')
-      window.location.assign('/projects')
+      navigate('/projects')
     }
     else {
       window.location.reload()
@@ -578,9 +613,22 @@ async function confirmModal(): Promise<void> {
 // Escape closes the modal. Bound to the document because no element owns the
 // keyboard globally — this is a listener on a thing no component owns, not
 // render wiring.
-document.addEventListener('keydown', (e) => {
+// useEventListener registers the matching removeEventListener via onDestroy.
+// Bound to the document because no element owns the keyboard globally.
+useEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && modalOpen())
     closeModal()
+}, { target: document })
+
+// Onboarding bounce. The server block already computed needsOnboarding, and it
+// crosses to here through the server-to-client bridge, so this is not a second
+// decision — it is the same one, acted on somewhere cancellable and lintable.
+// It replaces a <script> tag emitted as page CONTENT, which is not a redirect:
+// it is a fully rendered page that then tears itself down, costing a paint and
+// a second document load on a route the server already knew was wrong.
+onMount(() => {
+  if (needsOnboarding)
+    (navigate as StxNavigate)('/projects/new', true)
 })
 </script>
 
@@ -677,9 +725,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       <div class="py-24 text-center text-sm text-subtle">Loading…</div>
     @endif
 
-    @if (needsOnboarding)
-      <script>window.location.replace('/projects/new')</script>
-    @endif
+
 
     @if (user && activeProject)
       <div class="mb-6">
