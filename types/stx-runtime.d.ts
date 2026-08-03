@@ -52,6 +52,24 @@ declare global {
    */
   type StxNavigate = (url: string, forceReload?: boolean) => void
 
+  /**
+   * `useEventListener`'s real argument order.
+   *
+   * The shipped declaration is `(target, event, handler)`. The implementation
+   * is `(event, handler, options)` and takes the target from `options.target`,
+   * defaulting to window — verified in signals.js. The declared order happens
+   * to type-check for a call like `useEventListener('keydown', fn, …)` because
+   * the first parameter accepts a string (read as a selector), so getting this
+   * wrong produces a listener bound to nothing rather than a compile error.
+   *
+   * Declared as an additional overload, so a correctly-ordered call resolves.
+   */
+  function useEventListener(
+    event: string,
+    handler: (event: any) => void,
+    options?: { target?: Window | Document | HTMLElement | string | null, capture?: boolean, passive?: boolean, once?: boolean },
+  ): void
+
   /** The subset of the `window.stx` runtime surface loghq reaches directly. */
   interface StxRuntime {
     useCookie: (name: string, options?: StxCookieOptions) => StxSignal<string>

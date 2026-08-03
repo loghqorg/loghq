@@ -147,18 +147,53 @@ const theme = inject(ThemeKey, 'light')    // with default
 
 ## Browser Composables
 
-```typescript
-import {
-  useLocalStorage, useSessionStorage, useEventListener,
-  useClickOutside, useWindowSize, useMediaQuery,
-  usePrefersDark, useOnline
-} from '@stacksjs/stx'
+**Do not import these.** They are auto-imported into every `<script client>`
+block and into `functions/*.ts`, and importing them is at best dead code — the
+package index does not export them, so TypeScript will complain about a symbol
+that resolves fine at runtime (stacksjs/stx#1797).
 
-const { value, remove } = useLocalStorage('key', defaultValue)
-const { width, height } = useWindowSize()
-const isDark = usePrefersDark()
-const isOnline = useOnline()
-const cleanup = useClickOutside(elementRef, handler)
+They return **signals**, not `.value` refs. Call them to read, `.set()` to write,
+and use the bare name in templates — the normal stx rule.
+
+```typescript
+// <script client> — no import
+const theme = useLocalStorage('theme', 'dark')
+theme()                                    // read  -> 'dark'
+theme.set('light')                         // write -> persists
+
+const wide = useMediaQuery('(min-width: 60rem)')
+
+// target goes in the OPTIONS argument, not first
+useEventListener('keydown', (e) => { if (e.key === 'Escape') close() }, { target: document })
+useClickOutside(panelRef, () => close())
+```
+
+```html
+<div x-text="theme"></div>   <!-- bare name; the template proxy unwraps it -->
+```
+
+Two traps worth knowing:
+
+- **Never** `import { useLocalStorage } from '@stacksjs/stx/composables'` for
+  anything a template reads. That is a *different implementation* returning a
+  `StorageRef` (`.value` / `.get()` / `.remove()`), and it is not a signal — so
+  nothing bound to it re-renders. It is a legitimate API for plain server or
+  Node code, and the wrong one for reactive UI.
+- Never write the generic form at a client call site. Auto-import detection
+  matches `\bsymbol\s*\(`, so `useLocalStorage<string>(…)` puts a `<` where the
+  `(` must be: the symbol is never detected, the destructuring line is never
+  emitted, and you get a `ReferenceError`. Annotate the binding instead —
+  `const t: StxSignal<string> = useLocalStorage('t', '')`.
+
+For state shared across pages, use a store instead — it survives SPA
+navigation, which a page-local signal does not:
+
+```typescript
+// resources/stores/theme.ts
+defineStore('theme', () => {
+  const mode = state('dark')
+  return { mode, toggle: () => mode.set(mode() === 'dark' ? 'light' : 'dark') }
+}, { persist: true })
 ```
 
 ## Crosswind Configuration (config/ui.ts)
