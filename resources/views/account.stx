@@ -99,12 +99,12 @@ onMount(() => {
     <section class="mb-5 p-6 card">
       <div class="flex gap-4 items-center">
         <img class="h-14 w-14 avatar" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
-        <div class="grid place-items-center h-14 w-14 text-accent avatar" :show="!avatarUrl()" style="font-weight: 700; font-size: 1.25rem">{{ avatarInitial() }}</div>
+        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent avatar" :show="!avatarUrl()">{{ avatarInitial() }}</div>
         <div class="min-w-0">
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the
               skeleton needs a fixed box the real text must not inherit. --}}
-          <div class="skeleton" :show="!loaded()" style="width: 160px; height: 20px"></div>
+          <div class="skeleton w-[160px] h-5" :show="!loaded()"></div>
           <div class="font-semibold text-lg" :show="loaded()">{{ displayName() }}</div>
           <div class="mt-1.5 text-muted text-sm">{{ email() }}</div>
         </div>
@@ -115,7 +115,7 @@ onMount(() => {
     <section class="mb-5 card">
       <div class="flex items-center justify-between px-6 py-4">
         <div>
-          <div class="text-subtle text-xs tracking-wide uppercase" style="font-family: var(--mono)">Plan</div>
+          <div class="font-mono text-subtle text-xs tracking-wide uppercase">Plan</div>
           <div class="mt-1 font-semibold text-base">
             {{ pro() ? 'Pro' : 'Free' }}<span class="ml-1 px-2 py-0.5 badge badge-pro" :show="pro()">active</span>
           </div>
@@ -128,7 +128,7 @@ onMount(() => {
       </div>
       <div class="flex items-center justify-between px-6 py-4 row">
         <div>
-          <div class="text-subtle text-xs tracking-wide uppercase" style="font-family: var(--mono)">Member since</div>
+          <div class="font-mono text-subtle text-xs tracking-wide uppercase">Member since</div>
           <div class="mt-1 text-base text-muted">{{ memberSince() }}</div>
         </div>
         <StxLink to="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</StxLink>

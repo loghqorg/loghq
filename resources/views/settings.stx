@@ -633,14 +633,19 @@ onMount(() => {
 </script>
 
 <style>
-/* Channel brand colours and status hues, which no other page needs. The base
-  palette comes from /tokens.css. */
-:root { --slack: #611f69; --discord: #5865f2; --ok: #16a34a; --warn: #b91c1c; }
+/* Channel brand colours, which no other page needs. The base palette and the
+  --ok/--warn status hues come from /tokens.css: those two are semantic app
+  tokens rather than settings decoration, they are registered in
+  config/crosswind.ts as the `ok` and `warn` colours, and a utility that is
+  only defined on one page is the failure mode ch.11.6 describes. --slack and
+  --discord stay here because they are third-party brand values with no
+  meaning anywhere else in the app. */
+:root { --slack: #611f69; --discord: #5865f2; }
 @media (prefers-color-scheme: dark) {
-  :root { --discord: #818cf8; --ok: #4ade80; --warn: #f87171; }
+  :root { --discord: #818cf8; }
 }
-:root[data-theme="dark"] { --discord: #818cf8; --ok: #4ade80; --warn: #f87171; }
-:root[data-theme="light"] { --discord: #5865f2; --ok: #16a34a; --warn: #b91c1c; }
+:root[data-theme="dark"] { --discord: #818cf8; }
+:root[data-theme="light"] { --discord: #5865f2; }
 html { scroll-behavior: smooth; }
 .mono { font-family: var(--mono); }
 .lnk { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border); transition: color 0.15s ease, text-decoration-color 0.15s ease; }
@@ -722,7 +727,7 @@ html { scroll-behavior: smooth; }
     @if (user && activeProject)
       <div class="mb-6">
         <div class="flex flex-wrap gap-3 items-center">
-          <h2 class="font-semibold text-xl" style="letter-spacing:-0.02em">Settings</h2>
+          <h2 class="font-semibold text-xl tracking-[-0.02em]">Settings</h2>
           @if (projects.length > 1)
             <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm mono panel">
               @foreach (projects as p)
@@ -759,7 +764,7 @@ html { scroll-behavior: smooth; }
             </div>
           @endif
           <div class="relative">
-            <div class="code-block" style="white-space: pre">{{ guide.code }}</div>
+            <div class="code-block whitespace-pre">{{ guide.code }}</div>
             <button type="button" @click="copyText(codeText, copiedCode)" class="copy-btn" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -779,13 +784,13 @@ html { scroll-behavior: smooth; }
             It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
           </p>
           <div class="flex flex-wrap gap-2 items-center">
-            <code class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm truncate field mono" style="letter-spacing:0.01em" :text="keyShown()">{{ keyMask }}</code>
+            <code class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm tracking-[0.01em] truncate field mono" :text="keyShown()">{{ keyMask }}</code>
             <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-sm btn-ghost" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
             <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-sm btn-ghost" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
             <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm btn-danger">Rotate</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
-            Rotating generates a new key and <span style="color: var(--warn)">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="mono">X-LogHQ-Key</span>).
+            Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="mono">X-LogHQ-Key</span>).
           </p>
           <span class="mt-2 text-xs note show" :show="!!keyNote()" :style="keyNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ keyNote() }}</span>
         </div>
@@ -887,6 +892,12 @@ html { scroll-behavior: smooth; }
 
       {{-- ============================ DANGER ============================ --}}
       <section id="danger" class="mb-6 sec">
+        {{-- Stays inline, unlike the other var(--warn) on this page. `.sec-title`
+             in the <style> block below sets `color: var(--text-3)`, and a
+             `text-warn` utility ties with it on specificity then loses on
+             order, because the page style tag is emitted after the Crosswind
+             sheet. Only the inline declaration outranks it. Convert this the
+             same day `.sec-title` becomes a shortcut — see ch.11.1. --}}
         <div class="mb-3 sec-title" style="color: var(--warn)">Danger zone</div>
         <div class="danger-panel panel" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
           {{-- Archive / Unarchive --}}
@@ -935,7 +946,7 @@ html { scroll-behavior: smooth; }
             <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-sm btn-ghost">Cancel</button>
             <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm btn-danger"></button>
           </div>
-          <span class="mt-2.5 text-xs note show" :show="!!modalNote()" style="color: var(--accent)">{{ modalNote() }}</span>
+          <span class="mt-2.5 text-xs text-accent note show" :show="!!modalNote()">{{ modalNote() }}</span>
         </div>
       </div>
     @endif

@@ -54,6 +54,13 @@ export default {
         muted: 'var(--text-2)',
         subtle: 'var(--text-3)',
         accent: 'var(--accent)',
+        // Status hues. These lived in settings.stx's <style> block until the
+        // page needed `text-warn`; a utility backed by a token only one page
+        // declares resolves to nothing everywhere else, silently, because an
+        // undefined var() falls back to the property's initial value. Both are
+        // in /tokens.css now, so the utilities are valid on every route.
+        ok: 'var(--ok)',
+        warn: 'var(--warn)',
       },
       fontFamily: {
         sans: ['Space Grotesk', 'ui-sans-serif', 'system-ui', 'sans-serif'],

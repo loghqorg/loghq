@@ -481,7 +481,7 @@ select.panel {
           <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 panel" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" :show="!isDismissed('{{ inv.token }}')">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="flex gap-2 items-center ml-auto">
-              <button class="px-4 py-1.5 font-semibold text-sm bg-accent border border-accent js-invite-join pill" style="color:#fff" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
+              <button class="px-4 py-1.5 font-semibold text-sm text-white bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
               <button class="px-3 py-1.5 text-sm text-subtle border border-line js-invite-dismiss pill" title="Hide for now" @click="dismissInvite('{{ inv.token }}')">Dismiss</button>
             </div>
           </div>
@@ -542,7 +542,7 @@ select.panel {
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
       <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
             class="flex-1 px-4 py-2.5 text-sm mono search-input" />
-      <button type="submit" class="px-4 py-2.5 font-semibold text-sm bg-accent border border-accent pill" style="color:#fff">Search</button>
+      <button type="submit" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent border border-accent pill">Search</button>
       @if (search)
         <StxLink to="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</StxLink>
       @endif
@@ -591,7 +591,7 @@ select.panel {
               @if (entry.release)<span>release: <span class="text-muted">{{ entry.release }}</span></span>@endif
               @if (entry.host)<span>host: <span class="text-muted">{{ entry.host }}</span></span>@endif
             </div>
-            <div class="mb-3 text-ink text-sm mono" style="white-space: pre-wrap; word-break: break-word">{{ entry.message }}</div>
+            <div class="mb-3 text-ink text-sm whitespace-pre-wrap break-words mono">{{ entry.message }}</div>
             @if (entry.context)
               <pre class="overflow-x-auto px-3 py-2.5 text-muted text-xs ctx-pre mono panel">{{ prettyContext(entry.context) }}</pre>
             @endif
@@ -611,13 +611,13 @@ select.panel {
             @if (pager.hasPrev)
               <StxLink to="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newer</StxLink>
             @else
-              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">&larr; Newer</span>
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line opacity-45 pill">&larr; Newer</span>
             @endif
             <span class="tabular-nums text-subtle text-xs mono">{{ pager.page }} / {{ pager.pages }}</span>
             @if (pager.hasNext)
               <StxLink to="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</StxLink>
             @else
-              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line pill" style="opacity: 0.45">Older &rarr;</span>
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line opacity-45 pill">Older &rarr;</span>
             @endif
           </div>
         </div>

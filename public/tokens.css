@@ -37,6 +37,8 @@
   --text-2: #4b5565;
   --text-3: #97a1b2;
   --accent: #e11d48;
+  --ok: #16a34a;
+  --warn: #b91c1c;
   --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -50,6 +52,8 @@
     --text-2: #b3bccb;
     --text-3: #667085;
     --accent: #fb7185;
+    --ok: #4ade80;
+    --warn: #f87171;
   }
 }
 
@@ -61,6 +65,8 @@
   --text-2: #b3bccb;
   --text-3: #667085;
   --accent: #fb7185;
+  --ok: #4ade80;
+  --warn: #f87171;
 }
 
 :root[data-theme='light'] {
@@ -71,6 +77,8 @@
   --text-2: #4b5565;
   --text-3: #97a1b2;
   --accent: #e11d48;
+  --ok: #16a34a;
+  --warn: #b91c1c;
 }
 
 body {
