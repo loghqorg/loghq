@@ -2,7 +2,16 @@
 // Same auth signal as SiteNav — each partial owns its own, since a partial's
 // client scope does not reach across includes. See SiteNav.stx for why this
 // lives in the partial rather than in the pages.
-const isAuthed = state(!!localStorage.getItem('token'))
+const isAuthed = state(false)
+// The store owns the token; this mirrors its derived isAuthed so the markup
+// stays a binding. Read inside onMount because useStore is NOT in the
+// usesSignals trigger list — a client script whose only stx call is useStore()
+// gets the immediate IIFE form instead of the mount wrapper and runs before the
+// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
+onMount(() => {
+  const session = useStore('session')
+  effect(() => isAuthed.set(session.isAuthed()))
+})
 //
 // Comment style here follows SiteNav.stx: JS comments inside this block, never
 // an stx template comment anywhere in the file, because a partial containing a

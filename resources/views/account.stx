@@ -37,28 +37,26 @@ const avatarInitial = (): string => initial(user()?.name || user()?.email)
 const provider = (): string => user()?.provider || ''
 const memberSince = (): string => fmtDate(user()?.created_at)
 
-async function logout(): Promise<void> {
-  const token = localStorage.getItem('token')
-  // Fire-and-forget: the session is being discarded locally either way, so a
-  // failed revoke must not strand the user on a page they've logged out of.
-  try {
-    await fetch('/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-  }
-  catch {}
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  document.cookie = 'loghq_token=; path=/; max-age=0'
-  window.location.assign('/login')
+function logout(): void {
+  // One call. The store owns the token cookie and the cached viewer, and the
+  // revoke request is fire-and-forget inside it: the credentials are being
+  // discarded either way, so a failed revoke must not strand someone on a page
+  // they have already logged out of.
+  useStore('session').signOut()
 }
 
 async function loadAccount(): Promise<void> {
-  const token = localStorage.getItem('token')
+  const session = useStore('session')
+  const token = session.token()
   if (!token)
     return
   try {
     const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
     if (res.status === 401) {
-      localStorage.removeItem('token')
+      // The token is stale. Clearing it through the store also clears the cookie
+      // the server authenticates from, which the raw removeItem here never did —
+      // so a 401 used to leave the server still seeing a session.
+      session.token.set('')
       window.location.replace('/login')
       return
     }
@@ -172,9 +170,5 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 {{-- Auth guard. Navigation only, renders nothing, and must run before the page is
     usable — a directive would hydrate too late and flash the account shell to a
     signed-out visitor. --}}
-<script>
-(function () {
-  if (!localStorage.getItem('token'))
-    window.location.replace('/login')
-})()
-</script>
+
+@include('AuthGuard')

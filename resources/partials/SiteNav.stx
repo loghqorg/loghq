@@ -8,7 +8,16 @@
 // script in index.stx only, which meant a logged-in visitor saw "Dashboard" on
 // the homepage and "Log in / Sign up" on all 20+ other pages that include this
 // nav. One source of truth for the markup deserves one for its state.
-const isAuthed = state(!!localStorage.getItem('token'))
+const isAuthed = state(false)
+// The store owns the token; this mirrors its derived isAuthed so the markup
+// stays a binding. Read inside onMount because useStore is NOT in the
+// usesSignals trigger list — a client script whose only stx call is useStore()
+// gets the immediate IIFE form instead of the mount wrapper and runs before the
+// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
+onMount(() => {
+  const session = useStore('session')
+  effect(() => isAuthed.set(session.isAuthed()))
+})
 //
 // NOTE ON COMMENTS IN THIS FILE: use JS comments inside this script block, as
 // here, and plain markup below. Do NOT add an stx template comment anywhere in

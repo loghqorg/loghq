@@ -14,15 +14,10 @@ const error = state('')
 const loading = state(false)
 
 function ensureAuthed(): void {
-  const t = localStorage.getItem('token')
-  if (!t) {
+  // No mirror step any more: the cookie IS the session, so if the store has no
+  // token there is nothing to copy from and nothing to reload for.
+  if (!useStore('session').token())
     window.location.replace('/login')
-    return
-  }
-  // Mirror the token into a cookie so the server-rendered dashboard can
-  // authenticate this user on plain navigation.
-  if (!/(^|;)\s*loghq_token=/.test(document.cookie))
-    document.cookie = `loghq_token=${t}; path=/; max-age=2592000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
 }
 ensureAuthed()
 
@@ -43,7 +38,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${useStore('session').token()}`,
       },
       body: JSON.stringify({ name, platform: form.elements.platform.value }),
     })

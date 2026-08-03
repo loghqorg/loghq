@@ -44,7 +44,16 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/' }] })
 // imperative DOM-rewriting block that also reached into the nav and footer —
 // those now reflect auth state themselves, on every page rather than only this
 // one.
-const isAuthed = state(!!localStorage.getItem('token'))
+const isAuthed = state(false)
+// The store owns the token; this mirrors its derived isAuthed so the markup
+// stays a binding. Read inside onMount because useStore is NOT in the
+// usesSignals trigger list — a client script whose only stx call is useStore()
+// gets the immediate IIFE form instead of the mount wrapper and runs before the
+// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
+onMount(() => {
+  const session = useStore('session')
+  effect(() => isAuthed.set(session.isAuthed()))
+})
 </script>
 
 @push('styles')

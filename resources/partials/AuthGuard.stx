@@ -1,0 +1,37 @@
+{{-- Pre-paint auth bounce for the app pages.
+
+    This is the one place in the app that is allowed to touch document.cookie
+    directly, and it stays a plain script rather than a client block on purpose:
+    it must run before the runtime exists and before anything paints, so no
+    composable is available to it and hydrating would be far too late — a
+    signed-out visitor would see the app shell first.
+
+    Keeping it in ONE partial rather than copied into five pages is what makes
+    the strict-mode report legible: the DOM guard names this file, and any
+    second file appearing in that report is a real regression rather than one of
+    five known copies.
+
+    It used to read the token from localStorage and, if the cookie was missing,
+    write the cookie and reload the whole page so the server could see it. All
+    of that is gone. The cookie IS the session now — the session store writes it
+    at sign-in and every server-rendered page authenticates from it — so there
+    is nothing to mirror and nothing to reload for. That removes a full document
+    load from first sign-in.
+
+    `#auth-pending` is rendered by the server when the cookie did not
+    authenticate, which means the token is stale rather than absent. Reading it
+    here, from the DOM, is deliberate: the server cannot distinguish "no cookie
+    yet" from "bad cookie" at render time, and moving this into the server's own
+    signed-out branch would bounce a first-visit user in a loop. --}}
+<script>
+(function () {
+  if (!/(^|;)\s*loghq_token=/.test(document.cookie)) {
+    window.location.replace('/login')
+    return
+  }
+  if (document.getElementById('auth-pending')) {
+    document.cookie = 'loghq_token=; path=/; max-age=0'
+    window.location.replace('/login')
+  }
+})()
+</script>

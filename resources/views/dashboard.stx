@@ -264,18 +264,20 @@ const theme = state(
 )
 
 function toggleTheme(): void {
+  // The theme store owns persistence, the prefers-color-scheme listener, the
+  // cross-tab storage listener and the dark-class write. This used to do the
+  // first of those by hand and none of the rest, in three separate files.
   const next = theme() === 'dark' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-theme', next)
-  try { localStorage.setItem('loghq_theme', next) }
-  catch {}
+  useStore('theme').toggle()
   theme.set(next)
 }
 
 function signOut(): void {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  document.cookie = 'loghq_token=; path=/; max-age=0'
-  window.location.assign('/login')
+  // One call. The store owns the token cookie and the cached viewer, and the
+  // revoke request is fire-and-forget inside it: the credentials are being
+  // discarded either way, so a failed revoke must not strand someone on a page
+  // they have already logged out of.
+  useStore('session').signOut()
 }
 
 // Invite banner. Was one delegated listener on the container doing className
@@ -298,7 +300,7 @@ async function joinInvite(token: string): Promise<void> {
   try {
     const res = await fetch('/api/invites/accept', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${useStore('session').token()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     })
     const body = await res.json()
@@ -306,7 +308,7 @@ async function joinInvite(token: string): Promise<void> {
       joining.set('')
       return
     }
-    document.cookie = `loghq_project=${encodeURIComponent(body.project)}; path=/; max-age=31536000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
+    useStore('session').project.set(body.project)
     window.location.assign('/dashboard')
   }
   catch {
@@ -315,7 +317,7 @@ async function joinInvite(token: string): Promise<void> {
 }
 
 async function loadPlan(): Promise<void> {
-  const token = localStorage.getItem('token')
+  const token = useStore('session').token()
   if (!token)
     return
   try {
@@ -629,24 +631,8 @@ select.panel {
     at the top of this file. --}}
 <script>
 (function () {
-  var t = localStorage.getItem('token')
-  if (!t) { window.location.replace('/login'); return }
-  if (!/(^|;)\s*loghq_token=/.test(document.cookie)) {
-    document.cookie = 'loghq_token=' + t + '; path=/; max-age=2592000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
-    window.location.reload()
-    return
-  }
-  // The server renders #auth-pending when the cookie did not authenticate. This
-  // has to be read here, after the cookie mirror above — moving it into the
-  // server's own `@if (!user)` branch would fire before the cookie is set and
-  // bounce a first-visit user in a loop.
-  if (document.getElementById('auth-pending')) {
-    localStorage.removeItem('token'); localStorage.removeItem('user')
-    document.cookie = 'loghq_token=; path=/; max-age=0'
-    window.location.replace('/login')
-    return
-  }
-
+  // Project selection arrives as ?project=… from the apps list. Not auth, so it
+  // stays here rather than moving into AuthGuard.
   var qs = new URLSearchParams(window.location.search)
   if (qs.get('project')) {
     document.cookie = 'loghq_project=' + encodeURIComponent(qs.get('project')) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : '')
@@ -657,3 +643,5 @@ select.panel {
 
 })()
 </script>
+
+@include('AuthGuard')

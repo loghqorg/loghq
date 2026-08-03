@@ -44,9 +44,11 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       return
     }
     const token = data.token || data.access_token || ''
-    localStorage.setItem('token', token)
-    // Mirror the token into a cookie so server-rendered pages can authenticate.
-    document.cookie = `loghq_token=${token}; path=/; max-age=2592000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
+    // One write. The cookie IS the session — every server-rendered page
+    // authenticates from it — so there is no localStorage copy to mirror and no
+    // reload afterwards to make the server see it. useCookie serialises path,
+    // max-age, SameSite and Secure itself.
+    useStore('session').token.set(token)
     if (data.user)
       localStorage.setItem('user', JSON.stringify(data.user))
     navigate('/dashboard')
