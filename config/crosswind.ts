@@ -72,6 +72,55 @@ export default {
       },
     },
   },
+  /**
+   * Repeated compositions, per ch.11.1. Each of these was a rule duplicated
+   * byte-for-byte in five or more per-page <style> blocks; the shortcut is the
+   * one definition those blocks collapse into.
+   *
+   * The markup does not change when a rule becomes a shortcut. Crosswind
+   * expands a shortcut when the shortcut NAME appears in a class attribute
+   * (dev-server/crosswind.js), so `class="field"` keeps working and only the
+   * <style> block goes away. That is what makes this conversion low-risk.
+   *
+   * Underscores are the escape for spaces inside an arbitrary value, and
+   * commas survive — `bg-[color-mix(in_srgb,var(--accent)_88%,#000)]` emits
+   * `background-color: color-mix(in srgb,var(--accent) 88%,#000)`. Verified
+   * against the served sheet, along with the hover/focus/active/disabled
+   * variants used below.
+   *
+   * NOT AVAILABLE: `before:` and `after:`. Both are silently dropped — the
+   * generator emits no rule at all, so a `before:h-px` reads as styling and
+   * does nothing. `.divider`'s two pseudo-element rules became real <span>
+   * elements in the markup instead. Check the sheet before assuming a variant
+   * exists; the failure mode is silence, not an error.
+   */
+  shortcuts: {
+    'wordmark': 'font-bold tracking-[-0.03em]',
+
+    'field': 'bg-canvas border border-line rounded-[10px] text-ink '
+      + 'focus:outline-none focus:border-accent '
+      + 'focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]',
+
+    'btn': 'bg-accent text-white rounded-[10px] '
+      + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
+      + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
+      + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',
+
+    'oauth-btn': 'bg-panel border border-line rounded-[10px] text-ink '
+      + '[transition:border-color_0.15s_ease,transform_0.12s_ease] '
+      + 'hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] '
+      + 'active:translate-y-px',
+
+    // Status notes. The literal hexes are deliberate: these are fixed
+    // semantic colours that do not follow the accent, and #ef4444/#16a34a are
+    // what the five blocks all carried.
+    'err': 'bg-[color-mix(in_srgb,#ef4444_12%,transparent)] text-[#ef4444]',
+    'ok': 'bg-[color-mix(in_srgb,#22c55e_12%,transparent)] text-[#16a34a]',
+
+    'invite-hint': 'px-3 py-[9px] text-[13px] rounded-[9px] text-accent '
+      + 'bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] '
+      + 'border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]',
+  },
 // Partial<CrosswindConfig> alone is not enough: it makes the top-level keys
 // optional but `theme` still demands every field of Theme (colors, spacing,
 // fontSize, screens, borderRadius, boxShadow), when the only path that survives

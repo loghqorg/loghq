@@ -76,24 +76,6 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 }
 </script>
 
-<style>
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
-.field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
-.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
-.btn { background: var(--accent); color: #fff; border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease; }
-.btn:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.6; cursor: default; }
-.err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
-/* Invite hint. Was an inline style string assembled in JS — moved here so the
-  markup can be declarative and the styling survives a theme change. */
-.invite-hint { font-size: 13px; padding: 9px 12px; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
-.oauth-btn { border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); transition: border-color 0.15s ease, transform 0.12s ease; }
-.oauth-btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.oauth-btn:active { transform: translateY(1px); }
-.divider { display: flex; align-items: center; gap: 0.75rem; color: var(--text-3); font-size: 12px; }
-.divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
-</style>
 
 <div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
   <div class="max-w-sm w-full">
@@ -130,7 +112,13 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     </form>
 
     @if (anyOauth)
-    <div class="my-5 divider">or</div>
+    {{-- The two rules on this element were `.divider::before` and
+         `.divider::after`. Crosswind generates nothing for a `before:` or
+         `after:` utility — verified against the served sheet — so the
+         hairlines are real elements rather than pseudo-elements. --}}
+    <div class="flex gap-3 items-center my-5 text-subtle text-[12px]">
+      <span class="flex-1 h-px bg-line"></span>or<span class="flex-1 h-px bg-line"></span>
+    </div>
 
     <div class="space-y-2.5">
       @if (githubEnabled)
