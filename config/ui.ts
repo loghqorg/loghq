@@ -17,8 +17,9 @@ import type { StxOptions as UiOptions } from '@stacksjs/stx'
  *
  * A relative directory value cannot be correct in both unless `root` is '.'.
  * That is why `root: '.'` is pinned below and every directory is written from
- * the project root. Verify with `bun scripts/check-stx-topology.ts` — it fails
- * if the two loaders disagree or any resolved path is missing.
+ * the project root. If you change any path here, check it against BOTH loaders:
+ * loadStxConfig prefixes with `root`, the raw bunfig read does not, so a value
+ * that resolves under one can silently miss under the other.
  *
  * Keys are only listed here if the serve path actually forwards them
  * (serve.js:9508-9528). Everything else — `defaultLayout`, `i18n`, `forms`,
@@ -87,17 +88,19 @@ export default {
   // on every non-server <script> body; without this key it resolves to
   // { enabled: false } (script-validation.js:129) and reports nothing.
   //
-  // Stays warn-only, and enforcement lives in scripts/check-dom-guard.ts
-  // instead. failOnViolation is all-or-nothing and throws from inside the
-  // render — a 500 per request on the SSR path — and its escape hatch,
-  // allowPatterns, is RULE-global: it substring-matches the message
+  // Stays warn-only deliberately. failOnViolation is all-or-nothing and throws
+  // from inside the render — a 500 per request on the SSR path — and its escape
+  // hatch, allowPatterns, is RULE-global: it substring-matches the message
   // (script-validation.js:130-132), so exempting the pre-paint auth guard's
   // four rules would switch those rules off across the entire repo and let the
-  // next accidental location.replace in a component through.
+  // next accidental location.replace in a component through. That is the
+  // opposite of what turning the guard up is for.
   //
-  // The gate script enforces per FILE instead, which is the granularity that
-  // was wanted: exactly one file is allowed to violate, a second one fails,
-  // and an exemption that stops being needed also fails so it cannot go stale.
+  // So the report is advisory and the rule is a convention: exactly one file,
+  // resources/partials/AuthGuard.stx, may touch a prohibited browser API. It
+  // runs before the signals runtime exists, so no composable is reachable, and
+  // its whole job is to leave the page before it paints. Anything else in the
+  // warn output is a real finding — read it rather than filtering it.
   //
   // allowPatterns therefore stays EMPTY.
   strict: {
