@@ -359,95 +359,6 @@ onMount(() => {
 })
 </script>
 
-<style>
-/* Chrome accent only. Indigo deliberately, so navigation never reads as a
-  severity colour — see 20f40ed. Everything else comes from /tokens.css. */
-:root { --accent: #4f46e5; --rail: rgba(79,70,229,0.14); }
-@media (prefers-color-scheme: dark) {
-  :root { --accent: #818cf8; --rail: rgba(129,140,248,0.16); }
-}
-:root[data-theme="dark"] { --accent: #818cf8; --rail: rgba(129,140,248,0.16); }
-:root[data-theme="light"] { --accent: #4f46e5; --rail: rgba(79,70,229,0.14); }
-/* loghq - Space Grotesk display + JetBrains Mono for numerics/code/log lines.
-  One accent (indigo — chrome/navigation only; severity has its own semantic
-  colors), off-black/off-white, auto light+dark, radius lock 12px. */
-
-.mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
-.wordmark { font-family: var(--sans); font-weight: 700; letter-spacing: -0.03em; }
-.wordmark-link { color: inherit; text-decoration: none; transition: opacity 0.15s ease; }
-.wordmark-link:hover { opacity: 0.75; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
-.pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease; }
-a.pill:hover, button.pill:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-a.pill:active, button.pill:active { transform: translateY(1px); }
-/* Filter-tab state. These were inline style ternaries on every tab, which
-  outrank the hover rules above and could not be themed. The two levels differ
-  because the severity tabs are the primary control and the range tabs are
-  secondary. */
-.pill-on { color: #fff; background: var(--accent); border-color: var(--accent); }
-a.pill-on:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
-.pill-off { color: var(--text-2); border-color: var(--border); }
-.pill-on-soft { color: var(--accent); border-color: var(--accent); }
-.pill-off-soft { color: var(--text-3); border-color: var(--border); }
-.log-row { transition: background-color 0.12s ease; }
-.log-row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
-details[open] > .log-row { background: color-mix(in srgb, var(--accent) 5%, transparent); }
-summary { list-style: none; cursor: pointer; }
-summary::-webkit-details-marker { display: none; }
-.search-input { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; color: var(--text); outline: none; transition: border-color 0.15s ease; }
-.search-input:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
-.search-input::placeholder { color: var(--text-3); }
-/* Position was an inline style string assembled in JS. It lives here now, so
-  the chrome is styleable and themeable like everything else. */
-.chrome-logout, .chrome-upgrade { position: fixed; top: 16px; z-index: 60; padding: 8px 13px; border-radius: 9px; font-size: 13px; line-height: 1; font-family: var(--sans, ui-sans-serif); }
-.chrome-logout { right: 18px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
-.chrome-logout:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.chrome-upgrade { right: 112px; font-weight: 600; text-decoration: none; background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
-.chrome-upgrade:hover { filter: brightness(1.12); }
-.chrome-upgrade:active { transform: translateY(1px); }
-/* Pro is a status, not an action: no link, no hover lift. */
-.chrome-pro, .chrome-pro:hover { background: transparent; color: var(--accent); border: 1px solid var(--accent); cursor: default; filter: none; }
-.reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
-@keyframes reveal { to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
-.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 9px; color: var(--text-2); background: var(--panel); cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease; }
-.icon-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.icon-btn svg { width: 17px; height: 17px; }
-.theme-btn .ic-sun, .theme-btn .ic-moon { display: none; }
-.theme-btn[data-t="light"] .ic-sun { display: block; }
-.theme-btn[data-t="dark"] .ic-moon { display: block; }
-.ctx-pre { white-space: pre-wrap; word-break: break-word; }
-/* Keyboard focus — a visible ring on every interactive control (accessibility,
-  not optional). Search gets an inset ring so it doesn't clash with its pill. */
-a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
-}
-summary:focus-visible { outline-offset: -2px; }
-.search-input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-/* Physical press feedback on a log row. */
-.log-row:active { background: color-mix(in srgb, var(--accent) 9%, transparent); }
-/* Log stream aligned as fixed columns: rail · time · level · channel · message. */
-.log-row { display: grid; grid-template-columns: 3px 4.75rem 3.75rem 6rem minmax(0, 1fr); align-items: center; column-gap: 0.75rem; }
-.lvl-chip { display: inline-block; text-align: center; white-space: nowrap; }
-/* Subtle grain so the flat surfaces don't read as sterile. Fixed, non-blocking,
-  barely-there; sits under the floating chrome (z-60). */
-.grain { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.03;
-  background-size: 170px 170px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-@media (prefers-reduced-motion: no-preference) { .grain { opacity: 0.032; } }
-/* Project dropdown: the native select chevron hugged the rounded border. Reset
-  the native appearance and draw our own with a comfortable inset + room for the
-  value text. Chevron is themed to --text-3 in each mode. */
-select.panel {
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  padding-right: 2rem; background-repeat: no-repeat;
-  background-position: right 0.7rem center; background-size: 13px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-}
-@media (prefers-color-scheme: dark) { select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); } }
-:root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-:root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-</style>
 
 {{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
 <script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
@@ -455,7 +366,13 @@ select.panel {
 {{-- Ambient grain overlay: barely-there texture so surfaces aren't sterile-flat. --}}
 <div class="grain" aria-hidden="true"></div>
 
-<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
+{{-- page-dashboard carries this page's indigo --accent and --rail, which
+     used to be a :root block in a page <style> tag and was scoped only by
+     which page happened to carry that tag. It is public/app-chrome.css now,
+     hung off this wrapper so it cannot repaint the rest of the app. The
+     fixed-position chrome below is inside the wrapper and still inherits it;
+     the grain overlay sits outside and needs no accent. --}}
+<div class="px-5 py-10 md:px-10 min-h-[100dvh] page-dashboard">
   {{-- Fixed-position chrome. Inside the page container, not document.body, so an
       SPA view swap takes it with the rest of the page. Position is fixed, so
       where it sits in the DOM does not affect layout. --}}
@@ -478,7 +395,7 @@ select.panel {
     @if (pendingInvites.length)
       <div class="mb-7">
         @foreach (pendingInvites as inv)
-          <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 panel" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" :show="!isDismissed('{{ inv.token }}')">
+          <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 app-panel" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" :show="!isDismissed('{{ inv.token }}')">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="flex gap-2 items-center ml-auto">
               <button class="px-4 py-1.5 font-semibold text-sm text-white bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
@@ -492,22 +409,22 @@ select.panel {
     @if (projectId)
     <header class="flex flex-wrap gap-5 items-end justify-between mb-8">
       <div class="flex gap-3 items-center">
-        <StxLink to="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark">loghq</h1></StxLink>
+        <StxLink to="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark font-sans">loghq</h1></StxLink>
         @if (projects.length > 1)
           <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
-                  class="px-3 py-1.5 text-muted text-sm mono panel">
+                  class="px-3 py-1.5 text-muted text-sm font-mono tnum app-panel">
             @foreach (projects as p)
               <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
             @endforeach
           </select>
         @else
-          <span class="text-muted text-sm mono">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
+          <span class="text-muted text-sm font-mono tnum">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
         @endif
         <StxLink to="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</StxLink>
         <StxLink to="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</StxLink>
         <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" title="Toggle theme" aria-label="Toggle theme">
-          <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="h-[17px] w-[17px] ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="h-[17px] w-[17px] ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
         <StxLink to="/settings" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -530,7 +447,7 @@ select.panel {
         <span class="shrink-0 mx-1.5 h-4 w-px bg-line" aria-hidden="true"></span>
         @foreach (rangeTabs as r)
           <StxLink to="{!! r.href !!}"
-            class="px-3 py-1.5 font-medium text-xs border mono pill {{ r.key === rangeFilter ? 'pill-on-soft' : 'pill-off-soft' }}"
+            class="px-3 py-1.5 font-medium text-xs border font-mono tnum pill {{ r.key === rangeFilter ? 'pill-on-soft' : 'pill-off-soft' }}"
             aria-current="{{ r.key === rangeFilter ? 'page' : 'false' }}">{{ r.label }}</StxLink>
         @endforeach
       </nav>
@@ -541,7 +458,7 @@ select.panel {
       @if (levelFilter !== 'all')<input type="hidden" name="level" value="{{ levelFilter }}">@endif
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
       <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
-            class="flex-1 px-4 py-2.5 text-sm mono search-input" />
+            class="flex-1 px-4 py-2.5 text-sm font-mono tnum search-input" />
       <button type="submit" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent border border-accent pill">Search</button>
       @if (search)
         <StxLink to="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</StxLink>
@@ -549,51 +466,51 @@ select.panel {
     </form>
 
     @if (!live)
-      <div class="mb-8 px-4 py-3 text-muted text-sm panel reveal">
+      <div class="mb-8 px-4 py-3 text-muted text-sm app-panel reveal">
         <span class="font-semibold text-ink">Waiting for data.</span> Make sure Postgres is provisioned.
       </div>
     @endif
 
     {{-- Stats: hairline-separated, mono numerics. The dot + number tint go live
         only on a non-zero count, so severity reads at a glance. --}}
-    <div class="grid grid-cols-3 mb-8 border-line divide-x panel reveal">
+    <div class="grid grid-cols-3 mb-8 border-line divide-x app-panel reveal">
       @foreach (stats as s)
         <div class="px-5 py-5 border-line">
           <div class="flex gap-1.5 items-center mb-2">
             @if (s.dot)<span class="inline-block shrink-0 h-1.5 w-1.5 rounded-full" style="background: {{ s.on ? s.color : 'var(--text-3)' }}; opacity: {{ s.on ? '1' : '0.35' }}"></span>@endif
             <span class="font-medium text-subtle text-xs tracking-wider uppercase">{{ s.label }}</span>
           </div>
-          <div class="font-semibold text-3xl tracking-tight mono" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
+          <div class="font-semibold text-3xl tracking-tight font-mono tnum" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
         </div>
       @endforeach
     </div>
 
-    <section class="overflow-hidden panel reveal">
+    <section class="overflow-hidden app-panel reveal">
       <div class="flex items-center justify-between px-5 py-3.5 border-b border-line">
         <span class="font-semibold text-subtle text-xs tracking-wider uppercase">Stream</span>
-        <span class="text-subtle text-xs mono">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
+        <span class="text-subtle text-xs font-mono tnum">{{ pager.total === 0 ? 'none' : `${pager.from}-${pager.to} of ${pager.total.toLocaleString()}` }}</span>
       </div>
 
       @forelse (logs as entry)
         <details class="border-b border-line">
           <summary class="px-5 py-2.5 log-row">
             <span class="self-stretch rounded-full" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
-            <span class="tabular-nums text-subtle text-xs mono" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
-            <span class="px-1 py-0.5 font-semibold text-[11px] rounded lvl-chip mono" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
-            <span class="text-[11px] text-subtle truncate mono">{{ entry.channel || '' }}</span>
-            <span class="min-w-0 text-ink text-sm truncate mono">{{ entry.message }}</span>
+            <span class="tabular-nums text-subtle text-xs font-mono tnum" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
+            <span class="px-1 py-0.5 font-semibold text-[11px] rounded inline-block text-center whitespace-nowrap font-mono tnum" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
+            <span class="text-[11px] text-subtle truncate font-mono tnum">{{ entry.channel || '' }}</span>
+            <span class="min-w-0 text-ink text-sm truncate font-mono tnum">{{ entry.message }}</span>
           </summary>
           <div class="pb-4 pt-1 px-5" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-subtle text-xs mono">
+            <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-subtle text-xs font-mono tnum">
               <span>{{ dayOf(entry.timestamp) }} {{ clockOf(entry.timestamp) }} UTC</span>
               @if (entry.environment)<span>env: <span class="text-muted">{{ entry.environment }}</span></span>@endif
               @if (entry.framework)<span>via: <span class="text-muted">{{ entry.framework }}</span></span>@endif
               @if (entry.release)<span>release: <span class="text-muted">{{ entry.release }}</span></span>@endif
               @if (entry.host)<span>host: <span class="text-muted">{{ entry.host }}</span></span>@endif
             </div>
-            <div class="mb-3 text-ink text-sm whitespace-pre-wrap break-words mono">{{ entry.message }}</div>
+            <div class="mb-3 text-ink text-sm whitespace-pre-wrap break-words font-mono tnum">{{ entry.message }}</div>
             @if (entry.context)
-              <pre class="overflow-x-auto px-3 py-2.5 text-muted text-xs ctx-pre mono panel">{{ prettyContext(entry.context) }}</pre>
+              <pre class="overflow-x-auto px-3 py-2.5 text-muted text-xs whitespace-pre-wrap break-words font-mono tnum app-panel">{{ prettyContext(entry.context) }}</pre>
             @endif
           </div>
         </details>
@@ -606,14 +523,14 @@ select.panel {
 
       @if (pager.pages > 1)
         <div class="flex items-center justify-between px-5 py-3.5">
-          <span class="text-subtle text-xs mono">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
+          <span class="text-subtle text-xs font-mono tnum">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
           <div class="flex gap-2 items-center">
             @if (pager.hasPrev)
               <StxLink to="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newer</StxLink>
             @else
               <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line opacity-45 pill">&larr; Newer</span>
             @endif
-            <span class="tabular-nums text-subtle text-xs mono">{{ pager.page }} / {{ pager.pages }}</span>
+            <span class="tabular-nums text-subtle text-xs font-mono tnum">{{ pager.page }} / {{ pager.pages }}</span>
             @if (pager.hasNext)
               <StxLink to="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</StxLink>
             @else
@@ -625,14 +542,14 @@ select.panel {
     </section>
     @else
       <div class="py-20 text-center">
-        <StxLink to="/projects" class="wordmark-link"><h1 class="mb-3 text-2xl wordmark">loghq</h1></StxLink>
+        <StxLink to="/projects" class="wordmark-link"><h1 class="mb-3 text-2xl wordmark font-sans">loghq</h1></StxLink>
         <p class="text-sm text-subtle">Accept an invitation above to get started, or <StxLink to="/projects/new" class="text-accent">create your own app</StxLink>.</p>
       </div>
     @endif
     @endif
 
     <footer class="mt-12 text-center text-subtle text-xs">
-      Log streaming on Stacks and Postgres. <span class="mono">loghq.org</span>
+      Log streaming on Stacks and Postgres. <span class="font-font-mono tnum [font-feature-settings:'tnum'_1]">loghq.org</span>
     </footer>
 
   </div>

@@ -661,7 +661,7 @@ onMount(() => {
         <div class="flex flex-wrap gap-3 items-center">
           <h2 class="font-semibold text-xl tracking-[-0.02em]">Settings</h2>
           @if (projects.length > 1)
-            <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm font-mono panel">
+            <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm font-mono app-panel">
               @foreach (projects as p)
                 <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}</option>
               @endforeach
@@ -684,7 +684,7 @@ onMount(() => {
       {{-- ============================ INSTALL ============================ --}}
       <section id="install" class="mb-10 scroll-mt-[84px]">
         <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">Install</div>
-        <div class="px-5 py-5 panel">
+        <div class="px-5 py-5 app-panel">
           <div class="flex gap-3 items-center justify-between mb-3.5">
             <p class="text-sm text-subtle">Send logs to <span class="text-muted font-mono">{{ activeProject.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
             <span class="shrink-0 rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] text-accent">{{ guide.label }}</span>
@@ -710,7 +710,7 @@ onMount(() => {
       {{-- ============================ KEYS ============================ --}}
       <section id="keys" class="mb-10 scroll-mt-[84px]">
         <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">API key</div>
-        <div class="px-5 py-5 panel">
+        <div class="px-5 py-5 app-panel">
           <p class="mb-4 text-sm text-subtle">
             This key authorizes log ingest for <span class="text-muted font-mono">{{ activeProject.name }}</span>.
             It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
@@ -733,7 +733,7 @@ onMount(() => {
         <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">Members</div>
         <div class="flex flex-col gap-2.5 mb-4">
           {{-- Owner (always first, not removable) --}}
-          <div class="flex gap-3.5 items-center px-4 py-3.5 panel">
+          <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel">
             <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold rounded-lg bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] text-accent">{{ (ownerEmail || '?').charAt(0).toUpperCase() }}</span>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-sm truncate">{{ ownerEmail }}</div>
@@ -742,7 +742,7 @@ onMount(() => {
             <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] text-accent">Owner</span>
           </div>
           @foreach (memberView as m)
-            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isMemberRemoved('{{ m.id }}')">
+            <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ m.id }}')">
               <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted rounded-lg" style="background: color-mix(in srgb, var(--text-3) 16%, var(--panel))">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ m.email }}</div>
@@ -753,7 +753,7 @@ onMount(() => {
             </div>
           @endforeach
           @foreach (inviteView as i)
-            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isMemberRemoved('{{ i.id }}')">
+            <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ i.id }}')">
               <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle rounded-lg" style="background: color-mix(in srgb, var(--text-3) 12%, var(--panel))">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ i.email }}</div>
@@ -765,7 +765,7 @@ onMount(() => {
             </div>
           @endforeach
         </div>
-        <div class="px-5 py-5 panel">
+        <div class="px-5 py-5 app-panel">
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
             <input :model="inviteEmail" type="email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]" placeholder="teammate@company.com" autocomplete="off">
@@ -787,7 +787,7 @@ onMount(() => {
         </p>
         <div class="flex flex-col gap-2.5 mb-4">
           @forelse (channelView as c)
-            <div class="flex gap-3.5 items-center px-4 py-3.5 panel" :show="!isChannelRemoved('{{ c.id }}')">
+            <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isChannelRemoved('{{ c.id }}')">
               <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 badge-{{ c.type }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ c.label }}</div>
@@ -798,13 +798,13 @@ onMount(() => {
               <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" title="Remove">Remove</button>
             </div>
           @empty
-            <div class="px-5 py-8 text-center panel">
+            <div class="px-5 py-8 text-center app-panel">
               <div class="mb-1 font-medium text-sm">No chat alerts yet</div>
               <div class="text-subtle text-xs">Add a Slack or Discord webhook below to start getting pinged.</div>
             </div>
           @endforelse
         </div>
-        <div class="px-5 py-5 panel">
+        <div class="px-5 py-5 app-panel">
           <div class="mb-3.5 font-semibold text-sm">Add a channel</div>
           <div class="grid gap-2 grid-cols-2 mb-3">
             <button type="button" @click="chType.set('slack')" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-slack">Slack</button>
@@ -869,7 +869,7 @@ onMount(() => {
           script tag in one silently disables the document shell. Describe
           syntax in prose here; never quote it. --}}
       <div class="dz-overlay fixed inset-0 z-[60] flex items-center justify-center p-5 bg-[rgba(2,4,10,0.62)] backdrop-blur-[3px] [animation:dz-fade_0.12s_ease]" :show="modalOpen()" @click="closeModal">
-        <div class="w-full max-w-[440px] p-[22px] shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] panel" role="dialog" aria-modal="true" @click.stop>
+        <div class="w-full max-w-[440px] p-[22px] shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] app-panel" role="dialog" aria-modal="true" @click.stop>
           <div class="mb-1 font-semibold text-base">{{ modalTitle() }}</div>
           <p class="mb-4 text-muted text-sm">{{ modalDesc() }}</p>
           <label class="block mb-1.5 text-subtle text-xs">Type <span class="text-muted font-mono">{{ projectName }}</span> to confirm</label>

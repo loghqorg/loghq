@@ -150,7 +150,12 @@ export default {
     // once is the whole point of ch.11.1. Checked that no OTHER remaining
     // <style> block defines these names differently before adding them —
     // the mistake 469068c had to undo.
-    'panel': 'bg-panel border border-line rounded-xl',
+    // NOT named `panel`: public/marketing.css already defines .panel with a
+    // 14px radius and its own surface, and the Crosswind sheet is emitted
+    // after it, so a `panel` shortcut silently reshaped every marketing panel
+    // to 12px. Checking the remaining <style> blocks for a name is not
+    // enough — the stylesheets in public/ own names too.
+    'app-panel': 'bg-panel border border-line rounded-xl',
     'wordmark-link': 'text-inherit no-underline [transition:opacity_0.15s_ease] hover:opacity-75',
     'icon-btn': 'inline-flex items-center justify-center h-[34px] w-[34px] border border-line '
       + 'rounded-[9px] text-muted bg-panel cursor-pointer '

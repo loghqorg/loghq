@@ -76,6 +76,23 @@
   --discord: #5865f2;
 }
 
+/* Tabular numerals for the log stream's counts and timestamps, so digits do
+ * not jitter as values change.
+ *
+ * This is a real rule rather than an arbitrary property because the value has
+ * to be quoted — `font-feature-settings: 'tnum' 1` — and a quoted value cannot
+ * survive Crosswind's class-name syntax. Written as
+ * [font-feature-settings:'tnum'_1] it generates NOTHING; the three
+ * font-feature-settings declarations in the served sheet are all preflight
+ * resets, and the computed value on the element stayed `normal`.
+ *
+ * `tabular-nums` is not a substitute: it sets font-variant-numeric, a
+ * different property, and would not reproduce the measured baseline.
+ */
+.tnum {
+  font-feature-settings: 'tnum' 1;
+}
+
 /* ---------------------------------------------------------------------------
  * Bare element selectors — no utility targets an element type
  * ------------------------------------------------------------------------ */
@@ -153,3 +170,87 @@ html {
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * dashboard
+ *
+ * Moved verbatim from dashboard.stx's <style> block. Every family below is
+ * entangled with a selector no utility reaches, so splitting them would have
+ * meant half a component in each place:
+ *
+ *   .pill*        hover/active are tag-scoped (`a.pill:hover, button.pill:hover`)
+ *                 on purpose — the disabled pager is a <span class="pill"> and
+ *                 must NOT light up on hover.
+ *   .log-row      `details[open] > .log-row` has to outrank the hover state.
+ *   .search-input ::placeholder and :focus-visible.
+ *   .chrome-*     `.chrome-pro, .chrome-pro:hover` cancels .chrome-upgrade's
+ *                 hover: Pro is a status, not an action.
+ *   summary       bare element selector plus ::-webkit-details-marker.
+ *   :focus-visible a bare-element accessibility rule, not optional.
+ *   .grain,       data-URI backgrounds with prefers-color-scheme variants.
+ *   select.app-panel
+ *   .reveal       @keyframes plus a reduced-motion variant.
+ *
+ * What IS expressible went the other way and is now utilities in the markup:
+ * .mono, .wordmark, .wordmark-link, .panel, .lvl-chip, .ctx-pre and .icon-btn.
+ * ------------------------------------------------------------------------ */
+.pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease; }
+a.pill:hover, button.pill:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+a.pill:active, button.pill:active { transform: translateY(1px); }
+/* Filter-tab state. These were inline style ternaries on every tab, which
+  outrank the hover rules above and could not be themed. The two levels differ
+  because the severity tabs are the primary control and the range tabs are
+  secondary. */
+.pill-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+a.pill-on:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+.pill-off { color: var(--text-2); border-color: var(--border); }
+.pill-on-soft { color: var(--accent); border-color: var(--accent); }
+.pill-off-soft { color: var(--text-3); border-color: var(--border); }
+.log-row { transition: background-color 0.12s ease; }
+.log-row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+details[open] > .log-row { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+summary { list-style: none; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+.search-input { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; color: var(--text); outline: none; transition: border-color 0.15s ease; }
+.search-input:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.search-input::placeholder { color: var(--text-3); }
+/* Position was an inline style string assembled in JS. It lives here now, so
+  the chrome is styleable and themeable like everything else. */
+.chrome-logout, .chrome-upgrade { position: fixed; top: 16px; z-index: 60; padding: 8px 13px; border-radius: 9px; font-size: 13px; line-height: 1; font-family: var(--sans, ui-sans-serif); }
+.chrome-logout { right: 18px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
+.chrome-logout:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.chrome-upgrade { right: 112px; font-weight: 600; text-decoration: none; background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
+.chrome-upgrade:hover { filter: brightness(1.12); }
+.chrome-upgrade:active { transform: translateY(1px); }
+/* Pro is a status, not an action: no link, no hover lift. */
+.chrome-pro, .chrome-pro:hover { background: transparent; color: var(--accent); border: 1px solid var(--accent); cursor: default; filter: none; }
+.reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
+@keyframes reveal { to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+/* Keyboard focus — a visible ring on every interactive control (accessibility,
+  not optional). Search gets an inset ring so it doesn't clash with its pill. */
+a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
+}
+summary:focus-visible { outline-offset: -2px; }
+.search-input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* Physical press feedback on a log row. */
+.log-row:active { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+/* Log stream aligned as fixed columns: rail · time · level · channel · message. */
+.log-row { display: grid; grid-template-columns: 3px 4.75rem 3.75rem 6rem minmax(0, 1fr); align-items: center; column-gap: 0.75rem; }
+/* Subtle grain so the flat surfaces don't read as sterile. Fixed, non-blocking,
+  barely-there; sits under the floating chrome (z-60). */
+.grain { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.03;
+  background-size: 170px 170px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+@media (prefers-reduced-motion: no-preference) { .grain { opacity: 0.032; } }
+/* Project dropdown: the native select chevron hugged the rounded border. Reset
+  the native appearance and draw our own with a comfortable inset + room for the
+  value text. Chevron is themed to --text-3 in each mode. */
+select.app-panel {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  padding-right: 2rem; background-repeat: no-repeat;
+  background-position: right 0.7rem center; background-size: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) { select.app-panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); } }
