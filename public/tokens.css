@@ -96,3 +96,47 @@ body {
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Skeleton shimmer, from account.stx's <style> block. Utilities cannot declare
+ * a @keyframes, and config/crosswind.ts `preflights` — the documented home for
+ * one — is never emitted on this serve path, so it lives here.
+ *
+ * Named loghq-pulse rather than pulse on purpose. Crosswind emits its own
+ * `@keyframes pulse` (0%,100% opacity 1; 50% opacity .5) as soon as any page
+ * uses `animate-pulse`, into a sheet that is linked AFTER this file. A
+ * same-named keyframe there would silently replace this one and change the
+ * animation rather than error.
+ */
+@keyframes loghq-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* Theme-toggle icon swap. Three identical copies of this lived in
+ * dashboard.stx, settings.stx and projects/index.stx.
+ *
+ * It stays CSS because no utility can express it: the selector is an
+ * attribute-state descendant, `[data-t="light"] .ic-sun`, driven by the
+ * `theme()` signal through `:data-t` on the button. The alternative — a
+ * `:show` binding on each icon — would need `style="display:none"` on both to
+ * avoid showing both icons before hydration, trading a state rule for two
+ * inline styles and a hydration dependency on something that is currently
+ * pure CSS.
+ */
+.theme-btn .ic-sun,
+.theme-btn .ic-moon {
+  display: none;
+}
+
+.theme-btn[data-t='light'] .ic-sun {
+  display: block;
+}
+
+.theme-btn[data-t='dark'] .ic-moon {
+  display: block;
+}

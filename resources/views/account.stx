@@ -61,30 +61,13 @@ onMount(() => {
 })
 </script>
 
-<style>
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
-.btn { border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease, background-color 0.15s ease; font-weight: 600; }
-.btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.btn-ghost { border: 1px solid var(--border); color: var(--text); }
-.btn-ghost:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.badge { border: 1px solid var(--border); border-radius: 999px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); }
-.badge-pro { border-color: var(--accent); color: var(--accent); }
-.avatar { border-radius: 999px; object-fit: cover; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
-.row { border-top: 1px solid var(--border); }
-.skeleton { background: color-mix(in srgb, var(--text-3) 20%, transparent); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.9; } }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
-</style>
 
 <div class="min-h-[100dvh]">
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">loghq</StxLink>
     <div class="flex gap-2.5 items-center">
-      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
-      <button @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
+      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Dashboard</StxLink>
+      <button @click="logout" class="px-3.5 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Log out</button>
     </div>
   </header>
 
@@ -96,42 +79,48 @@ onMount(() => {
   <div class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
     <h1 class="mb-6 text-2xl wordmark">Account</h1>
 
-    <section class="mb-5 p-6 card">
+    <section class="mb-5 p-6 bg-panel border border-line rounded-[14px]">
       <div class="flex gap-4 items-center">
-        <img class="h-14 w-14 avatar" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
-        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent avatar" :show="!avatarUrl()">{{ avatarInitial() }}</div>
+        <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
+        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarUrl()">{{ avatarInitial() }}</div>
         <div class="min-w-0">
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the
               skeleton needs a fixed box the real text must not inherit. --}}
-          <div class="skeleton w-[160px] h-5" :show="!loaded()"></div>
+          <div class="w-[160px] h-5 rounded-md bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] [animation:loghq-pulse_1.4s_ease-in-out_infinite] motion-reduce:[animation:none]" :show="!loaded()"></div>
           <div class="font-semibold text-lg" :show="loaded()">{{ displayName() }}</div>
           <div class="mt-1.5 text-muted text-sm">{{ email() }}</div>
         </div>
-        <span class="ml-auto px-2.5 py-1 badge" :show="!!provider()">{{ provider() }}</span>
+        <span class="ml-auto px-2.5 py-1 border border-line rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase text-muted" :show="!!provider()">{{ provider() }}</span>
       </div>
     </section>
 
-    <section class="mb-5 card">
+    <section class="mb-5 bg-panel border border-line rounded-[14px]">
       <div class="flex items-center justify-between px-6 py-4">
         <div>
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Plan</div>
           <div class="mt-1 font-semibold text-base">
-            {{ pro() ? 'Pro' : 'Free' }}<span class="ml-1 px-2 py-0.5 badge badge-pro" :show="pro()">active</span>
+            {{ pro() ? 'Pro' : 'Free' }}{{-- The badge base without its `text-muted`/`border-line`: this is the Pro
+                 variant and both would fight the accent pair below. `.badge-pro`
+                 used to win by cascade order inside one <style> block; two
+                 utilities of equal specificity are decided by their order in the
+                 GENERATED sheet instead, and text-muted lands after text-accent
+                 there — the Pro badge came out grey. --}}
+                <span class="ml-1 px-2 py-0.5 border rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase border-accent text-accent" :show="pro()">active</span>
           </div>
         </div>
         {{-- Two anchors rather than one rewritten in place: the pro and free CTAs
             differ in destination, label and variant, so branching the markup is
             clearer than mutating three attributes. --}}
-        <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary" :show="!pro()">Upgrade to Pro</StxLink>
-        <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost" :show="pro()">Manage plan</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px bg-accent text-white hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)]" :show="!pro()">Upgrade to Pro</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :show="pro()">Manage plan</StxLink>
       </div>
-      <div class="flex items-center justify-between px-6 py-4 row">
+      <div class="flex items-center justify-between px-6 py-4 [border-top:1px_solid_var(--border)]">
         <div>
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Member since</div>
           <div class="mt-1 text-base text-muted">{{ memberSince() }}</div>
         </div>
-        <StxLink to="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</StxLink>
+        <StxLink to="/dashboard" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Open dashboard</StxLink>
       </div>
     </section>
 
