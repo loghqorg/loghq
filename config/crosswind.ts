@@ -1,23 +1,49 @@
+import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
+
 /**
  * Crosswind (utility CSS) config.
  *
- * The palette is registered here as semantic color tokens backed by the CSS
- * custom properties defined per-page (`--bg`, `--panel`, `--border`, `--text*`,
- * `--accent`). That gives real utilities (`bg-panel`, `text-subtle`,
- * `border-line`, `text-accent`) instead of inline `style="color: var(--…)"`,
- * while the vars still swap under `[data-theme]` / `prefers-color-scheme` so
- * dark mode keeps working without a `dark:` on every class.
+ * The palette is registered here as semantic colour tokens backed by CSS custom
+ * properties (`--bg`, `--panel`, `--border`, `--text*`, `--accent`). That gives
+ * real utilities — `bg-panel`, `text-subtle`, `border-line`, `text-accent` —
+ * instead of inline `style="color: var(--…)"`, while the variables still swap
+ * under `[data-theme]` and `prefers-color-scheme`, so dark mode works without a
+ * `dark:` on every class.
+ *
+ * WHAT ACTUALLY REACHES THE PAGE
+ *
+ * The stx serve path does not hand this file to Crosswind wholesale. It rebuilds
+ * the generator config at @stacksjs/stx/dist/dev-server/crosswind.js — the
+ * `crosswindConfig` literal — and only some of what is written here survives.
+ * Verified against the installed build, not assumed:
+ *
+ *   theme.extend   merged explicitly, and it is the ONLY theme path that
+ *                  survives; a top-level `theme.colors` is dropped.
+ *   safelist       concatenated with the base safelist.
+ *   shortcuts      read when expanding classes.
+ *
+ *   content        OVERRIDDEN to []. Class extraction runs over the RENDERED
+ *                  HTML, not over globs, so a content list means nothing here.
+ *   output         OVERRIDDEN to "". The CSS is injected as a <style> tag.
+ *   minify         OVERRIDDEN to false.
+ *   preflights     spread into the config and then NEVER EMITTED — toCSS()
+ *                  writes the built-in reset only. Verified by putting a probe
+ *                  token in a preflights entry and grepping the served page for
+ *                  it: zero occurrences, on both a marketing and an app route.
+ *                  This one matters: the obvious home for shared design tokens
+ *                  does not work, so they have to reach the document another
+ *                  way. See the token duplication noted in the styling work.
+ *
+ * Anything not on the surviving list is decoration. This file used to carry
+ * `content`, `minify`, and `preflight: true` — and that last one is not even a
+ * key of CrosswindConfig; the real name is `includePreflight`, so it was a
+ * silent no-op that read as configuration. None of it was caught because the
+ * file ended in a bare `}` with no `satisfies`, and `config/` sat outside
+ * tsconfig's include.
  *
  * @see https://github.com/cwcss/crosswind
  */
 export default {
-  content: [
-    './resources/views/**/*.{stx,html}',
-    './resources/**/*.{stx,html}',
-    './storage/framework/defaults/resources/views/**/*.{stx,html}',
-    './storage/framework/defaults/resources/components/**/*.{stx,html}',
-    './storage/framework/core/error-handling/src/views/**/*.{stx,html}',
-  ],
   theme: {
     extend: {
       colors: {
@@ -35,6 +61,11 @@ export default {
       },
     },
   },
-  preflight: true,
-  minify: false,
-}
+// Partial<CrosswindConfig> alone is not enough: it makes the top-level keys
+// optional but `theme` still demands every field of Theme (colors, spacing,
+// fontSize, screens, borderRadius, boxShadow), when the only path that survives
+// the serve merge is `theme.extend`. Narrowing to Pick<Theme, 'extend'> keeps
+// the excess-property check that makes this assertion worth having — a key that
+// is not part of CrosswindConfig, like the `preflight` that used to sit here,
+// now fails the build.
+} satisfies Partial<Omit<CrosswindConfig, 'theme'>> & { theme?: Pick<Theme, 'extend'> }
