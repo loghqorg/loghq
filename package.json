@@ -56,6 +56,7 @@
     "changelog": "./buddy changelog",
     "generate": "./buddy generate",
     "typecheck": "bun x tsc --noEmit",
+    "check:stx": "bun scripts/check-stx-topology.ts && bun scripts/check-dom-guard.ts && bun scripts/check-stx-styles.ts",
     "types:check": "bun tsc --noEmit",
     "types:fix": "./buddy types:fix",
     "test": "./buddy test",
