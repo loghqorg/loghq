@@ -29,7 +29,7 @@ const inviteParams = new URLSearchParams(location.search)
 const invitedEmail = state(inviteParams.get('email') || '')
 const isInvite = state(!!inviteParams.get('invite'))
 
-async function handleSubmit(e) {
+async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (loading())
     return

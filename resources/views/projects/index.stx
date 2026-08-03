@@ -22,7 +22,7 @@ if (user) {
   )) ?? []
 }
 
-function fromNow(iso) {
+function fromNow(iso: string | null | undefined): string {
   if (!iso) return ''
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
   if (s < 60) return 'just now'
@@ -51,7 +51,7 @@ const theme = state(
   || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
 )
 
-function toggleTheme() {
+function toggleTheme(): void {
   const next = theme() === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', next)
   try { localStorage.setItem('loghq_theme', next) }
@@ -60,7 +60,7 @@ function toggleTheme() {
 }
 
 // Navigation side effect, not rendering — clears credentials and leaves.
-function logout() {
+function logout(): void {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   document.cookie = 'loghq_token=; path=/; max-age=0'

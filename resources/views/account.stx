@@ -15,11 +15,11 @@ const user: StxSignal<MeUser | null> = state(null)
 const pro = state(false)
 const loaded = state(false)
 
-function initial(s) {
+function initial(s: string | null | undefined): string {
   return (s || '?').trim().charAt(0).toUpperCase()
 }
 
-function fmtDate(v) {
+function fmtDate(v: string | null | undefined): string {
   if (!v)
     return '--'
   const d = new Date(v)
@@ -30,14 +30,14 @@ function fmtDate(v) {
 
 // Derived reads. Plain functions rather than computed(): each is called from a
 // binding, which re-evaluates when the signal it reads changes.
-const displayName = () => user()?.name || 'Your account'
-const email = () => user()?.email || ''
-const avatarUrl = () => user()?.avatar || ''
-const avatarInitial = () => initial(user()?.name || user()?.email)
-const provider = () => user()?.provider || ''
-const memberSince = () => fmtDate(user()?.created_at)
+const displayName = (): string => user()?.name || 'Your account'
+const email = (): string => user()?.email || ''
+const avatarUrl = (): string => user()?.avatar || ''
+const avatarInitial = (): string => initial(user()?.name || user()?.email)
+const provider = (): string => user()?.provider || ''
+const memberSince = (): string => fmtDate(user()?.created_at)
 
-async function logout() {
+async function logout(): Promise<void> {
   const token = localStorage.getItem('token')
   // Fire-and-forget: the session is being discarded locally either way, so a
   // failed revoke must not strand the user on a page they've logged out of.
@@ -51,7 +51,7 @@ async function logout() {
   window.location.assign('/login')
 }
 
-async function loadAccount() {
+async function loadAccount(): Promise<void> {
   const token = localStorage.getItem('token')
   if (!token)
     return

@@ -66,14 +66,14 @@ if (user) {
 const projectId = activeProject?.id || null
 const ownerEmail = (user && user.email) || ''
 
-function maskWebhook(url) {
+function maskWebhook(url: string): string {
   try {
     const u = new URL(url)
     return u.host + '/…' + String(url).slice(-4)
   }
   catch { return '…' }
 }
-function maskKey(k) {
+function maskKey(k: string | null | undefined): string {
   const s = String(k || '')
   return s.length > 16 ? s.slice(0, 10) + '……' + s.slice(-4) : s
 }
@@ -103,7 +103,7 @@ const keyMask = maskKey(keyFull)
 // The wire contract these snippets implement is docs/ingest.md.
 const INGEST_ENDPOINT = `${INGEST_BASE}/logs`
 
-function installGuide(platform, key) {
+function installGuide(platform: string | null | undefined, key: string): { label: string, install: string, code: string } {
   const p = String(platform || 'javascript').toLowerCase()
 
   // Shared JS transport. Deliberately fire-and-forget and un-awaited: logging
@@ -254,7 +254,7 @@ const theme = state(
   document.documentElement.getAttribute('data-theme')
   || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
 )
-function toggleTheme() {
+function toggleTheme(): void {
   const next = theme() === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', next)
   try { localStorage.setItem('loghq_theme', next) }
@@ -262,7 +262,7 @@ function toggleTheme() {
   theme.set(next)
 }
 
-const authHeaders = () => ({
+const authHeaders = (): Record<string, string> => ({
   'Authorization': `Bearer ${localStorage.getItem('token')}`,
   'Content-Type': 'application/json',
 })
@@ -270,7 +270,7 @@ const projUrl = `/api/projects/${encodeURIComponent(projectId || '')}`
 const chBase = `${projUrl}/channels`
 
 /** Read a JSON body without throwing on an empty or non-JSON response. */
-async function readJson(res) {
+async function readJson(res: Response): Promise<any> {
   try { return await res.json() }
   catch { return {} }
 }
@@ -280,7 +280,7 @@ const copiedInstall = state(false)
 const copiedCode = state(false)
 const copiedKey = state(false)
 
-async function copyText(text, flag) {
+async function copyText(text: string, flag: StxSignal<boolean>): Promise<void> {
   try { await navigator.clipboard.writeText(text) }
   catch {}
   flag.set(true)
@@ -288,7 +288,7 @@ async function copyText(text, flag) {
 }
 
 // ---- project switcher ----
-function switchProject(e) {
+function switchProject(e: Event): void {
   document.cookie = `loghq_project=${encodeURIComponent(e.target.value)}; path=/; max-age=31536000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`
   window.location.href = '/settings'
 }
@@ -301,14 +301,14 @@ const rotating = state(false)
 const keyNote = state('')
 const keyNoteOk = state(true)
 
-const keyShown = () => (keyRevealed() ? keyFull() : keyMask())
+const keyShown = (): string => (keyRevealed() ? keyFull() : keyMask())
 
-function note(msgSig, okSig, msg, ok) {
+function note(msgSig: StxSignal<string>, okSig: StxSignal<boolean>, msg: string, ok: boolean): void {
   msgSig.set(msg)
   okSig.set(ok)
 }
 
-async function rotateKey() {
+async function rotateKey(): Promise<void> {
   const ask = window.stxConfirm
     ? window.stxConfirm('The current key stops working immediately — anything still sending it will get 401 until you update it. Continue?', { title: 'Rotate ingest key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
     : Promise.resolve(window.confirm('Rotate the ingest key? The current key stops working immediately.'))
@@ -346,14 +346,14 @@ const isMemberRemoved = id => removedMembers().includes(id)
 const memberBtnLabel = id => (removingMember() === id ? 'Removing…' : 'Remove')
 const joinBtnLabel = id => (copiedJoin() === id ? 'Copied ✓' : 'Copy link')
 
-async function copyJoin(id, link) {
+async function copyJoin(id: string, link: string): Promise<void> {
   try { await navigator.clipboard.writeText(link) }
   catch {}
   copiedJoin.set(id)
   setTimeout(() => copiedJoin.set(''), 1600)
 }
 
-async function addInvite() {
+async function addInvite(): Promise<void> {
   const email = inviteEmail().trim()
   if (!email) {
     note(inviteNote, inviteNoteOk, 'Enter an email address.', false)
@@ -376,7 +376,7 @@ async function addInvite() {
   }
 }
 
-async function removeMember(id) {
+async function removeMember(id: string): Promise<void> {
   if (removingMember())
     return
   removingMember.set(id)
@@ -407,20 +407,20 @@ const HELPS = {
   slack: 'In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the hooks.slack.com/services/… URL.',
   discord: 'In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
 }
-const whPlaceholder = () => PLACEHOLDERS[chType()]
-const whHelp = () => HELPS[chType()]
+const whPlaceholder = (): string => PLACEHOLDERS[chType()]
+const whHelp = (): string => HELPS[chType()]
 
 const isChannelRemoved = id => removedChannels().includes(id)
 const testLabel = id => channelBusy()[id] || 'Test'
 const deleteLabel = id => (channelBusy()[id] === 'Removing…' ? 'Removing…' : 'Remove')
 /** Enabled state, defaulting to the server-rendered value until toggled. */
-const isChannelOn = (id, initial) => (id in channelOn() ? channelOn()[id] : initial)
+const isChannelOn = (id: string, initial: boolean): boolean => (id in channelOn() ? channelOn()[id] : initial)
 
-function setBusy(id, value) {
+function setBusy(id: string, value: boolean): void {
   channelBusy.set({ ...channelBusy(), [id]: value })
 }
 
-async function addChannel() {
+async function addChannel(): Promise<void> {
   const url = whUrl().trim()
   if (!url) {
     note(whNote, whNoteOk, 'Paste a webhook URL first.', false)
@@ -444,7 +444,7 @@ async function addChannel() {
   }
 }
 
-async function testChannel(id) {
+async function testChannel(id: string): Promise<void> {
   if (channelBusy()[id])
     return
   setBusy(id, 'Sending…')
@@ -458,7 +458,7 @@ async function testChannel(id) {
   setTimeout(() => setBusy(id, ''), 2400)
 }
 
-async function toggleChannel(id, initial) {
+async function toggleChannel(id: string, initial: boolean): Promise<void> {
   const next = !isChannelOn(id, initial)
   channelOn.set({ ...channelOn(), [id]: next })
   try {
@@ -472,7 +472,7 @@ async function toggleChannel(id, initial) {
   }
 }
 
-async function deleteChannel(id) {
+async function deleteChannel(id: string): Promise<void> {
   if (channelBusy()[id])
     return
   setBusy(id, 'Removing…')
@@ -494,27 +494,27 @@ const modalBusy = state(false)
 const modalNote = state('')
 const archiving = state(false)
 
-const modalOpen = () => modalKind() !== ''
-const modalTitle = () => (modalKind() === 'delete' ? `Delete ${projectName}?` : `Archive ${projectName}?`)
-const modalDesc = () => (modalKind() === 'delete'
+const modalOpen = (): boolean => modalKind() !== ''
+const modalTitle = (): string => (modalKind() === 'delete' ? `Delete ${projectName}?` : `Archive ${projectName}?`)
+const modalDesc = (): string => (modalKind() === 'delete'
   ? 'This permanently deletes the project and all of its log entries, alert channels, members, and invites. This cannot be undone.'
   : 'loghq will stop accepting new log entries for this project. Everything already stored is kept, and you can unarchive anytime.')
-const modalConfirmLabel = () => {
+const modalConfirmLabel = (): string => {
   if (modalBusy())
     return modalKind() === 'delete' ? 'Deleting…' : 'Archiving…'
   return modalKind() === 'delete' ? 'Delete project' : 'Archive project'
 }
 /** The type-to-confirm gate: the typed name must match exactly. */
-const modalReady = () => modalInput().trim() === projectName && !modalBusy()
+const modalReady = (): boolean => modalInput().trim() === projectName && !modalBusy()
 
-function closeModal() {
+function closeModal(): void {
   modalKind.set('')
   modalInput.set('')
   modalNote.set('')
   modalBusy.set(false)
 }
 
-function openArchive() {
+function openArchive(): void {
   // Unarchiving is non-destructive, so it skips the confirm entirely.
   if (!projectActive) {
     unarchive()
@@ -525,13 +525,13 @@ function openArchive() {
   modalKind.set('archive')
 }
 
-function openDelete() {
+function openDelete(): void {
   modalInput.set('')
   modalNote.set('')
   modalKind.set('delete')
 }
 
-async function unarchive() {
+async function unarchive(): Promise<void> {
   archiving.set(true)
   try {
     const res = await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: false }) })
@@ -546,7 +546,7 @@ async function unarchive() {
   }
 }
 
-async function confirmModal() {
+async function confirmModal(): Promise<void> {
   if (!modalReady())
     return
   modalBusy.set(true)

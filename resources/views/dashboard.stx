@@ -92,7 +92,7 @@ const projectId = activeProject?.id || null
 // Canonical dashboard URL for a filter state; defaults are omitted so links stay
 // clean. The project rides the loghq_project cookie. Changing any filter resets
 // to page 1.
-function pageUrl(overrides) {
+function pageUrl(overrides: Partial<{ level: string, range: string, q: string, page: number }>): string {
   const state = { level: levelFilter, range: rangeFilter, q: search, page: requestedPage, ...overrides }
   const p = new URLSearchParams()
   if (state.level && state.level !== 'all')
@@ -115,7 +115,7 @@ let counts = { total: 0, warnings: 0, errors: 0 }
 let live = false
 let pager = { from: 0, to: 0, total: 0, page: 1, pages: 1, hasPrev: false, hasNext: false, prevHref: '', nextHref: '' }
 
-async function loadData() {
+async function loadData(): Promise<void> {
   if (!projectId)
     return
   // WHERE for the stream: project + level threshold + range + search. The
@@ -188,7 +188,7 @@ catch {
 }
 
 // Severity drives the one accent-adjacent semantic color on the list rail.
-function levelColor(level) {
+function levelColor(level: LogLevel | null | undefined): string {
   switch (level) {
     case 'emergency': case 'alert': case 'critical': return '#f43f5e'
     case 'error': return '#fb7185'
@@ -198,12 +198,12 @@ function levelColor(level) {
     default: return '#94a3b8' // debug
   }
 }
-function levelLabel(level) {
+function levelLabel(level: LogLevel | null | undefined): string {
   return String(level || 'info').toUpperCase()
 }
 // Compact fixed-width labels so the level column stays aligned across every row
 // (a log tail reads best when the message always starts at the same x).
-function chipLabel(level) {
+function chipLabel(level: LogLevel | null | undefined): string {
   switch (level) {
     case 'emergency': return 'EMERG'
     case 'critical': return 'CRIT'
@@ -213,19 +213,19 @@ function chipLabel(level) {
   }
 }
 // Absolute clock (HH:MM:SS) for the row; the stream is read against wall time.
-function clockOf(iso) {
+function clockOf(iso: string | null | undefined): string {
   if (!iso) return '--:--:--'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso).slice(11, 19) || '--:--:--'
   return d.toISOString().slice(11, 19)
 }
-function dayOf(iso) {
+function dayOf(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(5, 10)
 }
 // Pretty-print stored JSON context for the expanded row (best-effort).
-function prettyContext(raw) {
+function prettyContext(raw: unknown): string {
   if (!raw) return ''
   try { return JSON.stringify(JSON.parse(raw), null, 2) }
   catch { return String(raw) }
@@ -263,7 +263,7 @@ const theme = state(
   || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
 )
 
-function toggleTheme() {
+function toggleTheme(): void {
   const next = theme() === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', next)
   try { localStorage.setItem('loghq_theme', next) }
@@ -271,7 +271,7 @@ function toggleTheme() {
   theme.set(next)
 }
 
-function signOut() {
+function signOut(): void {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   document.cookie = 'loghq_token=; path=/; max-age=0'
@@ -287,11 +287,11 @@ const joining = state('')
 const isDismissed = t => dismissed().includes(t)
 const joinLabel = t => (joining() === t ? 'Joining…' : 'Join')
 
-function dismissInvite(token) {
+function dismissInvite(token: string): void {
   dismissed.set([...dismissed(), token])
 }
 
-async function joinInvite(token) {
+async function joinInvite(token: string): Promise<void> {
   if (joining())
     return
   joining.set(token)
@@ -314,7 +314,7 @@ async function joinInvite(token) {
   }
 }
 
-async function loadPlan() {
+async function loadPlan(): Promise<void> {
   const token = localStorage.getItem('token')
   if (!token)
     return

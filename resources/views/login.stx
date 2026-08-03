@@ -25,7 +25,7 @@ const loading = state(false)
 // (which is the credential form's own failure) because both can be on screen.
 const oauthError = state(new URLSearchParams(location.search).get('error') || '')
 
-async function handleSubmit(e) {
+async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (loading())
     return
