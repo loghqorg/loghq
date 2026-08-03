@@ -50,10 +50,70 @@ function registerSessionStore() {
     // default is widened so the signal is MeUser | null rather than null.
     const user: StxSignal<MeUser | null> = useLocalStorage('user', null as MeUser | null)
 
+    // ---- the viewer -------------------------------------------------------
+    // GET /api/me was fetched independently by account.stx and dashboard.stx,
+    // each with its own `pro` signal, so navigating between the two refetched
+    // every time and the two copies could disagree. It lives here now: one
+    // request per page load, shared across SPA navigations because the store
+    // registry survives a fragment swap.
+    //
+    // Deliberately a plain fetch rather than useQuery. useQuery throws
+    // `HTTP <status>: <statusText>` on any non-2xx and never reads the body, so
+    // the 401 branch below — which must clear the session, not just report an
+    // error — would have to be recovered by pattern-matching an error string.
+    // The caching useQuery would buy is what this store already provides.
+    const viewer: StxSignal<MeUser | null> = state(null as MeUser | null)
+    const pro = state(false)
+    const viewerLoaded = state(false)
+
+    // In-flight de-duplication. A `viewerLoaded()` check alone is not enough:
+    // two callers that arrive before the first response lands both pass it and
+    // both fetch. Measured — /account issued two /api/me requests. Holding the
+    // promise means every caller after the first awaits the same request.
+    let viewerRequest: Promise<void> | null = null
+
+    async function loadViewer(): Promise<void> {
+      const bearer = token()
+      if (!bearer || viewerLoaded())
+        return
+      if (viewerRequest)
+        return viewerRequest
+      viewerRequest = fetchViewer(bearer).finally(() => { viewerRequest = null })
+      return viewerRequest
+    }
+
+    async function fetchViewer(bearer: string): Promise<void> {
+      try {
+        const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${bearer}` } })
+        if (res.status === 401) {
+          // Stale token. Clearing it through the signal also clears the cookie
+          // the server authenticates from.
+          token.set('')
+          ;(navigate as StxNavigate)('/login', true)
+          return
+        }
+        if (!res.ok)
+          return
+        const data = await res.json()
+        if (!data?.user)
+          return
+        batch(() => {
+          viewer.set(data.user)
+          pro.set(data.pro === true)
+          viewerLoaded.set(true)
+        })
+      }
+      catch {}
+    }
+
     return {
       token,
       project,
       user,
+      viewer,
+      pro,
+      viewerLoaded,
+      loadViewer,
       isAuthed: derived(() => !!token()),
 
       /**
@@ -71,6 +131,9 @@ function registerSessionStore() {
         batch(() => {
           token.set('')
           user.set(null)
+          viewer.set(null)
+          pro.set(false)
+          viewerLoaded.set(false)
         })
         // forceReload, not a fragment swap: signing out should drop every
         // signal and cached query in memory, not carry them to the next page.

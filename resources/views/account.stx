@@ -45,32 +45,20 @@ function logout(): void {
   useStore('session').signOut()
 }
 
-async function loadAccount(): Promise<void> {
+// The viewer is fetched once, by the session store, and shared. This page and
+// the dashboard used to request /api/me independently and keep their own `pro`
+// signal, so moving between them refetched every time and the two copies could
+// disagree. These three stay local signals so every binding in the markup below
+// is unchanged; they mirror the store.
+onMount(() => {
   const session = useStore('session')
-  const token = session.token()
-  if (!token)
-    return
-  try {
-    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
-    if (res.status === 401) {
-      // The token is stale. Clearing it through the store also clears the cookie
-      // the server authenticates from, which the raw removeItem here never did —
-      // so a 401 used to leave the server still seeing a session.
-      session.token.set('')
-      ;(navigate as StxNavigate)('/login', true)
-      return
-    }
-    const data = await res.json()
-    if (!data?.user)
-      return
-    user.set(data.user)
-    pro.set(data.pro === true)
-    loaded.set(true)
-  }
-  catch {}
-}
-
-loadAccount()
+  session.loadViewer()
+  effect(() => {
+    user.set(session.viewer())
+    pro.set(session.pro())
+    loaded.set(session.viewerLoaded())
+  })
+})
 </script>
 
 <style>

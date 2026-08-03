@@ -316,24 +316,13 @@ async function joinInvite(token: string): Promise<void> {
   }
 }
 
-async function loadPlan(): Promise<void> {
-  const token = useStore('session').token()
-  if (!token)
-    return
-  try {
-    const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
-    if (res.status === 401) {
-      signOut()
-      return
-    }
-    const data = res.ok ? await res.json() : null
-    if (data?.pro)
-      pro.set(true)
-  }
-  catch {}
-}
-
-loadPlan()
+// Pro status comes from the session store, which fetches /api/me once and
+// shares it with the account page instead of each requesting it separately.
+onMount(() => {
+  const session = useStore('session')
+  session.loadViewer()
+  effect(() => pro.set(session.pro()))
+})
 
 // Onboarding bounce. The server block already computed needsOnboarding, and it
 // crosses to here through the server-to-client bridge, so this is not a second
