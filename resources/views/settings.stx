@@ -743,7 +743,7 @@ onMount(() => {
           </div>
           @foreach (memberView as m)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ m.id }}')">
-              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted rounded-lg" style="background: color-mix(in srgb, var(--text-3) 16%, var(--panel))">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted rounded-lg bg-[color-mix(in_srgb,var(--text-3)_16%,var(--panel))]">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ m.email }}</div>
                 <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
@@ -754,7 +754,7 @@ onMount(() => {
           @endforeach
           @foreach (inviteView as i)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ i.id }}')">
-              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle rounded-lg" style="background: color-mix(in srgb, var(--text-3) 12%, var(--panel))">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle rounded-lg bg-[color-mix(in_srgb,var(--text-3)_12%,var(--panel))]">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ i.email }}</div>
                 <div class="mt-0.5 text-subtle text-xs">{{ i.registered ? 'Has an account — pending accept' : 'Invite sent — awaiting sign-up' }}</div>
@@ -824,13 +824,12 @@ onMount(() => {
 
       {{-- ============================ DANGER ============================ --}}
       <section id="danger" class="mb-6 scroll-mt-[84px]">
-        {{-- Stays inline, unlike the other var(--warn) on this page. `.sec-title`
-             in the <style> block below sets `color: var(--text-3)`, and a
-             `text-warn` utility ties with it on specificity then loses on
-             order, because the page style tag is emitted after the Crosswind
-             sheet. Only the inline declaration outranks it. Convert this the
-             same day `.sec-title` becomes a shortcut — see ch.11.1. --}}
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle" style="color: var(--warn)">Danger zone</div>
+        {{-- The section-heading utilities WITHOUT their text-subtle: this
+             heading is warn-coloured, and two colour utilities of equal
+             specificity are decided by their order in the generated sheet.
+             It was pinned inline until settings' <style> block went, because
+             `.sec-title` set var(--text-3) and outranked the utility. --}}
+        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-warn">Danger zone</div>
         <div class="bg-panel border rounded-xl border-[color-mix(in_srgb,var(--warn)_40%,var(--border))]" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
           {{-- Archive / Unarchive --}}
           <div class="flex gap-4 items-center justify-between px-5 py-4">

@@ -395,7 +395,7 @@ onMount(() => {
     @if (pendingInvites.length)
       <div class="mb-7">
         @foreach (pendingInvites as inv)
-          <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 app-panel" style="border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel))" :show="!isDismissed('{{ inv.token }}')">
+          <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 border rounded-xl border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_6%,var(--panel))]" :show="!isDismissed('{{ inv.token }}')">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="flex gap-2 items-center ml-auto">
               <button class="px-4 py-1.5 font-semibold text-sm text-white bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
@@ -500,7 +500,7 @@ onMount(() => {
             <span class="text-[11px] text-subtle truncate font-mono tnum">{{ entry.channel || '' }}</span>
             <span class="min-w-0 text-ink text-sm truncate font-mono tnum">{{ entry.message }}</span>
           </summary>
-          <div class="pb-4 pt-1 px-5" style="background: color-mix(in srgb, var(--accent) 3%, transparent)">
+          <div class="pb-4 pt-1 px-5 bg-[color-mix(in_srgb,var(--accent)_3%,transparent)]">
             <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 text-subtle text-xs font-mono tnum">
               <span>{{ dayOf(entry.timestamp) }} {{ clockOf(entry.timestamp) }} UTC</span>
               @if (entry.environment)<span>env: <span class="text-muted">{{ entry.environment }}</span></span>@endif
