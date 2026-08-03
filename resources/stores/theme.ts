@@ -43,11 +43,12 @@ function registerThemeStore() {
   // cross-tab storage listener, and transition suppression — all four of which
   // the hand-rolled `effectiveTheme()` copies scattered across the app lack.
   //
-  // The cast is not cosmetic: the shipped `stx.d.ts:231` declares a zero-arg
-  // function returning `{ mode: StxSignal, setMode }`, which is not the function
-  // that exists. The real signature is in types/stx-runtime.d.ts, checked
-  // against signals.js:3429-3505.
-    const cm = (useColorMode as unknown as StxUseColorMode)({
+    // No cast here any more. stx used to declare this as a zero-arg function
+    // returning { mode: StxSignal, setMode } — an API that did not exist — so
+    // the call had to go through a locally corrected type. The shipped
+    // declaration was fixed upstream and now matches the implementation, so the
+    // local override is deleted and this is checked against stx's own types.
+    const cm = useColorMode({
       storageKey: 'loghq_theme',
       attribute: 'data-theme',
     })
@@ -55,7 +56,7 @@ function registerThemeStore() {
     // cm.mode / cm.isDark are plain getters, NOT signals (signals.js:3494-3504).
     // Reading one inside a directive registers no dependency, so the binding
     // would never update. Mirror it into a real signal via subscribe.
-    const mode = state<StxColorResolved>(cm.mode)
+    const mode = state<'light' | 'dark'>(cm.mode)
     cm.subscribe((resolved) => {
       mode.set(resolved)
       // Crosswind's darkMode defaults to the *class* strategy, so every `dark:`
