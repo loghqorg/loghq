@@ -145,6 +145,18 @@ export default {
     'footer-link': 'text-muted text-[0.9rem] leading-[1.4] '
       + '[transition:color_0.16s_ease] hover:text-ink',
 
+    // Shared app-surface vocabulary. `panel`, `icon-btn` and `wordmark-link`
+    // were byte-identical in dashboard.stx and settings.stx; defining them
+    // once is the whole point of ch.11.1. Checked that no OTHER remaining
+    // <style> block defines these names differently before adding them —
+    // the mistake 469068c had to undo.
+    'panel': 'bg-panel border border-line rounded-xl',
+    'wordmark-link': 'text-inherit no-underline [transition:opacity_0.15s_ease] hover:opacity-75',
+    'icon-btn': 'inline-flex items-center justify-center h-[34px] w-[34px] border border-line '
+      + 'rounded-[9px] text-muted bg-panel cursor-pointer '
+      + '[transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink '
+      + 'hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+
     'invite-hint': 'px-3 py-[9px] text-[13px] rounded-[9px] text-accent '
       + 'bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] '
       + 'border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]',

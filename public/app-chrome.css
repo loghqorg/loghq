@@ -1,0 +1,155 @@
+/* App-surface CSS that utilities provably cannot express.
+ *
+ * Everything here was measured against Crosswind's generated sheet before it
+ * was moved: pseudo-elements, attribute-state selectors, bare element
+ * selectors, `@keyframes`, and page-scoped custom properties all produce NO
+ * rule when written as a utility or variant. The failure is silent — no error,
+ * no warning, just a class that does nothing — so the test is always "does the
+ * served sheet contain it", never "does it look plausible".
+ *
+ * `config/crosswind.ts` `preflights` is where ch.11.2/11.7 says this belongs.
+ * It does not work on the stx serve path: the entry is spread into the
+ * generator config and then never emitted, verified with a probe token that
+ * appears nowhere in the served CSS on any route. A linked stylesheet is the
+ * substitute, and it is also the router-safe home — the SPA router destroys
+ * every <head> style that is not the Crosswind tag, but leaves <link>s alone.
+ *
+ * Linked once from config/ui.ts `app.head.link`, after /tokens.css so it can
+ * read the palette, before the Crosswind sheet so utilities still win a
+ * specificity tie against anything here.
+ *
+ * Rules that WERE expressible are deliberately absent — they live as utilities
+ * in the markup. Do not move a rule back here because it is more convenient.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Page-scoped tokens
+ *
+ * dashboard is the one surface with its own accent: indigo, so navigation
+ * never reads as a severity colour (see 20f40ed). It used to be a `:root`
+ * block inside dashboard.stx's <style>, scoped only by the accident of which
+ * page carried the tag. Declared globally that would repaint the whole app, so
+ * it hangs off a wrapper class on the dashboard's root element and cascades to
+ * its descendants — including the fixed-position chrome, which is inside the
+ * wrapper.
+ * ------------------------------------------------------------------------ */
+.page-dashboard {
+  --accent: #4f46e5;
+  --rail: rgba(79, 70, 229, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page-dashboard {
+    --accent: #818cf8;
+    --rail: rgba(129, 140, 248, 0.16);
+  }
+}
+
+:root[data-theme='dark'] .page-dashboard {
+  --accent: #818cf8;
+  --rail: rgba(129, 140, 248, 0.16);
+}
+
+:root[data-theme='light'] .page-dashboard {
+  --accent: #4f46e5;
+  --rail: rgba(79, 70, 229, 0.14);
+}
+
+/* Channel brand colours. Only settings uses them, but they are declared here
+ * with everything else rather than in a page tag. */
+:root {
+  --slack: #611f69;
+  --discord: #5865f2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --discord: #818cf8;
+  }
+}
+
+:root[data-theme='dark'] {
+  --discord: #818cf8;
+}
+
+:root[data-theme='light'] {
+  --discord: #5865f2;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bare element selectors — no utility targets an element type
+ * ------------------------------------------------------------------------ */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ---------------------------------------------------------------------------
+ * settings: the alert-channel toggle
+ *
+ * The knob is a ::after pseudo-element and both states are attribute-driven.
+ * Crosswind generates nothing for `after:` or for a `[data-on]` variant.
+ * ------------------------------------------------------------------------ */
+.tgl::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.tgl[data-on='1'] {
+  background: var(--ok);
+}
+
+.tgl[data-on='1']::after {
+  transform: translateX(16px);
+}
+
+/* settings: the Slack/Discord channel picker. Selected state is attribute
+ * driven, and each brand paints its own fill. */
+.seg[data-sel='1'] {
+  color: #fff;
+  border-color: transparent;
+}
+
+.seg-slack[data-sel='1'] {
+  background: var(--slack);
+}
+
+.seg-discord[data-sel='1'] {
+  background: var(--discord);
+}
+
+/* settings: delete-zone modal. `[hidden]` has to beat the overlay's own
+ * `display: flex`, which a utility cannot guarantee — Crosswind's preflight
+ * `[hidden]{display:none}` ties with `.flex` on specificity and loses on
+ * order. */
+.dz-overlay[hidden] {
+  display: none;
+}
+
+@keyframes dz-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dz-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

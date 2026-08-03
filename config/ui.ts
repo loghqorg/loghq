@@ -171,6 +171,13 @@ export default {
         // layout adds and which defines a richer overlapping set — later wins,
         // which is the intent.
         { rel: 'stylesheet', href: '/tokens.css' },
+        // App-surface CSS that utilities provably cannot express —
+        // pseudo-elements, attribute-state selectors, bare element selectors,
+        // @keyframes, and the dashboard's page-scoped accent. After
+        // /tokens.css so it can read the palette; still before the Crosswind
+        // sheet, which the renderer injects last, so a utility continues to
+        // win a specificity tie against anything in here.
+        { rel: 'stylesheet', href: '/app-chrome.css' },
       ],
     },
   },
