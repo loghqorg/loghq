@@ -101,7 +101,7 @@ export default {
       + 'focus:outline-none focus:border-accent '
       + 'focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]',
 
-    'btn': 'bg-accent text-white rounded-[10px] '
+    'btn-solid': 'bg-accent text-white rounded-[10px] '
       + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
       + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
       + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',
@@ -114,8 +114,19 @@ export default {
     // Status notes. The literal hexes are deliberate: these are fixed
     // semantic colours that do not follow the accent, and #ef4444/#16a34a are
     // what the five blocks all carried.
-    'err': 'bg-[color-mix(in_srgb,#ef4444_12%,transparent)] text-[#ef4444]',
-    'ok': 'bg-[color-mix(in_srgb,#22c55e_12%,transparent)] text-[#16a34a]',
+    //
+    // Named -box, and the filled button named -solid, because the bare names
+    // are already taken and mean something DIFFERENT elsewhere in the app:
+    // pricing.stx and account.stx use `.btn` as a neutral base that carries
+    // only radius, transition and weight, with `.btn-primary` / `.btn-ghost`
+    // supplying the fill, and pricing's `.err` sets a colour and no
+    // background. A shortcut named `btn` therefore painted every ghost button
+    // on those two pages accent-coloured — a shortcut is global the moment it
+    // is defined, and it collides with any same-named rule still living in a
+    // page <style> block. Unify the vocabulary when those blocks are
+    // converted; until then, distinct names.
+    'err-box': 'bg-[color-mix(in_srgb,#ef4444_12%,transparent)] text-[#ef4444]',
+    'ok-box': 'bg-[color-mix(in_srgb,#22c55e_12%,transparent)] text-[#16a34a]',
 
     'invite-hint': 'px-3 py-[9px] text-[13px] rounded-[9px] text-accent '
       + 'bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] '

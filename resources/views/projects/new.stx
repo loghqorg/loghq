@@ -76,7 +76,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 
     <form @submit="handleSubmit" class="space-y-4">
       @if (error())
-        <div class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
+        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ error() }}</div>
       @endif
 
       <div>
@@ -97,7 +97,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
         </select>
       </div>
 
-      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
+      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-solid">
         {{ loading() ? 'Creating…' : 'Create app' }}
       </button>
     </form>
