@@ -100,3 +100,6 @@ storage/framework/cache/
 # Root-anchored: a bare `logs/` also matches app/Logs/, which is real source
 # (the filesystem here is case-insensitive).
 /logs/
+
+# Scratch tree for scripts/check-stx-types.ts
+.stx-typecheck/

@@ -399,8 +399,8 @@ const adding = state(false)
 const whNote = state('')
 const whNoteOk = state(true)
 const removedChannels: StxSignal<string[]> = state([])
-const channelBusy = state({})
-const channelOn = state({})
+const channelBusy: StxSignal<Record<string, string>> = state({})
+const channelOn: StxSignal<Record<string, boolean>> = state({})
 
 const PLACEHOLDERS = { slack: 'https://hooks.slack.com/services/…', discord: 'https://discord.com/api/webhooks/…' }
 const HELPS = {
@@ -416,7 +416,7 @@ const deleteLabel = id => (channelBusy()[id] === 'Removing…' ? 'Removing…' :
 /** Enabled state, defaulting to the server-rendered value until toggled. */
 const isChannelOn = (id: string, initial: boolean): boolean => (id in channelOn() ? channelOn()[id] : initial)
 
-function setBusy(id: string, value: boolean): void {
+function setBusy(id: string, value: string): void {
   channelBusy.set({ ...channelBusy(), [id]: value })
 }
 
