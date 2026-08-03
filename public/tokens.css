@@ -19,7 +19,12 @@
  * initial value rather than erroring.
  *
  * Marketing pages additionally load /marketing.css, which arrives after this
- * file and defines a richer set of its own (--surface, --accent-soft, --r, …).
+ * file and defines a richer set of its own (--surface, --accent-line, --r, …).
+ * --accent-soft moved the other way, out of marketing.css and into here, the
+ * day the compare tables needed a `bg-accent-soft` utility: a utility backed
+ * by a token that only marketing pages declare is dead everywhere else and
+ * fails silently. marketing.css still consumes it (.live-dot, .cell.tint,
+ * .cell.feature) and resolves it from this file.
  * Where the two overlap the values agree; where they differ, marketing.css
  * wins on marketing pages, which is the intent.
  *
@@ -37,6 +42,7 @@
   --text-2: #4b5565;
   --text-3: #97a1b2;
   --accent: #e11d48;
+  --accent-soft: rgba(225, 29, 72, 0.08);
   --ok: #16a34a;
   --warn: #b91c1c;
   --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
@@ -52,6 +58,7 @@
     --text-2: #b3bccb;
     --text-3: #667085;
     --accent: #fb7185;
+    --accent-soft: rgba(251, 113, 133, 0.1);
     --ok: #4ade80;
     --warn: #f87171;
   }
@@ -65,6 +72,7 @@
   --text-2: #b3bccb;
   --text-3: #667085;
   --accent: #fb7185;
+  --accent-soft: rgba(251, 113, 133, 0.1);
   --ok: #4ade80;
   --warn: #f87171;
 }
@@ -77,6 +85,7 @@
   --text-2: #4b5565;
   --text-3: #97a1b2;
   --accent: #e11d48;
+  --accent-soft: rgba(225, 29, 72, 0.08);
   --ok: #16a34a;
   --warn: #b91c1c;
 }

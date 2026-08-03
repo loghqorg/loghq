@@ -20,12 +20,6 @@ const crumbs = [
 </script>
 
 @push('styles')
-<style>
-  /* Highlight the loghq column (2nd of every 3 grid cells) so the table reads
-    at a glance. Uses the same accent-soft token as the rest of the site. */
-  .cmp-hl .cmp-cell:nth-child(3n+2) { background: var(--accent-soft); }
-  .cmp-note { margin-top: 1rem; color: var(--text-3); font-size: 0.86rem; line-height: 1.55; max-width: 68ch; }
-</style>
 @endpush
 
 @section('content')
@@ -52,37 +46,37 @@ const crumbs = [
   </div>
   <div class="cmp cmp-hl">
   <div class="cmp-cell">Capability</div>
-  <div class="cmp-cell">loghq</div>
+  <div class="cmp-cell bg-accent-soft">loghq</div>
   <div class="cmp-cell">Airbrake</div>
   <div class="cmp-cell cmp-dim">What it is</div>
-  <div class="cmp-cell cmp-ghost">Focused error and crash tracking</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Focused error and crash tracking</div>
   <div class="cmp-cell">Error and performance monitoring</div>
   <div class="cmp-cell cmp-dim">Open source</div>
-  <div class="cmp-cell cmp-ghost">Yes, open source</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Yes, open source</div>
   <div class="cmp-cell">No</div>
   <div class="cmp-cell cmp-dim">Self-host / data ownership</div>
-  <div class="cmp-cell cmp-ghost">Yes, your own Postgres</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Yes, your own Postgres</div>
   <div class="cmp-cell">No, SaaS only</div>
   <div class="cmp-cell cmp-dim">Pricing model</div>
-  <div class="cmp-cell cmp-ghost">Free self-hosted, usage-based hosted</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Free self-hosted, usage-based hosted</div>
   <div class="cmp-cell">Event-volume based</div>
   <div class="cmp-cell cmp-dim">Error grouping</div>
-  <div class="cmp-cell cmp-ghost">Automatic fingerprinting</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Automatic fingerprinting</div>
   <div class="cmp-cell">Yes</div>
   <div class="cmp-cell cmp-dim">Source maps and stack traces</div>
-  <div class="cmp-cell cmp-ghost">Full source-mapped traces</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Full source-mapped traces</div>
   <div class="cmp-cell">Yes</div>
   <div class="cmp-cell cmp-dim">Releases and environments</div>
-  <div class="cmp-cell cmp-ghost">Built in</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Built in</div>
   <div class="cmp-cell">Yes, deploy tracking</div>
   <div class="cmp-cell cmp-dim">Alerting</div>
-  <div class="cmp-cell cmp-ghost">New and spiking issues</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">New and spiking issues</div>
   <div class="cmp-cell">Yes</div>
   <div class="cmp-cell cmp-dim">Data retention</div>
-  <div class="cmp-cell cmp-ghost">Yours to set when self-hosted</div>
+  <div class="cmp-cell cmp-ghost bg-accent-soft">Yours to set when self-hosted</div>
   <div class="cmp-cell">Plan-based</div>
   </div>
-  <p class="cmp-note">Where Airbrake still leads: it is a long-established tool with deep, mature SDKs for Ruby and other classic server stacks.</p>
+  <p class="mt-4 max-w-[68ch] text-subtle text-[0.86rem] leading-[1.55]">Where Airbrake still leads: it is a long-established tool with deep, mature SDKs for Ruby and other classic server stacks.</p>
 </section>
 
 <section class="reveal section shell" aria-labelledby="why-heading">

@@ -61,6 +61,10 @@ export default {
         // in /tokens.css now, so the utilities are valid on every route.
         ok: 'var(--ok)',
         warn: 'var(--warn)',
+        // The accent at low alpha — highlight fills, tinted cells. Registered
+        // so the compare tables can mark their loghq column with a class
+        // instead of a `:nth-child(3n+2)` rule in a per-page <style> block.
+        'accent-soft': 'var(--accent-soft)',
       },
       fontFamily: {
         sans: ['Space Grotesk', 'ui-sans-serif', 'system-ui', 'sans-serif'],
