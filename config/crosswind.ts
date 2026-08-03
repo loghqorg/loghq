@@ -66,6 +66,16 @@ export default {
         // instead of a `:nth-child(3n+2)` rule in a per-page <style> block.
         'accent-soft': 'var(--accent-soft)',
       },
+      // The site's own two breakpoints, as min-widths. public/marketing.css
+      // states them as `max-width: 560px` and `max-width: 900px`; Crosswind
+      // generates NOTHING for a `max-[900px]:` variant or a bare
+      // `[@media(max-width:900px)]:` — verified against the served sheet, no
+      // rule and no media query — so a max-width rule has to be inverted to
+      // mobile-first and the boundary moves by one pixel.
+      screens: {
+        'bp-sm': '561px',
+        'bp-md': '901px',
+      },
       fontFamily: {
         sans: ['Space Grotesk', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
@@ -127,6 +137,13 @@ export default {
     // converted; until then, distinct names.
     'err-box': 'bg-[color-mix(in_srgb,#ef4444_12%,transparent)] text-[#ef4444]',
     'ok-box': 'bg-[color-mix(in_srgb,#22c55e_12%,transparent)] text-[#16a34a]',
+
+    // SiteFooter's repeated link and column heading. Four columns and ~28
+    // links, so these earn a name rather than being repeated on each element.
+    'footer-head': 'm-0 mb-[0.35rem] font-mono text-[0.7rem] font-semibold '
+      + 'tracking-[0.12em] uppercase text-subtle',
+    'footer-link': 'text-muted text-[0.9rem] leading-[1.4] '
+      + '[transition:color_0.16s_ease] hover:text-ink',
 
     'invite-hint': 'px-3 py-[9px] text-[13px] rounded-[9px] text-accent '
       + 'bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] '
