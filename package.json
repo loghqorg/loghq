@@ -74,6 +74,7 @@
     "stacks": "^0.70.201"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.121",
     "better-dx": "^0.2.15"
   },
   "git-hooks": {

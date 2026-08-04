@@ -425,7 +425,7 @@ onMount(() => {
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="flex gap-2 items-center ml-auto">
               <button class="px-4 py-1.5 font-semibold text-sm text-white bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
-              <button class="px-3 py-1.5 text-sm text-subtle border border-line js-invite-dismiss pill" title="Hide for now" @click="dismissInvite('{{ inv.token }}')">Dismiss</button>
+              <button class="px-3 py-1.5 text-sm text-subtle border border-line js-invite-dismiss pill" x-tooltip="Hide for now" @click="dismissInvite('{{ inv.token }}')">Dismiss</button>
             </div>
           </div>
         @endforeach
@@ -447,12 +447,15 @@ onMount(() => {
         @endif
         <StxLink to="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</StxLink>
         <StxLink to="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</StxLink>
-        <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" title="Toggle theme" aria-label="Toggle theme">
-          <svg class="h-[17px] w-[17px] ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          <svg class="h-[17px] w-[17px] ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
+          <Icon name="lucide:sun" size="17" class="h-[17px] w-[17px] ic-sun" />
+          <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>
-        <StxLink to="/settings" class="icon-btn" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <StxLink to="/settings" class="icon-btn" x-tooltip="Settings" aria-label="Settings">
+          {{-- 17px to match the sun/moon beside it. The hand-pasted SVG this
+               replaced carried no width/height at all, so it sized itself from
+               the 34px button rather than from its siblings. --}}
+          <Icon name="lucide:settings" size="17" class="h-[17px] w-[17px]" />
         </StxLink>
       </div>
       <nav class="flex flex-wrap gap-1.5 items-center">
@@ -520,7 +523,7 @@ onMount(() => {
         <details class="border-b border-line">
           <summary class="px-5 py-2.5 log-row">
             <span class="self-stretch rounded-full" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
-            <span class="tabular-nums text-subtle text-xs font-mono tnum" title="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
+            <span class="tabular-nums text-subtle text-xs font-mono tnum" x-tooltip="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
             <span class="px-1 py-0.5 font-semibold text-[11px] rounded inline-block text-center whitespace-nowrap font-mono tnum" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
             <span class="text-[11px] text-subtle truncate font-mono tnum">{{ entry.channel || '' }}</span>
             <span class="min-w-0 text-ink text-sm truncate font-mono tnum">{{ entry.message }}</span>

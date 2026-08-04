@@ -123,6 +123,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <span class="flex-1 h-px bg-line"></span>or<span class="flex-1 h-px bg-line"></span>
     </div>
 
+    {{-- Brand marks, kept inline on purpose — same reasoning as login.stx. --}}
     <div class="space-y-2.5">
       @if (githubEnabled)
       <a href="/api/auth/github/redirect" data-no-router class="flex gap-2 items-center justify-center py-2.5 w-full font-medium text-sm oauth-btn">
