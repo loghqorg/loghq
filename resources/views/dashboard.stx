@@ -239,6 +239,12 @@ const stats = [
   { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, on: counts.errors > 0, color: '#f43f5e' },
 ]
 
+// Where the project switcher lands. pageUrl() is server-side — it reads the
+// filter state this render was built from — so the client cannot rebuild it.
+// Bridged as JSON rather than interpolated into a quoted attribute, which is
+// the convention settings.stx already uses for its server-computed strings.
+const switchUrlJson = JSON.stringify(pageUrl({ page: 1 }))
+
 useSeoMeta({
   title: 'Logs - loghq',
   description: 'Your live application log stream — filter by level, search messages, and inspect structured context.',
@@ -288,6 +294,24 @@ const joining = state('')
 
 const isDismissed = t => dismissed().includes(t)
 const joinLabel = t => (joining() === t ? 'Joining…' : 'Join')
+
+// ---- project switcher ----
+//
+// This was a DOM-0 `onchange` attribute that wrote document.cookie by hand,
+// read location.protocol to decide the secure flag, and then assigned
+// location.href — four separate violations in one attribute, none of them
+// visible to the strict validator, which only scans <script> bodies.
+//
+// The cookie is the session store's `project` signal, so setting it here writes
+// the same cookie with the same attributes the store already declares. The
+// reload is DECLARED, as in settings.stx: the server render is keyed off that
+// cookie, so a fragment swap would repaint the old project's logs.
+const switchUrl: string = JSON.parse({{ switchUrlJson }})
+
+function switchProject(e: Event): void {
+  useStore('session').project.set((e.target as HTMLSelectElement).value)
+  navigate(switchUrl, { reload: true })
+}
 
 function dismissInvite(token: string): void {
   dismissed.set([...dismissed(), token])
@@ -345,11 +369,10 @@ onMount(() => {
 // validator scans script bodies as raw text, comments included, so quoting a
 // prohibited API in a comment reports as a violation of it.
 //
-// The param is deliberately no longer stripped from the URL. useSearchParams
-// has no delete at runtime — it is declared with one, but the object returned
-// is { data, get, set, setAll } — and rewriting history by hand is exactly the
-// violation this change exists to remove. Leaving it is
-// harmless and arguably better: the server prefers the query param over the
+// The param is deliberately not stripped from the URL. stx has since given
+// useSearchParams a working delete (#1806 — the declaration used to promise one
+// the runtime did not have), so this is now a choice rather than a limitation,
+// and the choice is unchanged: the server prefers the query param over the
 // cookie, so the URL stays shareable and pinned to that project, and it clears
 // itself on the first filter click because pageUrl() does not carry it.
 onMount(() => {
@@ -414,8 +437,7 @@ onMount(() => {
       <div class="flex gap-3 items-center">
         <StxLink to="/projects" class="wordmark-link"><h1 class="leading-none text-2xl md:text-[28px] wordmark font-sans">loghq</h1></StxLink>
         @if (projects.length > 1)
-          <select onchange="document.cookie = 'loghq_project=' + encodeURIComponent(this.value) + '; path=/; max-age=31536000; samesite=lax' + (location.protocol === 'https:' ? '; secure' : ''); location.href = '{{ pageUrl({ page: 1 }) }}'"
-                  class="px-3 py-1.5 text-muted text-sm font-mono tnum app-panel">
+          <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm font-mono tnum app-panel">
             @foreach (projects as p)
               <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
             @endforeach

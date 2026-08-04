@@ -24,10 +24,13 @@ const featureCells = [
   { slug: 'self-host', cls: 'cell', title: 'Self-hosting', body: 'Open source, on your own Postgres. Sensitive log data never leaves your servers.' },
 ]
 
+// No hand-carried ordinal. The loop already knows which iteration it is on, and
+// a `num` field in the data is a second source of truth that silently goes
+// wrong the moment a step is inserted or reordered.
 const steps = [
-  { num: '01', verb: 'Install', body: 'Add the loghq log channel to your app. One line in your logging config wires up the stream.' },
-  { num: '02', verb: 'Log', body: 'Keep logging exactly as you do today. Every Log call is shipped to loghq in the background.' },
-  { num: '03', verb: 'Stream', body: 'Watch lines land live, filter by level and time, search messages, and inspect structured context.' },
+  { verb: 'Install', body: 'Add the loghq log channel to your app. One line in your logging config wires up the stream.' },
+  { verb: 'Log', body: 'Keep logging exactly as you do today. Every Log call is shipped to loghq in the background.' },
+  { verb: 'Stream', body: 'Watch lines land live, filter by level and time, search messages, and inspect structured context.' },
 ]
 
 useSeoMeta({
@@ -107,7 +110,7 @@ onMount(() => {
     <div class="flow">
       @foreach (steps as step)
         <div class="flow-step">
-          <span class="flow-num">{{ step.num }}</span>
+          <span class="flow-num">{{ String(loop.iteration).padStart(2, '0') }}</span>
           <div>
             <h3>{{ step.verb }}</h3>
             <p>{{ step.body }}</p>
