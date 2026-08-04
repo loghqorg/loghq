@@ -19,7 +19,7 @@ const broadcastDriver = String(env.BROADCAST_DRIVER || 'bun')
 const broadcastScheme = String(env.BROADCAST_SCHEME || 'ws')
 
 export default {
-  enabled: true,
+  enabled: false,
 
   // Deployment mode: 'server' (ts-broadcasting) or 'serverless' (API Gateway)
   mode: realtimeMode as 'serverless' | 'server',
