@@ -61,8 +61,11 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   }
 }
 </script>
+{{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
+    path is not relied on. --}}
+@extends('layouts/default')
 
-
+@section('content')
 <div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
   <div class="max-w-md w-full">
     <div class="mb-8 text-center">
@@ -103,3 +106,4 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     </form>
   </div>
 </div>
+@endsection

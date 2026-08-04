@@ -60,8 +60,11 @@ onMount(() => {
   })
 })
 </script>
+{{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
+    path is not relied on. --}}
+@extends('layouts/default')
 
-
+@section('content')
 <div class="min-h-[100dvh]">
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">loghq</StxLink>
@@ -135,3 +138,4 @@ onMount(() => {
     signed-out visitor. --}}
 
 @include('AuthGuard')
+@endsection

@@ -62,7 +62,15 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 }
 </script>
 
+{{-- Explicit layout binding, per ch.3.4. Without it the page relies on
+    the implicit path (process.js:310-338), which applies defaultLayout only
+    while the page has no DOCTYPE and then wraps it in a synthetic
+    @section('content'). That is fragile in a specific way: the gate is
+    `if (!hasDoctype || hasSections)`, so the binding depends on what the
+    page does NOT contain. --}}
+@extends('layouts/default')
 
+@section('content')
 <div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
   <div class="max-w-sm w-full">
     <div class="mb-8 text-center">
@@ -127,3 +135,4 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     </p>
   </div>
 </div>
+@endsection

@@ -41,8 +41,11 @@ async function upgrade(): Promise<void> {
   }
 }
 </script>
+{{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
+    path is not relied on. --}}
+@extends('layouts/default')
 
-
+@section('content')
 <div class="px-5 py-14 md:px-10 min-h-[100dvh]">
   <div class="mx-auto max-w-3xl">
     <header class="mb-10 text-center">
@@ -100,3 +103,4 @@ async function upgrade(): Promise<void> {
     <p class="mt-10 text-center text-subtle text-xs">Prefer to self-host? loghq is open source and free to run yourself.</p>
   </div>
 </div>
+@endsection

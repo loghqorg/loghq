@@ -69,8 +69,11 @@ function logout(): void {
   useStore('session').signOut()
 }
 </script>
+{{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
+    path is not relied on. --}}
+@extends('layouts/default')
 
-
+@section('content')
 {{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
 <script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
 
@@ -127,3 +130,4 @@ function logout(): void {
 </div>
 
 @include('AuthGuard')
+@endsection
