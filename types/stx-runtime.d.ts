@@ -1,68 +1,37 @@
 /**
- * Corrected shapes for stx runtime globals whose shipped ambient declarations
+ * Corrections for stx runtime globals whose shipped ambient declarations still
  * do not match the shipped implementation.
  *
- * These are declared global (not exported) so store files can use them without
- * an `import` — the store loader deletes every single-line import before
+ * Declared global (not exported) so store files can use them without an
+ * `import` — the store loader deletes every single-line import before
  * transpiling (store-loader.js:52), so a store must be self-contained.
+ *
+ * This file used to carry five corrections. Three are gone because stx fixed
+ * them (#1806, #1807, #1808): `useCookie` and `StxCookieOptions` are declared
+ * upstream now, and `navigate`'s second argument is a real options object with
+ * working `replace` and `reload`. Keeping a local copy of a fixed declaration is
+ * not neutral — two same-named interfaces in global scope MERGE rather than
+ * collide, so a stale copy silently widens the upstream shape and `tsc` says
+ * nothing. Delete on fix; do not leave them for symmetry.
  */
 
 declare global {
-  /** Options accepted by `useCookie` (signals.js:3568-3600). */
-  interface StxCookieOptions {
-    path?: string
-    domain?: string
-    /** Seconds. Emitted as max-age; setting the signal to '' emits max-age=0. */
-    maxAge?: number
-    sameSite?: 'Strict' | 'Lax' | 'None'
-    /** Derived from location.protocol when omitted. */
-    secure?: boolean
-    defaultValue?: string
-    encode?: (value: string) => string
-    decode?: (value: string) => string
-  }
-
-  /**
-   * `useCookie` is undeclared in the shipped stx.d.ts even though it exists and
-   * is auto-imported. Declared here so client scripts can use it bare.
-   *
-   * IMPORTANT — this is only valid inside a <script client> block. Unlike
-   * useColorMode, useLocalStorage and the other 24 composables, useCookie is
-   * NOT assigned to `window` as a bare global; it lives only on `window.stx`
-   * and reaches client scripts through auto-import destructuring. Store bundles
-   * are injected raw, with no auto-import pass, so a store must reach it via
-   * `window.stx.useCookie` — see resources/stores/session.ts. Calling it bare
-   * from a store is a ReferenceError, which the type system will not catch.
-   *
-   * It returns a string signal with no JSON layer, which is why it is the right
-   * home for a bearer token; useLocalStorage would JSON.parse it and throw.
-   */
-  function useCookie(name: string, options?: StxCookieOptions): StxSignal<string>
-
-  /**
-   * `navigate`'s real signature.
-   *
-   * The shipped declaration is `navigate(url, options?: { replace?: boolean })`.
-   * The implementation is `navigate(url, forceReload)` and there is no replace
-   * behaviour anywhere in it — the second argument is tested for truthiness and,
-   * when truthy, assigns location.href. So the declared call
-   * `navigate(url, { replace: true })` type-checks, does a FULL PAGE LOAD, and
-   * pushes a history entry, which is the opposite of replace semantics. Cast
-   * through this to pass the boolean the function actually reads.
-   */
-  type StxNavigate = (url: string, forceReload?: boolean) => void
-
   /**
    * `useEventListener`'s real argument order.
    *
-   * The shipped declaration is `(target, event, handler)`. The implementation
-   * is `(event, handler, options)` and takes the target from `options.target`,
-   * defaulting to window — verified in signals.js. The declared order happens
-   * to type-check for a call like `useEventListener('keydown', fn, …)` because
-   * the first parameter accepts a string (read as a selector), so getting this
-   * wrong produces a listener bound to nothing rather than a compile error.
+   * Two different functions ship under this name. `src/browser-composables.ts`
+   * exports target-first overloads; the runtime global that a bare call in a
+   * client script actually resolves to is `src/signals.ts:5032`, which is
+   * `(event, handler, options)` with the target read from `options.target`,
+   * defaulting to window. stx.d.ts:186-197 declares the target-first module
+   * shape for the runtime one.
    *
-   * Declared as an additional overload, so a correctly-ordered call resolves.
+   * The declared order happens to type-check a correct call, because parameter
+   * one accepts a string and reads it as a selector — so getting this wrong
+   * binds a listener to nothing rather than failing to compile. That is why the
+   * correct order is declared here as an extra overload rather than trusted.
+   *
+   * Still unfixed upstream as of fork commit f539929dfe; unfiled.
    */
   function useEventListener(
     event: string,
@@ -70,13 +39,23 @@ declare global {
     options?: { target?: Window | Document | HTMLElement | string | null, capture?: boolean, passive?: boolean, once?: boolean },
   ): void
 
-  /** The subset of the `window.stx` runtime surface loghq reaches directly. */
-  interface StxRuntime {
+  /**
+   * `useCookie` on the `window.stx` registry.
+   *
+   * #1808 declared the bare global and unified the auto-import list, but the
+   * `StxRuntimeRegistry` interface (stx.d.ts:559) still has no `useCookie`
+   * member, while the runtime does assign it (dist/signals.js:5542). loghq
+   * needs the member, not the bare global: store bundles are injected raw with
+   * no auto-import pass, so bare `useCookie` inside `resources/stores/*.ts` is
+   * a ReferenceError. Stores reach it as `window.stx.useCookie`.
+   *
+   * Declared by merging into the upstream interface. Do NOT re-declare
+   * `interface Window { stx: ... }` here — upstream declares that property as
+   * `StxRuntimeRegistry` (stx.d.ts:658), and a second declaration with a
+   * different type is a TS2717 conflict rather than a merge.
+   */
+  interface StxRuntimeRegistry {
     useCookie: (name: string, options?: StxCookieOptions) => StxSignal<string>
-  }
-
-  interface Window {
-    stx: StxRuntime
   }
 }
 

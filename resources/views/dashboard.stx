@@ -309,7 +309,7 @@ async function joinInvite(token: string): Promise<void> {
       return
     }
     useStore('session').project.set(body.project)
-    ;(navigate as StxNavigate)('/dashboard', true)
+    navigate('/dashboard', { reload: true })
   }
   catch {
     joining.set('')
@@ -332,7 +332,7 @@ onMount(() => {
 // a second document load on a route the server already knew was wrong.
 onMount(() => {
   if (needsOnboarding)
-    (navigate as StxNavigate)('/projects/new', true)
+    navigate('/projects/new', { reload: true })
 })
 
 // Project selection arrives as ?project=… from the apps list. This used to be a

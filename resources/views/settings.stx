@@ -323,7 +323,7 @@ function switchProject(e: Event): void {
   // rewritten and the server render depends on it, so this must reach the
   // server again — and navigate() no-ops on a same-URL fragment navigation
   // (client.js:300), which would leave the page showing the old project.
-  ;(navigate as StxNavigate)('/settings', true)
+  navigate('/settings', { reload: true })
 }
 
 // ---- ingest key ----
@@ -404,7 +404,7 @@ async function addInvite(): Promise<void> {
       note(inviteNote, inviteNoteOk, body.error || 'Could not invite.', false)
       return
     }
-    (navigate as StxNavigate)('/settings', true)
+    navigate('/settings', { reload: true })
   }
   catch {
     inviting.set(false)
@@ -472,7 +472,7 @@ async function addChannel(): Promise<void> {
       note(whNote, whNoteOk, body.error || 'Could not add that channel.', false)
       return
     }
-    (navigate as StxNavigate)('/settings', true)
+    navigate('/settings', { reload: true })
   }
   catch {
     adding.set(false)
@@ -572,7 +572,7 @@ async function unarchive(): Promise<void> {
   try {
     const res = await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: false }) })
     if (res.ok) {
-      (navigate as StxNavigate)('/settings', true)
+      navigate('/settings', { reload: true })
       return
     }
     archiving.set(false)
@@ -601,7 +601,7 @@ async function confirmModal(): Promise<void> {
       navigate('/projects')
     }
     else {
-      (navigate as StxNavigate)('/settings', true)
+      navigate('/settings', { reload: true })
     }
   }
   catch {
@@ -628,7 +628,7 @@ useEventListener('keydown', (e: KeyboardEvent) => {
 // a second document load on a route the server already knew was wrong.
 onMount(() => {
   if (needsOnboarding)
-    (navigate as StxNavigate)('/projects/new', true)
+    navigate('/projects/new', { reload: true })
 })
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit

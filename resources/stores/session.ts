@@ -89,7 +89,7 @@ function registerSessionStore() {
           // Stale token. Clearing it through the signal also clears the cookie
           // the server authenticates from.
           token.set('')
-          ;(navigate as StxNavigate)('/login', true)
+          navigate('/login', { reload: true })
           return
         }
         if (!res.ok)
@@ -135,11 +135,11 @@ function registerSessionStore() {
           pro.set(false)
           viewerLoaded.set(false)
         })
-        // forceReload, not a fragment swap: signing out should drop every
-        // signal and cached query in memory, not carry them to the next page.
-        // The boolean is what the function actually reads — see StxNavigate in
-        // types/stx-runtime.d.ts for why the declared signature disagrees.
-        ;(navigate as StxNavigate)('/login', true)
+        // reload, not a fragment swap: signing out should drop every signal and
+        // cached query in memory, not carry them to the next page. `replace`
+        // would also be defensible here — it would keep the authed page out of
+        // history — but it is a fragment swap, so the in-memory state survives.
+        navigate('/login', { reload: true })
       },
     }
   })

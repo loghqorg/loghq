@@ -30,7 +30,7 @@ async function upgrade(): Promise<void> {
     const data = await res.json().catch(() => ({}))
     // Cross-origin Stripe Checkout. navigate() handles the origin switch
     // itself (client.js:285); the second argument declares the full load.
-    if (res.ok && data.url) { (navigate as StxNavigate)(data.url, true); return }
+    if (res.ok && data.url) { navigate(data.url, { reload: true }); return }
     err.set(data.error || 'Checkout is not available yet.')
   }
   catch {
