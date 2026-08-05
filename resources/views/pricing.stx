@@ -42,8 +42,20 @@ async function upgrade(): Promise<void> {
 }
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
-    path is not relied on. --}}
-@extends('layouts/default')
+    path is not relied on.
+
+    MARKETING, not default. This page is linked from the marketing nav, so it
+    needs the marketing chrome: layouts/default includes neither SiteNav nor
+    SiteFooter, and a hard load therefore reached a pricing page with 2 links
+    on it and no footer, against 76 and 27 on any /compare page. Someone
+    arriving from search had no route into the rest of the site.
+
+    It also renders the same way now however you arrive. Under layouts/default
+    the router fragment-swapped this page into whatever shell the previous page
+    had, because the layout-GROUP guard is asked before the response that
+    carries the group header (stx#1833) — so clicking Pricing from marketing
+    showed it WITH nav and footer while a direct hit showed it without. --}}
+@extends('layouts/marketing')
 
 @section('content')
 <div class="px-5 py-14 md:px-10 min-h-[100dvh]">
