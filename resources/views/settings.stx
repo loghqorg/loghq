@@ -824,7 +824,14 @@ onMount(() => {
         <div class="flex flex-col gap-2.5 mb-4">
           @forelse (channelView as c)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isChannelRemoved('{{ c.id }}')">
-              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 badge-{{ c.type }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
+              {{-- The class used to be `badge-{{ c.type }}`, which emits
+                   `badge-slack` or `badge-discord` — and neither class exists
+                   anywhere in the project, so the pill rendered unstyled. A
+                   name assembled by interpolation cannot be found by grepping
+                   for the class either, which is why it survived this long.
+                   The brand treatment here matches .seg-slack / .seg-discord in
+                   app-chrome.css: solid brand background, white text. --}}
+              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 text-white {{ c.type === 'slack' ? 'bg-[var(--slack)]' : 'bg-[var(--discord)]' }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ c.label }}</div>
                 <div class="mt-0.5 text-subtle text-xs truncate font-mono">{{ c.mask }}</div>
