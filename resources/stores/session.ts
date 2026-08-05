@@ -29,22 +29,27 @@
 
 function registerSessionStore() {
   defineStore('session', () => {
-    // Reached through window.stx, not called bare. useCookie is the one
-    // composable loghq uses that is NOT assigned to window as a global — it
-    // exists only on window.stx and reaches <script client> blocks through
-    // auto-import destructuring. Store bundles are injected raw, with no
-    // auto-import pass, so calling it bare here is a ReferenceError. Verified
-    // by shipping exactly that bug.
-    const cookie = window.stx.useCookie
-
+    // Called bare, as any other composable would be. It could not be until
+    // stx#1838: useCookie is one of ~34 composables that live only on
+    // window.stx rather than as a bare window global, and store bundles used to
+    // be injected with no runtime-globals preamble — so the straightforward
+    // call was a ReferenceError, and this file reached through window.stx to
+    // work around it. store-loader now emits the same preamble a <script client>
+    // block gets, so the workaround is gone.
+    //
+    // The failure it caused was worth the detour: the throw happens inside the
+    // shared store IIFE, so defineStore never completes and what a developer
+    // actually sees is "Store not found" from useStore('session') — raised in a
+    // different file, which is fine.
+    //
     // 30 days, matching what the hand-serialised writes used. useCookie adds
     // path=/, SameSite=Lax and — only on https — Secure, which is the exact
     // string that was being retyped at every call site.
-    const token = cookie('loghq_token', { maxAge: 2592000, sameSite: 'Lax' })
+    const token = useCookie('loghq_token', { maxAge: 2592000, sameSite: 'Lax' })
 
     // Which project the dashboard and settings pages are looking at. A browsing
     // preference, not a credential, so it gets a year.
-    const project = cookie('loghq_project', { maxAge: 31536000, sameSite: 'Lax' })
+    const project = useCookie('loghq_project', { maxAge: 31536000, sameSite: 'Lax' })
 
     // Safe under useLocalStorage: this value is already written as JSON. The
     // default is widened so the signal is MeUser | null rather than null.
