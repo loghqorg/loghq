@@ -17,52 +17,80 @@ const query = new URLSearchParams((typeof globalThis !== 'undefined' && globalTh
 const requestedProject = query.get('project')
 const cookieProject = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_project')) || ''
 
-const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+// ---------------------------------------------------------------------------
+// THE `__` PREFIX IS A SECURITY BOUNDARY IN THIS FILE. READ BEFORE RENAMING.
+//
+// stx bridges server scope into the client script automatically. extractBridgeData
+// (client-script.ts:775) takes EVERY top-level binding in this block that is not
+// a function and is not prefixed with `__` or `$`, and generateServerDataBridge
+// (client-script.ts:846) then emits `var <name> = <JSON>` into the page for any
+// of those whose name matches /\b<name>\b/ anywhere in the client script TEXT —
+// comments and string literals included.
+//
+// That last part is what makes this dangerous rather than merely wasteful. A
+// binding does not have to be USED by client code to be published; the word
+// merely has to appear. Measured on this page before the fix: `var token = "…"`
+// carried the raw session token into the HTML because `useStore('session').token()`
+// appears in the client block, and `projects` published every ingest_key because
+// the string `/api/projects/${…}` appears in a fetch URL.
+//
+// So anything holding a credential is named `__something` and never reaches the
+// template. What the template renders is a projection built below — channelView,
+// memberView, inviteView, projects — that contains no secret by construction.
+// Renaming a `__` binding to a bare one re-opens the leak silently, with no lint
+// error and no test failure.
+// ---------------------------------------------------------------------------
+const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
 let user: AuthUser | null = null
-if (token) {
+if (__token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
-    user = await Auth.getUserFromToken(token)
+    user = await Auth.getUserFromToken(__token)
   }
   catch { user = null }
 }
 
-let projects: ProjectRow[] = []
-let activeProject: ProjectRow | null = null
+let __projectRows: ProjectRow[] = []
+let __activeRow: ProjectRow | null = null
 let needsOnboarding = false
-let channels: AlertChannelRow[] = []
-let members: MemberRow[] = []
-let invites: InviteRow[] = []
+let __channelRows: AlertChannelRow[] = []
+let __memberRows: MemberRow[] = []
+let __inviteRows: InviteRow[] = []
 if (user) {
   // Owned projects only — settings is the owner's admin surface.
-  projects = (await db.unsafe(
+  __projectRows = (await db.unsafe(
     'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
     [Number(user.id)],
   )) ?? []
-  if (projects.length === 0)
+  if (__projectRows.length === 0)
     needsOnboarding = true
   else
-    activeProject = projects.find(p => p.id === requestedProject) || projects.find(p => p.id === cookieProject) || projects[0]
+    __activeRow = __projectRows.find(p => p.id === requestedProject) || __projectRows.find(p => p.id === cookieProject) || __projectRows[0]
 
-  if (activeProject) {
-    channels = (await db.unsafe(
+  if (__activeRow) {
+    __channelRows = (await db.unsafe(
       `SELECT id, type, label, webhook_url, enabled, created_at
       FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
-      [activeProject.id],
+      [__activeRow.id],
     )) ?? []
-    members = (await db.unsafe(
+    __memberRows = (await db.unsafe(
       `SELECT m.id, m.email, m.role FROM project_members m
       WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
-      [activeProject.id],
+      [__activeRow.id],
     )) ?? []
-    invites = (await db.unsafe(
+    __inviteRows = (await db.unsafe(
       `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
       FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
       WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
-      [activeProject.id],
+      [__activeRow.id],
     )) ?? []
   }
 }
+
+// Template-facing projections. `ingest_key` is dropped here and nowhere else:
+// the switcher needs a project's id, name and state, never its credential.
+const projects = __projectRows.map(({ ingest_key: _ignored, ...p }) => p)
+const activeProject = __activeRow ? (({ ingest_key: _ignored, ...p }) => p)(__activeRow) : null
 const projectId = activeProject?.id || null
 const ownerEmail = (user && user.email) || ''
 
@@ -77,7 +105,9 @@ function maskKey(k: string | null | undefined): string {
   const s = String(k || '')
   return s.length > 16 ? s.slice(0, 10) + '……' + s.slice(-4) : s
 }
-const channelView = channels.map(c => ({
+// A webhook URL is a bearer credential — anyone holding it can post into the
+// customer's Slack or Discord — so only the mask crosses into template scope.
+const channelView = __channelRows.map(c => ({
   id: c.id,
   type: c.type,
   label: c.label || (c.type === 'slack' ? 'Slack' : 'Discord'),
@@ -85,9 +115,12 @@ const channelView = channels.map(c => ({
   mask: maskWebhook(c.webhook_url),
 }))
 const JOIN_BASE = `${APP_BASE}/join/`
-const memberView = members.map(m => ({ id: m.id, email: m.email }))
-const inviteView = invites.map(i => ({ id: i.id, email: i.email, registered: !!i.registered, join: JOIN_BASE + i.token }))
-const keyFull = activeProject ? String(activeProject.ingest_key || '') : ''
+const memberView = __memberRows.map(m => ({ id: m.id, email: m.email }))
+const inviteView = __inviteRows.map(i => ({ id: i.id, email: i.email, registered: !!i.registered, join: JOIN_BASE + i.token }))
+// keyFull reads the credential from the server-only row, not from the projection.
+// It is bridged deliberately — the reveal control needs it — but as its own
+// named value, so publishing it stays a decision rather than a side effect.
+const keyFull = __activeRow ? String(__activeRow.ingest_key || '') : ''
 const keyMask = maskKey(keyFull)
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only

@@ -4,12 +4,15 @@
 // visitors) are handled by the client guard at the bottom.
 const { db } = await import('@stacksjs/database')
 
-const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+// `__`-prefixed so the server→client bridge cannot publish it — see the note in
+// settings.stx. This page does not leak today only because the word "token"
+// happens not to appear in its client block; that is an accident, not a design.
+const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
 let user: AuthUser | null = null
-if (token) {
+if (__token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
-    user = await Auth.getUserFromToken(token)
+    user = await Auth.getUserFromToken(__token)
   }
   catch { user = null }
 }
@@ -17,7 +20,9 @@ if (token) {
 let projects: ProjectRow[] = []
 if (user) {
   projects = (await db.unsafe(
-    'SELECT id, name, platform, ingest_key, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+    // ingest_key is not selected: nothing on this page renders it, and
+    // `projects` is a server→client bridge candidate.
+    'SELECT id, name, platform, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
     [Number(user.id)],
   )) ?? []
 }

@@ -50,12 +50,19 @@ const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 
 // Authenticate from the token cookie (mirrored from localStorage by
 // login/register). A project the user does not own is never resolved, so no
 // tenant can read another tenant's logs by guessing a project id.
-const token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+// `__token` is prefixed deliberately: extractBridgeData (client-script.ts:775)
+// skips `__`-prefixed bindings, and everything else in this block is a bridge
+// candidate that gets published into the HTML as soon as its NAME appears
+// anywhere in the client script — comments included. Named `token`, this line
+// put the raw session credential in the page source of every /dashboard render,
+// because `useStore('session').token()` appears in the client block below. See
+// the fuller note in settings.stx.
+const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
 let user: AuthUser | null = null
-if (token) {
+if (__token) {
   try {
     const { Auth } = await import('@stacksjs/auth')
-    user = await Auth.getUserFromToken(token)
+    user = await Auth.getUserFromToken(__token)
   }
   catch { user = null }
 }
@@ -68,7 +75,10 @@ let pendingInvites: PendingInvite[] = []
 if (user) {
   const userEmail = String(user.email || '').trim().toLowerCase()
   projects = (await db.unsafe(
-    `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.created_at, p.is_active,
+    // No p.ingest_key. This page has no key UI, and `projects` is a bridge
+    // candidate, so selecting the column published every project's ingest
+    // credential — the only thing routes/logs.ts checks — into the HTML.
+    `SELECT DISTINCT p.id, p.name, p.platform, p.created_at, p.is_active,
             (p.owner_id = $1) AS is_owner
     FROM projects p
     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
@@ -451,12 +461,29 @@ onMount(() => {
           <Icon name="lucide:sun" size="17" class="h-[17px] w-[17px] ic-sun" />
           <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>
-        <StxLink to="/settings" class="icon-btn" x-tooltip="Settings" aria-label="Settings">
-          {{-- 17px to match the sun/moon beside it. The hand-pasted SVG this
-               replaced carried no width/height at all, so it sized itself from
-               the 34px button rather than from its siblings. --}}
-          <Icon name="lucide:settings" size="17" class="h-[17px] w-[17px]" />
-        </StxLink>
+        {{-- x-tooltip lives on this WRAPPER, not on the StxLink, and that is
+             load-bearing. component-renderer.ts:154-159 rewrites any x-* attribute
+             on a COMPONENT to a `:` signal binding unless the name is in its
+             ALPINE_PASSTHROUGH set — and x-tooltip is not in that set, even though
+             the signals runtime lists it in X_HANDLED (signals.ts:2295) as an
+             attribute it consumes itself. So x-tooltip="Settings" on the StxLink
+             became :tooltip="Settings", stx tried to evaluate the bare identifier
+             Settings as an expression, and the page logged
+             "hydration invariant failed after DOMContentLoaded: 1 expression(s)
+             never evaluated — Settings is not defined". Filed upstream. The same
+             trap applies to <Icon> and every other component; a plain element is
+             the only safe host until the two lists agree.
+
+             The span is inline-flex so it behaves as the same flex item the
+             anchor used to be, and the hover area is unchanged. --}}
+        <span class="inline-flex" x-tooltip="Settings">
+          <StxLink to="/settings" class="icon-btn" aria-label="Settings">
+            {{-- 17px to match the sun/moon beside it. The hand-pasted SVG this
+                 replaced carried no width/height at all, so it sized itself from
+                 the 34px button rather than from its siblings. --}}
+            <Icon name="lucide:settings" size="17" class="h-[17px] w-[17px]" />
+          </StxLink>
+        </span>
       </div>
       <nav class="flex flex-wrap gap-1.5 items-center">
         {{-- `to` is interpolated raw here, and only here. Inside a loop the value
