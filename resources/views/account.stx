@@ -32,8 +32,30 @@ function fmtDate(v: string | null | undefined): string {
 // binding, which re-evaluates when the signal it reads changes.
 const displayName = (): string => user()?.name || 'Your account'
 const email = (): string => user()?.email || ''
-const avatarUrl = (): string => user()?.avatar || ''
+// A remote avatar can 404 — a revoked GitHub account, a Gravatar that was
+// removed, a provider that rotates its CDN paths. Without this the <img> stays
+// in the layout and paints the browser's broken-image glyph, which looks like
+// the app is broken rather than like the picture is gone. The flag is reset
+// whenever the URL changes so a later successful load is not suppressed by an
+// earlier failure.
+const avatarFailed = state(false)
+let lastAvatarUrl = ''
+
+const avatarUrl = (): string => {
+  const url = user()?.avatar || ''
+  if (url !== lastAvatarUrl) {
+    lastAvatarUrl = url
+    avatarFailed.set(false)
+  }
+  return url
+}
+const avatarOk = (): boolean => !!avatarUrl() && !avatarFailed()
 const avatarInitial = (): string => initial(user()?.name || user()?.email)
+
+// A named handler rather than an expression in the attribute — ch.7.7/7.9.
+function onAvatarError(): void {
+  avatarFailed.set(true)
+}
 const provider = (): string => user()?.provider || ''
 const memberSince = (): string => fmtDate(user()?.created_at)
 
@@ -84,8 +106,12 @@ onMount(() => {
 
     <section class="mb-5 p-6 bg-panel border border-line rounded-[14px]">
       <div class="flex gap-4 items-center">
-        <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
-        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarUrl()" :text="avatarInitial()"></div>
+        {{-- The initials block is the fallback for BOTH "no avatar" and "the
+             avatar failed to load", so the two :show conditions are exact
+             complements — avatarOk() and !avatarOk() — and exactly one of the
+             pair is ever visible. --}}
+        <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="avatarOk()" :src="avatarUrl()" @error="onAvatarError">
+        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarOk()" :text="avatarInitial()"></div>
         <div class="min-w-0">
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the

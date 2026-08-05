@@ -576,28 +576,102 @@ const modalConfirmLabel = (): string => {
 /** The type-to-confirm gate: the typed name must match exactly. */
 const modalReady = (): boolean => modalInput().trim() === projectName && !modalBusy()
 
+// ---- modal focus management ----
+//
+// The overlay had role="dialog" and aria-modal="true" and behaved like neither.
+// Measured in a browser before this change: opening it left focus on the
+// trigger button (focusInsideDialog:false), six Tab presses walked focus out of
+// the dialog and into the page behind it, and document.body kept
+// overflow:visible so the page scrolled under the overlay. For a confirmation
+// that deletes a project and all of its log entries, that is the wrong
+// behaviour to ship.
+//
+// Not the shipped <Dialog>: it provides role, aria-modal, :show and an Escape
+// handler bound to the dialog ELEMENT — which only fires once focus is already
+// inside, the very thing that was broken here. It has no focus trap, no scroll
+// lock and no focus restore, so adopting it would have removed this page's
+// document-level Escape and added none of what was missing.
+const modalPanel = useRef('modalPanel')
+const scrollLocked = useScrollLock()
+let restoreFocusTo: HTMLElement | null = null
+
+/**
+ * Focusable descendants of the panel, in DOM order.
+ *
+ * Enumerated from the ref'd element rather than from the document — which is
+ * what the strict validator itself suggests, and why this is not a DOM-guard
+ * violation. `:disabled` on the confirm button means the tail of this list
+ * changes as the type-to-confirm gate opens, so it is recomputed per keystroke
+ * rather than cached.
+ */
+function modalFocusables(): HTMLElement[] {
+  const panel = modalPanel.current as HTMLElement | null
+  if (!panel)
+    return []
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'),
+  )
+}
+
+/**
+ * Wrap Tab at the ends of the panel.
+ *
+ * `e.target` is the focused element for a keydown, so this needs no
+ * document.activeElement — which the DOM guard prohibits and which would have
+ * been the obvious way to write it.
+ */
+function onModalKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Tab')
+    return
+  const items = modalFocusables()
+  if (items.length === 0)
+    return
+  const first = items[0]
+  const last = items[items.length - 1]
+  if (e.shiftKey && e.target === first) {
+    e.preventDefault()
+    last.focus()
+  }
+  else if (!e.shiftKey && e.target === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+/** Open with focus moved into the panel, the page locked, and a way back out. */
+function openModal(kind: 'archive' | 'delete', e?: Event): void {
+  restoreFocusTo = (e?.currentTarget as HTMLElement | null) ?? null
+  modalInput.set('')
+  modalNote.set('')
+  modalKind.set(kind)
+  scrollLocked.set(true)
+  // After the :show binding has painted the panel, not before.
+  nextTick(() => modalFocusables()[0]?.focus())
+}
+
 function closeModal(): void {
   modalKind.set('')
   modalInput.set('')
   modalNote.set('')
   modalBusy.set(false)
+  scrollLocked.set(false)
+  // Back to the control that opened it, so a keyboard user is not dropped at
+  // the top of the document.
+  restoreFocusTo?.focus()
+  restoreFocusTo = null
 }
 
-function openArchive(): void {
+function openArchive(e: Event): void {
   // Unarchiving is non-destructive, so it skips the confirm entirely.
   if (!projectActive) {
     unarchive()
     return
   }
-  modalInput.set('')
-  modalNote.set('')
-  modalKind.set('archive')
+  openModal('archive', e)
 }
 
-function openDelete(): void {
-  modalInput.set('')
-  modalNote.set('')
-  modalKind.set('delete')
+function openDelete(e: Event): void {
+  openModal('delete', e)
 }
 
 async function unarchive(): Promise<void> {
@@ -837,7 +911,22 @@ onMount(() => {
                 <div class="mt-0.5 text-subtle text-xs truncate font-mono">{{ c.mask }}</div>
               </div>
               <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" x-tooltip="Send a test message">Test</button>
-              <div class="tgl relative h-[22px] w-[38px] rounded-[999px] bg-line flex-none cursor-pointer [transition:background_0.15s_ease]" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" role="switch" x-tooltip="Enable / disable"></div>
+              {{-- A real <button>, not a <div role="switch">. As a div this had
+                   no tabindex, no key handler and no accessible name: measured
+                   in a browser it reported focusable:false and ariaLabel:null,
+                   so the only control for enabling an alert channel was
+                   unreachable by keyboard and anonymous to a screen reader.
+                   A button gives focusability, Space/Enter activation and the
+                   focus ring for free, which is precisely the behaviour that
+                   should not be hand-rolled.
+
+                   NOT the shipped <Switch>: it renders a 74x38 blue track
+                   (bg-blue-500, sizeConfig.md) against this app's 38x22
+                   var(--ok) one, and its state colours are hard-coded rather
+                   than tokenised. Adopting it means restyling the control to
+                   match the component instead of the product. The a11y gap was
+                   the defect; the platform element closes it. --}}
+              <button type="button" role="switch" aria-label="Enable {{ c.label }}" class="tgl relative h-[22px] w-[38px] rounded-[999px] bg-line flex-none cursor-pointer border-none p-0 appearance-none [transition:background_0.15s_ease]" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
               <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" x-tooltip="Remove">Remove</button>
             </div>
           @empty
@@ -911,7 +1000,7 @@ onMount(() => {
           script tag in one silently disables the document shell. Describe
           syntax in prose here; never quote it. --}}
       <div class="dz-overlay fixed inset-0 z-[60] flex items-center justify-center p-5 bg-[rgba(2,4,10,0.62)] backdrop-blur-[3px] [animation:dz-fade_0.12s_ease]" :show="modalOpen()" @click="closeModal">
-        <div class="w-full max-w-[440px] p-[22px] shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] app-panel" role="dialog" aria-modal="true" @click.stop>
+        <div ref="modalPanel" @keydown="onModalKeydown" class="w-full max-w-[440px] p-[22px] shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] app-panel" role="dialog" aria-modal="true" @click.stop>
           <div class="mb-1 font-semibold text-base">{{ modalTitle() }}</div>
           <p class="mb-4 text-muted text-sm">{{ modalDesc() }}</p>
           <label class="block mb-1.5 text-subtle text-xs">Type <span class="text-muted font-mono">{{ projectName }}</span> to confirm</label>
