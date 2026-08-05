@@ -19,8 +19,6 @@ const crumbs = [
 ]
 </script>
 
-@push('styles')
-@endpush
 
 @section('content')
 @structuredData({

@@ -63,11 +63,16 @@
     they are genuinely site-wide, and injectConfigHeadTags dedupes by exact href
     so nothing doubles up. --}}
 <link rel="stylesheet" href="/marketing.css">
-{{-- Page-local CSS arrives here, inside the document head, via @push('styles').
-    A bare style block in a page would instead be swept into the BODY by
-    process.js:373-384 and then swapped away by the router on the next
-    navigation. --}}
-@stack('styles')
+{{-- No @stack('styles') here, following the same rule default.stx states: add a
+    slot when a page pushes to it, not before. Nine pages used to carry an empty
+    `@push('styles')` / `@endpush` pair — index and all eight compare pages —
+    which made this slot read as a live extension point fed by nine files while
+    it was in fact fed by none, and established the empty pair as an idiom the
+    next page would copy.
+
+    When a page does need head CSS, restore this stack AND push to it from that
+    page. Do not use a bare style block: process.js:373-384 sweeps it into the
+    BODY, where the router swaps it away on the next navigation. --}}
 @endhead
 
 @include('SiteNav')
