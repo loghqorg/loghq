@@ -304,7 +304,7 @@ const projectActive = JSON.parse({{ projectActiveJson }})
 const installText = JSON.parse({{ guideInstallJson }})
 const codeText = JSON.parse({{ guideCodeJson }})
 
-// ---- theme (mirrors the root element; the pre-paint script owns the truth) ----
+// ---- theme (mirrors the root element; stx's color-mode boot owns the truth) ----
 const theme = state(
   document.documentElement.getAttribute('data-theme')
   || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
@@ -765,8 +765,12 @@ onMount(() => {
 @extends('layouts/default')
 
 @section('content')
-{{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
-<script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
+    stx emits the pre-paint boot script from that one declaration — first inside
+    <head>, above every stylesheet, reading the same loghq_theme key and setting
+    the same data-theme attribute this script used to set by hand. The generated
+    one is strictly better: it also resolves 'auto' against
+    prefers-color-scheme, which the three copies here never did. --}}
 
 <div class="px-5 py-10 md:px-10 min-h-[100dvh]">
   <div class="mx-auto max-w-2xl">

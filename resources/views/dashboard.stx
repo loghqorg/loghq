@@ -295,7 +295,8 @@ useSeoMeta({
 const pro = state(false)
 
 // `theme` mirrors the root element's data-theme — the root is owned by no
-// component, and the pre-paint script sets it before hydration to avoid a flash.
+// component, and stx's color-mode boot script — emitted from app.colorMode in
+// config/ui.ts — sets it before hydration to avoid a flash.
 const theme = state(
   document.documentElement.getAttribute('data-theme')
   || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
@@ -418,8 +419,12 @@ onMount(() => {
 @extends('layouts/default')
 
 @section('content')
-{{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
-<script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
+    stx emits the pre-paint boot script from that one declaration — first inside
+    <head>, above every stylesheet, reading the same loghq_theme key and setting
+    the same data-theme attribute this script used to set by hand. The generated
+    one is strictly better: it also resolves 'auto' against
+    prefers-color-scheme, which the three copies here never did. --}}
 
 {{-- Ambient grain overlay: barely-there texture so surfaces aren't sterile-flat. --}}
 <div class="grain" aria-hidden="true"></div>

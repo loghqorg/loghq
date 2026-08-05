@@ -150,6 +150,31 @@ export default {
   // and metas by name/property/charset (document-shell.js:73-75) — so these can
   // land here before the per-page copies are deleted, without doubling up.
   app: {
+    // --- Theme -------------------------------------------------------------
+    // The single declaration of how this app themes. Values MUST match the
+    // useColorMode call in resources/stores/theme.ts — stx emits the pre-paint
+    // boot script from this same option surface, and if the two disagree the
+    // boot script sets one thing and hydration immediately undoes it, which is
+    // worse than having no boot script.
+    //
+    // Declaring it also stands down stx's LEGACY theme guard (#1812). Without
+    // it, loghq shipped two independent pre-paint theme systems that shared no
+    // contract: stx's own guard read localStorage['theme'] — a key nothing in
+    // this app writes — so it always fell through to its default of dark and
+    // stamped class="dark" on <html> at the top of <head>. A light-preference
+    // visitor got the dark class from first paint until hydration corrected it.
+    // The guard against a flash of the wrong theme was itself causing one.
+    //
+    // darkClass is kept because the shipped component library's `dark:`
+    // utilities compile to `.dark .dark\:x`, and those cannot see [data-theme].
+    // The store writes both for the same reason.
+    colorMode: {
+      storageKey: 'loghq_theme',
+      attribute: 'data-theme',
+      darkClass: 'dark',
+      initialMode: 'auto',
+    },
+
     head: {
       title: 'loghq',
       lang: 'en',

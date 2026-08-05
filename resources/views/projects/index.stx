@@ -58,8 +58,9 @@ useSeoMeta({
 // state is a binding now.
 //
 // `theme` is a MIRROR of the root element's data-theme, not the source of truth:
-// no component owns the root element, and the pre-paint script below sets it
-// before hydration to avoid a flash of the wrong theme. The signal exists so the
+// no component owns the root element, and stx's color-mode boot script — emitted
+// from app.colorMode in config/ui.ts — sets it before hydration to avoid a flash
+// of the wrong theme. The signal exists so the
 // button's own state can be a binding (:data-t) instead of a manual repaint.
 const theme = state(
   document.documentElement.getAttribute('data-theme')
@@ -89,8 +90,12 @@ function logout(): void {
 @extends('layouts/default')
 
 @section('content')
-{{-- Apply the saved theme before first paint (no flash of the wrong theme). --}}
-<script>(function(){try{var t=localStorage.getItem('loghq_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()</script>
+{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
+    stx emits the pre-paint boot script from that one declaration — first inside
+    <head>, above every stylesheet, reading the same loghq_theme key and setting
+    the same data-theme attribute this script used to set by hand. The generated
+    one is strictly better: it also resolves 'auto' against
+    prefers-color-scheme, which the three copies here never did. --}}
 
 <div class="px-5 py-10 md:px-10 min-h-[100dvh]">
   <div class="mx-auto max-w-4xl">
