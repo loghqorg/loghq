@@ -56,34 +56,56 @@ let needsOnboarding = false
 let __channelRows: AlertChannelRow[] = []
 let __memberRows: MemberRow[] = []
 let __inviteRows: InviteRow[] = []
+// Distinguishes "this owner has no projects" from "the database did not
+// answer". Only the first should offer to create one.
+let projectsUnavailable = false
 if (user) {
-  // Owned projects only — settings is the owner's admin surface.
-  __projectRows = (await db.unsafe(
-    'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
-    [Number(user.id)],
-  )) ?? []
-  if (__projectRows.length === 0)
-    needsOnboarding = true
-  else
-    __activeRow = __projectRows.find(p => p.id === requestedProject) || __projectRows.find(p => p.id === cookieProject) || __projectRows[0]
+  // All four reads share one try. They are one unit of work: the last three are
+  // scoped to the project the first resolves, so partial success here would
+  // render an admin surface for a project whose members and channels silently
+  // came back empty — which reads as "everyone was removed" rather than as a
+  // fault. Unguarded, a throw truncated the whole page to its skeleton on a
+  // 200; see the note in dashboard.stx.
+  try {
+    // Owned projects only — settings is the owner's admin surface.
+    __projectRows = (await db.unsafe(
+      'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+      [Number(user.id)],
+    )) ?? []
+    if (__projectRows.length === 0)
+      needsOnboarding = true
+    else
+      __activeRow = __projectRows.find(p => p.id === requestedProject) || __projectRows.find(p => p.id === cookieProject) || __projectRows[0]
 
-  if (__activeRow) {
-    __channelRows = (await db.unsafe(
-      `SELECT id, type, label, webhook_url, enabled, created_at
-      FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
-      [__activeRow.id],
-    )) ?? []
-    __memberRows = (await db.unsafe(
-      `SELECT m.id, m.email, m.role FROM project_members m
-      WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
-      [__activeRow.id],
-    )) ?? []
-    __inviteRows = (await db.unsafe(
-      `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
-      FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
-      WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
-      [__activeRow.id],
-    )) ?? []
+    if (__activeRow) {
+      __channelRows = (await db.unsafe(
+        `SELECT id, type, label, webhook_url, enabled, created_at
+        FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
+        [__activeRow.id],
+      )) ?? []
+      __memberRows = (await db.unsafe(
+        `SELECT m.id, m.email, m.role FROM project_members m
+        WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
+        [__activeRow.id],
+      )) ?? []
+      __inviteRows = (await db.unsafe(
+        `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
+        FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
+        WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
+        [__activeRow.id],
+      )) ?? []
+    }
+  }
+  catch {
+    // needsOnboarding stays false: a database fault must not send an owner with
+    // existing projects to the create-your-first-app flow.
+    projectsUnavailable = true
+    needsOnboarding = false
+    __projectRows = []
+    __activeRow = null
+    __channelRows = []
+    __memberRows = []
+    __inviteRows = []
   }
 }
 
@@ -764,7 +786,15 @@ onMount(() => {
       <div class="py-24 text-center text-sm text-subtle">Loading…</div>
     @endif
 
-
+    {{-- Say the database is unreachable rather than leaving the skeleton above
+         in place, which is what an unguarded throw produced: HTTP 200, a page
+         truncated to "Loading…", and nothing to act on. --}}
+    @if (user && projectsUnavailable)
+      <div class="py-24 text-center">
+        <p class="text-sm text-muted"><span class="font-semibold text-ink">Can't reach your settings right now.</span> Make sure Postgres is provisioned.</p>
+        <p class="mt-2 text-xs text-subtle">Nothing has been changed — reload once the database is back.</p>
+      </div>
+    @endif
 
     @if (user && activeProject)
       <div class="mb-6">

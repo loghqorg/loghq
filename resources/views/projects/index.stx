@@ -18,13 +18,23 @@ if (__token) {
 }
 
 let projects: ProjectRow[] = []
+// A failed lookup is not an empty list. Without this flag the page would say
+// "no apps yet" and offer to create one, which is the wrong thing to tell
+// someone whose apps exist and whose database is briefly unreachable.
+let projectsUnavailable = false
 if (user) {
-  projects = (await db.unsafe(
-    // ingest_key is not selected: nothing on this page renders it, and
-    // `projects` is a server→client bridge candidate.
-    'SELECT id, name, platform, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
-    [Number(user.id)],
-  )) ?? []
+  try {
+    projects = (await db.unsafe(
+      // ingest_key is not selected: nothing on this page renders it, and
+      // `projects` is a server→client bridge candidate.
+      'SELECT id, name, platform, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+      [Number(user.id)],
+    )) ?? []
+  }
+  catch {
+    projectsUnavailable = true
+    projects = []
+  }
 }
 
 function fromNow(iso: string | null | undefined): string {
@@ -119,11 +129,22 @@ function logout(): void {
           <span class="shrink-0 text-subtle text-xs">{{ fromNow(p.created_at) }}</span>
         </StxLink>
       @empty
+        {{-- Two different empty states. "No apps yet" is a fact about the
+             account; projectsUnavailable is a fact about the database. Showing
+             the first when the second is true tells someone their apps are gone
+             and invites them to recreate one. --}}
+        @if (projectsUnavailable)
+        <div class="px-5 py-16 text-center bg-panel border border-line rounded-xl">
+          <div class="mb-1 font-medium text-base">Can't reach your apps right now</div>
+          <div class="text-sm text-subtle">Make sure Postgres is provisioned. Nothing has been lost — reload once the database is back.</div>
+        </div>
+        @else
         <div class="px-5 py-16 text-center bg-panel border border-line rounded-xl">
           <div class="mb-1 font-medium text-base">No apps yet</div>
           <div class="mb-5 text-sm text-subtle">Create your first app to start capturing errors.</div>
           <StxLink to="/projects/new" class="inline-block px-4 py-2.5 font-semibold text-sm bg-accent text-white rounded-[10px] hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)]">Create an app</StxLink>
         </div>
+        @endif
       @endforelse
     @endif
 

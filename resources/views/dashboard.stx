@@ -72,27 +72,49 @@ let projects: ProjectRow[] = []
 let activeProject: ProjectRow | null = null
 let needsOnboarding = false
 let pendingInvites: PendingInvite[] = []
+// Set when the project lookup itself fails, as opposed to `live` below, which
+// covers the log-stream queries. The two are separate because they degrade
+// differently: without the stream you still get chrome and a filter bar to
+// retry from; without the project list there is no page to render at all.
+let projectsUnavailable = false
 if (user) {
   const userEmail = String(user.email || '').trim().toLowerCase()
-  projects = (await db.unsafe(
-    // No p.ingest_key. This page has no key UI, and `projects` is a bridge
-    // candidate, so selecting the column published every project's ingest
-    // credential — the only thing routes/logs.ts checks — into the HTML.
-    `SELECT DISTINCT p.id, p.name, p.platform, p.created_at, p.is_active,
-            (p.owner_id = $1) AS is_owner
-    FROM projects p
-    LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
-    WHERE p.owner_id = $1 OR m.email IS NOT NULL
-    ORDER BY p.created_at DESC NULLS LAST, p.id`,
-    [Number(user.id), userEmail],
-  )) ?? []
-  pendingInvites = (await db.unsafe(
-    `SELECT i.token, p.name AS project_name FROM project_invites i
-    JOIN projects p ON p.id = i.project_id
-    WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
-    [userEmail],
-  )) ?? []
-  if (projects.length === 0 && pendingInvites.length === 0)
+  // These two used to sit outside any try/catch, and the failure mode was not
+  // the 500 you would expect. stx isolates a throwing view (#1810) and renders
+  // what it already had, so a dropped connection or a table missing after a
+  // half-applied migration produced HTTP 200 with the page truncated to
+  // "Loading…" — a skeleton that never resolves, with no error anywhere.
+  // Measured by renaming project_invites out from under a live server: 22845
+  // bytes of dashboard became 14842 bytes of permanent spinner.
+  try {
+    projects = (await db.unsafe(
+      // No p.ingest_key. This page has no key UI, and `projects` is a bridge
+      // candidate, so selecting the column published every project's ingest
+      // credential — the only thing routes/logs.ts checks — into the HTML.
+      `SELECT DISTINCT p.id, p.name, p.platform, p.created_at, p.is_active,
+              (p.owner_id = $1) AS is_owner
+      FROM projects p
+      LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
+      WHERE p.owner_id = $1 OR m.email IS NOT NULL
+      ORDER BY p.created_at DESC NULLS LAST, p.id`,
+      [Number(user.id), userEmail],
+    )) ?? []
+    pendingInvites = (await db.unsafe(
+      `SELECT i.token, p.name AS project_name FROM project_invites i
+      JOIN projects p ON p.id = i.project_id
+      WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
+      [userEmail],
+    )) ?? []
+  }
+  catch {
+    // Deliberately no onboarding bounce from here: needsOnboarding stays false,
+    // so a transient database fault cannot redirect an existing user to
+    // /projects/new and invite them to create a duplicate project.
+    projectsUnavailable = true
+    projects = []
+    pendingInvites = []
+  }
+  if (!projectsUnavailable && projects.length === 0 && pendingInvites.length === 0)
     needsOnboarding = true
   else if (projects.length > 0)
     activeProject = projects.find(p => p.id === requestedProject) || projects.find(p => p.id === cookieProject) || projects[0]
@@ -426,7 +448,18 @@ onMount(() => {
       <div class="py-24 text-center text-sm text-subtle">Setting up your workspace…</div>
     @endif
 
-    @if (user && !needsOnboarding)
+    {{-- The project lookup failed. Say so, rather than leaving the page as the
+         "Loading…" skeleton above — which is exactly what it did before, on a
+         200, forever. Wording matches the stream's own fault state further down
+         so the two read as one condition when they happen together. --}}
+    @if (user && projectsUnavailable)
+      <div class="py-24 text-center">
+        <p class="text-sm text-muted"><span class="font-semibold text-ink">Can't reach your projects right now.</span> Make sure Postgres is provisioned.</p>
+        <p class="mt-2 text-xs text-subtle">Nothing has been lost — reload once the database is back.</p>
+      </div>
+    @endif
+
+    @if (user && !needsOnboarding && !projectsUnavailable)
 
     @if (pendingInvites.length)
       <div class="mb-7">
