@@ -297,18 +297,11 @@ const pro = state(false)
 // `theme` mirrors the root element's data-theme — the root is owned by no
 // component, and stx's color-mode boot script — emitted from app.colorMode in
 // config/ui.ts — sets it before hydration to avoid a flash.
-const theme = state(
-  document.documentElement.getAttribute('data-theme')
-  || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
-)
-
 function toggleTheme(): void {
   // The theme store owns persistence, the prefers-color-scheme listener, the
   // cross-tab storage listener and the dark-class write. This used to do the
   // first of those by hand and none of the rest, in three separate files.
-  const next = theme() === 'dark' ? 'light' : 'dark'
   useStore('theme').toggle()
-  theme.set(next)
 }
 
 function signOut(): void {
@@ -495,7 +488,7 @@ onMount(() => {
         @endif
         <StxLink to="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</StxLink>
         <StxLink to="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</StxLink>
-        <button class="icon-btn theme-btn" :data-t="theme()" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
+        <button class="icon-btn theme-btn" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
           <Icon name="lucide:sun" size="17" class="h-[17px] w-[17px] ic-sun" />
           <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>

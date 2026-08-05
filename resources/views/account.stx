@@ -76,9 +76,15 @@ onMount(() => {
   const session = useStore('session')
   session.loadViewer()
   effect(() => {
-    user.set(session.viewer())
-    pro.set(session.pro())
-    loaded.set(session.viewerLoaded())
+    // One batch, three writes. Without it each set() flushes on its own, so a
+    // render can observe `loaded` still false while `user` already holds the
+    // viewer — the skeleton and the value both showing for a frame. batch()
+    // defers the flush until all three have landed.
+    batch(() => {
+      user.set(session.viewer())
+      pro.set(session.pro())
+      loaded.set(session.viewerLoaded())
+    })
   })
 })
 </script>
@@ -109,7 +115,15 @@ onMount(() => {
         {{-- The initials block is the fallback for BOTH "no avatar" and "the
              avatar failed to load", so the two :show conditions are exact
              complements — avatarOk() and !avatarOk() — and exactly one of the
-             pair is ever visible. --}}
+             pair is ever visible.
+
+             `:src` deliberately has NO static counterpart, unlike every other
+             binding in this app. There is no server-known avatar: it arrives
+             from /api/me after paint. A static src="" would be worse than
+             nothing — the browser resolves an empty src against the current
+             URL and requests the page again as an image. The element is hidden
+             by :show until avatarOk() is true, so there is no first-paint state
+             to encode. --}}
         <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="avatarOk()" :src="avatarUrl()" @error="onAvatarError">
         <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarOk()" :text="avatarInitial()"></div>
         <div class="min-w-0">

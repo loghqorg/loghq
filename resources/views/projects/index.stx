@@ -54,26 +54,18 @@ useSeoMeta({
 </script>
 
 <script client>
-// Theme + logout. The lookup-and-listener wiring these used is gone; the button
-// state is a binding now.
+// Theme + logout. The lookup-and-listener wiring these used is gone.
 //
-// `theme` is a MIRROR of the root element's data-theme, not the source of truth:
-// no component owns the root element, and stx's color-mode boot script — emitted
-// from app.colorMode in config/ui.ts — sets it before hydration to avoid a flash
-// of the wrong theme. The signal exists so the
-// button's own state can be a binding (:data-t) instead of a manual repaint.
-const theme = state(
-  document.documentElement.getAttribute('data-theme')
-  || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
-)
-
+// The theme button holds no state at all now. Its icon swap is a CSS rule keyed
+// off the root element's data-theme (public/tokens.css), which stx's color-mode
+// boot script sets before first paint from app.colorMode in config/ui.ts. The
+// mirror signal this file used to keep — and the :data-t binding it fed — meant
+// neither icon matched until hydration, so the button rendered empty.
 function toggleTheme(): void {
   // The theme store owns persistence, the prefers-color-scheme listener, the
   // cross-tab storage listener and the dark-class write. This used to do the
   // first of those by hand and none of the rest, in three separate files.
-  const next = theme() === 'dark' ? 'light' : 'dark'
   useStore('theme').toggle()
-  theme.set(next)
 }
 
 // Navigation side effect, not rendering — clears credentials and leaves.
@@ -106,7 +98,7 @@ function logout(): void {
         <p class="mt-2 text-sm text-subtle">Pick an app to track, or create a new one.</p>
       </div>
       <div class="flex gap-2.5 items-center">
-        <button class="inline-flex items-center justify-center h-9 w-9 border border-line rounded-[10px] text-subtle bg-panel cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] theme-btn" :data-t="theme()" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
+        <button class="inline-flex items-center justify-center h-9 w-9 border border-line rounded-[10px] text-subtle bg-panel cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] theme-btn" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
           <Icon name="lucide:sun" size="18" class="h-[18px] w-[18px] ic-sun" />
           <Icon name="lucide:moon" size="18" class="h-[18px] w-[18px] ic-moon" />
         </button>

@@ -57,6 +57,15 @@ function registerThemeStore() {
     // Reading one inside a directive registers no dependency, so the binding
     // would never update. Mirror it into a real signal via subscribe.
     const mode = state<'light' | 'dark'>(cm.mode)
+    // The unsubscribe cm.subscribe returns is deliberately discarded: this
+    // subscription's lifetime IS the page's. defineStore runs a factory once and
+    // the store then survives fragment swaps, which was worth checking rather
+    // than assuming — useColorMode registers its own onDestroy, and onDestroy
+    // callbacks are flushed on the stx:load the router emits after every swap,
+    // so a store outliving its composable's teardown is a plausible way for the
+    // theme to go deaf after one navigation. Measured in a browser: after an SPA
+    // navigation useStore('theme') is the SAME object, mode() still tracks, and
+    // toggling still writes data-theme and the dark class. No leak, no deafness.
     cm.subscribe((resolved) => {
       mode.set(resolved)
       // Crosswind's darkMode defaults to the *class* strategy, so every `dark:`

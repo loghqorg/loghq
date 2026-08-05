@@ -133,10 +133,24 @@ body {
   display: none;
 }
 
-.theme-btn[data-t='light'] .ic-sun {
+/* Keyed off the ROOT element, not off the button.
+ *
+ * These used to read `.theme-btn[data-t='light']`, where data-t came from a
+ * `:data-t="theme()"` binding — a client signal. So before hydration the button
+ * carried no data-t at all, neither rule matched, and the pair above left BOTH
+ * icons display:none: the theme control rendered as an empty box on every cold
+ * load. There is no server-known theme to put in a static counterpart either,
+ * so the fix is not a static attribute; it is keying off something that IS set
+ * before first paint.
+ *
+ * stx's color-mode boot script sets data-theme on the root above every
+ * stylesheet (config/ui.ts app.colorMode), and useColorMode keeps it current
+ * afterwards, so the correct icon paints immediately and the mirror signal the
+ * binding needed is gone from all three pages. */
+:root[data-theme='light'] .theme-btn .ic-sun {
   display: block;
 }
 
-.theme-btn[data-t='dark'] .ic-moon {
+:root[data-theme='dark'] .theme-btn .ic-moon {
   display: block;
 }

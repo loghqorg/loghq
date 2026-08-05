@@ -59,8 +59,13 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     // One write. The cookie IS the session — every server-rendered page
     // authenticates from it — so there is no localStorage copy to mirror.
     useStore('session').token.set(token)
+    // Through the store, not localStorage directly. `user` is a
+    // useLocalStorage signal the session store owns (session.ts:56), so a raw
+    // setItem wrote the same key behind the signal's back: nothing subscribed
+    // re-rendered, and the store's own copy stayed stale until the next reload.
+    // It was also write-only from here — the account page reads the signal.
     if (data.user)
-      localStorage.setItem('user', JSON.stringify(data.user))
+      useStore('session').user.set(data.user)
     // New accounts have no apps yet: go to create-app — unless they arrived from
     // an invite link, in which case land on the dashboard where the join banner
     // is waiting for them to accept.

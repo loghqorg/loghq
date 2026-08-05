@@ -49,8 +49,13 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     // reload afterwards to make the server see it. useCookie serialises path,
     // max-age, SameSite and Secure itself.
     useStore('session').token.set(token)
+    // Through the store, not localStorage directly. `user` is a
+    // useLocalStorage signal the session store owns (session.ts:56), so a raw
+    // setItem wrote the same key behind the signal's back: nothing subscribed
+    // re-rendered, and the store's own copy stayed stale until the next reload.
+    // It was also write-only from here — the account page reads the signal.
     if (data.user)
-      localStorage.setItem('user', JSON.stringify(data.user))
+      useStore('session').user.set(data.user)
     navigate('/dashboard')
   }
   catch {

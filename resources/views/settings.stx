@@ -304,18 +304,16 @@ const projectActive = JSON.parse({{ projectActiveJson }})
 const installText = JSON.parse({{ guideInstallJson }})
 const codeText = JSON.parse({{ guideCodeJson }})
 
-// ---- theme (mirrors the root element; stx's color-mode boot owns the truth) ----
-const theme = state(
-  document.documentElement.getAttribute('data-theme')
-  || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
-)
+// ---- theme ----
+// No mirror signal. The icon swap is a CSS rule keyed off the root element's
+// data-theme (public/tokens.css), which stx's color-mode boot sets before first
+// paint — so the right icon is painted rather than bound, and there is nothing
+// here for a signal to hold.
 function toggleTheme(): void {
   // The theme store owns persistence, the prefers-color-scheme listener, the
   // cross-tab storage listener and the dark-class write. This used to do the
   // first of those by hand and none of the rest, in three separate files.
-  const next = theme() === 'dark' ? 'light' : 'dark'
   useStore('theme').toggle()
-  theme.set(next)
 }
 
 const authHeaders = (): Record<string, string> => ({
@@ -778,7 +776,7 @@ onMount(() => {
     <header class="flex gap-4 items-center justify-between mb-7">
       <StxLink to="/projects" class="wordmark-link"><h1 class="leading-none text-2xl wordmark">loghq</h1></StxLink>
       <div class="flex gap-2 items-center">
-        <button :data-t="theme()" @click="toggleTheme" class="icon-btn theme-btn" x-tooltip="Toggle theme" aria-label="Toggle theme">
+        <button @click="toggleTheme" class="icon-btn theme-btn" x-tooltip="Toggle theme" aria-label="Toggle theme">
           <Icon name="lucide:sun" size="17" class="h-[17px] w-[17px] ic-sun" />
           <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>
@@ -960,7 +958,7 @@ onMount(() => {
                    than tokenised. Adopting it means restyling the control to
                    match the component instead of the product. The a11y gap was
                    the defect; the platform element closes it. --}}
-              <button type="button" role="switch" aria-label="Enable {{ c.label }}" class="tgl relative h-[22px] w-[38px] rounded-[999px] bg-line flex-none cursor-pointer border-none p-0 appearance-none [transition:background_0.15s_ease]" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
+              <button type="button" role="switch" aria-label="Enable {{ c.label }}" data-on="{{ c.enabled ? '1' : '0' }}" aria-checked="{{ c.enabled ? 'true' : 'false' }}" class="tgl relative h-[22px] w-[38px] rounded-[999px] bg-line flex-none cursor-pointer border-none p-0 appearance-none [transition:background_0.15s_ease]" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
               <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" x-tooltip="Remove">Remove</button>
             </div>
           @empty
@@ -973,8 +971,8 @@ onMount(() => {
         <div class="px-5 py-5 app-panel">
           <div class="mb-3.5 font-semibold text-sm">Add a channel</div>
           <div class="grid gap-2 grid-cols-2 mb-3">
-            <button type="button" @click="chType.set('slack')" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-slack">Slack</button>
-            <button type="button" @click="chType.set('discord')" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-discord">Discord</button>
+            <button type="button" @click="chType.set('slack')" data-sel="1" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-slack">Slack</button>
+            <button type="button" @click="chType.set('discord')" data-sel="0" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-discord">Discord</button>
           </div>
           <input :model="whUrl" :placeholder="whPlaceholder()" type="url" class="mb-2 px-3.5 py-2.5 w-full text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] font-mono" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
           <input :model="whLabel" type="text" class="mb-3 px-3.5 py-2.5 w-full text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
