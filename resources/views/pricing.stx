@@ -96,8 +96,12 @@ async function upgrade(): Promise<void> {
 
       <div class="p-7 bg-panel border rounded-2xl border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] shadow-[0_12px_40px_color-mix(in_srgb,var(--accent)_12%,transparent)]">
         <div class="font-semibold text-accent text-sm tracking-wider uppercase">Pro</div>
+        {{-- Monthly is the resting state (`state('monthly')` at :13), so it is
+             written statically and `:text` takes over once the toggle is live.
+             As `{{ }}` in the body, the Pro price was cloaked — the price on the
+             pricing page did not exist for a crawler or before hydration. --}}
         <div class="mt-3">
-          <span class="text-4xl wordmark">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span><span class="text-sm text-subtle">{{ interval() === 'yearly' ? ' / year' : ' / month' }}</span>
+          <span class="text-4xl wordmark" :text="interval() === 'yearly' ? '$190' : '$19'">$19</span><span class="text-sm text-subtle" :text="interval() === 'yearly' ? ' / year' : ' / month'"> / month</span>
         </div>
         <p class="mt-2 text-muted text-sm">For teams and sites that are growing.</p>
         <ul class="mt-6 space-y-2.5 text-sm">
@@ -106,7 +110,7 @@ async function upgrade(): Promise<void> {
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Full retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Priority support</li>
         </ul>
-        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease] active:translate-y-px bg-accent text-white disabled:opacity-60 disabled:cursor-default">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
+        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease] active:translate-y-px bg-accent text-white disabled:opacity-60 disabled:cursor-default" :text="loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
         @if (err())
           <p class="mt-3 text-center text-xs text-[#ef4444]">{{ err() }}</p>
         @endif

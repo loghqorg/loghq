@@ -85,16 +85,16 @@ onMount(() => {
     <section class="mb-5 p-6 bg-panel border border-line rounded-[14px]">
       <div class="flex gap-4 items-center">
         <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="!!avatarUrl()" :src="avatarUrl()">
-        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarUrl()">{{ avatarInitial() }}</div>
+        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarUrl()" :text="avatarInitial()"></div>
         <div class="min-w-0">
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the
               skeleton needs a fixed box the real text must not inherit. --}}
           <div class="w-[160px] h-5 rounded-md bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] [animation:loghq-pulse_1.4s_ease-in-out_infinite] motion-reduce:[animation:none]" :show="!loaded()"></div>
-          <div class="font-semibold text-lg" :show="loaded()">{{ displayName() }}</div>
-          <div class="mt-1.5 text-muted text-sm">{{ email() }}</div>
+          <div class="font-semibold text-lg" :show="loaded()" :text="displayName()"></div>
+          <div class="mt-1.5 text-muted text-sm" :text="email()"></div>
         </div>
-        <span class="ml-auto px-2.5 py-1 border border-line rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase text-muted" :show="!!provider()">{{ provider() }}</span>
+        <span class="ml-auto px-2.5 py-1 border border-line rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase text-muted" :show="!!provider()" :text="provider()"></span>
       </div>
     </section>
 
@@ -103,7 +103,10 @@ onMount(() => {
         <div>
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Plan</div>
           <div class="mt-1 font-semibold text-base">
-            {{ pro() ? 'Pro' : 'Free' }}{{-- The badge base without its `text-muted`/`border-line`: this is the Pro
+            {{-- Its own <span> because the parent also holds the badge below,
+                 and `:text` on the parent would erase it. Free is the resting
+                 state: `pro` is false until /api/me answers. --}}
+            <span :text="pro() ? 'Pro' : 'Free'">Free</span>{{-- The badge base without its `text-muted`/`border-line`: this is the Pro
                  variant and both would fight the accent pair below. `.badge-pro`
                  used to win by cascade order inside one <style> block; two
                  utilities of equal specificity are decided by their order in the
@@ -121,7 +124,7 @@ onMount(() => {
       <div class="flex items-center justify-between px-6 py-4 [border-top:1px_solid_var(--border)]">
         <div>
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Member since</div>
-          <div class="mt-1 text-base text-muted">{{ memberSince() }}</div>
+          <div class="mt-1 text-base text-muted" :text="memberSince()"></div>
         </div>
         <StxLink to="/dashboard" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Open dashboard</StxLink>
       </div>

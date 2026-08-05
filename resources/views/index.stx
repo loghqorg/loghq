@@ -69,7 +69,12 @@ onMount(() => {
       <h1 class="hero-title">Your logs, finally worth reading.</h1>
       <p class="hero-sub">Stream every log line from your app into a fast, searchable UI. Filter by level, search messages, and inspect structured context instead of tailing a file.</p>
       <div class="hero-actions">
-        <a class="btn primary" :href="isAuthed() ? '/dashboard' : '/register'">{{ isAuthed() ? 'Go to dashboard' : 'Get started' }}</a>
+        {{-- Label and href carry their logged-OUT state statically: that is the
+             SSR truth, it is what a crawler and a first-time visitor see, and it
+             works with no JavaScript. The bindings upgrade it for a signed-in
+             visitor after hydration. As `{{ }}` in the body this button was
+             cloaked — display:none until the runtime booted. --}}
+        <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
         <a class="btn ghost" href="https://github.com/stacksjs/loghq">View source</a>
       </div>
     </div>
@@ -131,7 +136,12 @@ onMount(() => {
     <div class="cta-band">
       <h2>Stop tailing log files.</h2>
       <div class="cta-actions">
-        <a class="btn primary" :href="isAuthed() ? '/dashboard' : '/register'">{{ isAuthed() ? 'Go to dashboard' : 'Get started' }}</a>
+        {{-- Label and href carry their logged-OUT state statically: that is the
+             SSR truth, it is what a crawler and a first-time visitor see, and it
+             works with no JavaScript. The bindings upgrade it for a signed-in
+             visitor after hydration. As `{{ }}` in the body this button was
+             cloaked — display:none until the runtime booted. --}}
+        <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
         <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
       </div>
     </div>

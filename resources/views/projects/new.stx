@@ -100,9 +100,8 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
         </select>
       </div>
 
-      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-solid">
-        {{ loading() ? 'Creating…' : 'Create app' }}
-      </button>
+      {{-- Static label + `:text`, never `{{ }}` in the body — see login.stx. --}}
+      <button type="submit" :disabled="loading()" :text="loading() ? 'Creating…' : 'Create app'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create app</button>
     </form>
   </div>
 </div>

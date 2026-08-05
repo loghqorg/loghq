@@ -95,9 +95,14 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
         <input name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 
-      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-solid">
-        {{ loading() ? 'Signing in…' : 'Sign in' }}
-      </button>
+      {{-- The label is a `:text` binding with the resting label written into the
+           element, not a `{{ }}` expression in the body. stx cloaks any element
+           whose TEXT contains an unresolved expression (misc-directives.ts:228)
+           and the cloak rule is `[x-cloak]{display:none !important}` — so the
+           form's only submit control was display:none until the client runtime
+           booted. `:text` overwrites the static label after hydration and never
+           cloaks, so the button is present and pressable at first paint. --}}
+      <button type="submit" :disabled="loading()" :text="loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
     </form>
 
     @if (oauthError())
