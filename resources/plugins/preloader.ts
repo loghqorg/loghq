@@ -181,15 +181,22 @@ export async function loadAutoImports() {
     }
   }
 
-  // 2. Load all functions from resources/functions
+  // 2. Load all functions from resources/functions — IF the directory exists.
+  //
+  // It is optional, and loghq no longer has one: its two files were orphans
+  // that nothing imported, and dark.ts was a second theme source competing with
+  // resources/stores/theme.ts. Glob.scan() throws ENOENT on a missing cwd
+  // rather than yielding nothing, and this preloader runs from bunfig.toml's
+  // `preload`, so an unguarded scan takes down EVERY bun process in the project
+  // — not just the ones that wanted auto-imports.
+  const { existsSync } = await import('node:fs')
   const functionsPath = path.resourcesPath('functions')
   const glob = new Glob('**/*.ts')
+  const functionFiles = existsSync(functionsPath)
+    ? glob.scan({ cwd: functionsPath, absolute: true, onlyFiles: true })
+    : []
 
-  for await (const file of glob.scan({
-    cwd: functionsPath,
-    absolute: true,
-    onlyFiles: true,
-  })) {
+  for await (const file of functionFiles) {
     if (file.endsWith('.d.ts')) continue
 
     try {
