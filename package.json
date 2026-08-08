@@ -71,11 +71,11 @@
   },
   "dependencies": {
     "bun-plugin-auto-imports": "^0.4.1",
-    "stacks": "^0.70.201"
+    "stacks": "^0.70.324"
   },
   "devDependencies": {
-    "@iconify-json/lucide": "^1.2.121",
-    "better-dx": "^0.2.15"
+    "@iconify-json/lucide": "^1.2.122",
+    "better-dx": "^0.2.22"
   },
   "git-hooks": {
     "pre-commit": {
