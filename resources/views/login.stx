@@ -17,53 +17,54 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/login' }] })
 
 <script client>
 // Token auth via stx client directives. Uncontrolled inputs read from the submit
-// event; error/loading are signals.
+// event.
 const error = state('')
-const loading = state(false)
 // OAuth failures come back as ?error= on a full-page redirect from the provider,
 // so this is read once at hydration rather than watched. Separate from `error`
 // (which is the credential form's own failure) because both can be on screen.
 const oauthError = state(new URLSearchParams(location.search).get('error') || '')
 
-async function handleSubmit(e: SubmitEvent): Promise<void> {
-  e.preventDefault()
-  if (loading())
-    return
-  const form = e.target
-  loading.set(true)
-  error.set('')
-  try {
-    const res = await fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: form.elements.email.value, password: form.elements.password.value }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      error.set(data.message || 'Invalid email or password.')
-      return
-    }
-    const token = data.token || data.access_token || ''
+// useMutation owns the request, the in-flight flag and the failure path. What it
+// replaced was a manual loading toggle, a try/catch/finally, a res.ok branch and
+// a json().catch(() => ({})) — all of it the same shape on five other pages.
+//
+// `error` stays a page signal rather than binding `signIn.error()` directly. The
+// primitive's error signal is the thrown message, which is prefixed:
+// "HTTP 401: Unauthorized - Incorrect email or password". Measured against the
+// real runtime, not assumed. `err.data` is the server's body, so the page shows
+// what the server actually said (stx#1848 made that reachable).
+//
+// A network failure has no `.data`, so it falls through to the generic copy.
+const signIn = useMutation('/login', {
+  onError(err: { data?: { message?: string } }) {
+    error.set(err.data?.message || 'Invalid email or password.')
+  },
+  onSuccess(data: { token?: string, access_token?: string, user?: unknown }) {
     // One write. The cookie IS the session — every server-rendered page
     // authenticates from it — so there is no localStorage copy to mirror and no
     // reload afterwards to make the server see it. useCookie serialises path,
     // max-age, SameSite and Secure itself.
-    useStore('session').token.set(token)
+    useStore('session').token.set(data.token || data.access_token || '')
     // Through the store, not localStorage directly. `user` is a
-    // useLocalStorage signal the session store owns (session.ts:56), so a raw
-    // setItem wrote the same key behind the signal's back: nothing subscribed
-    // re-rendered, and the store's own copy stayed stale until the next reload.
-    // It was also write-only from here — the account page reads the signal.
+    // useLocalStorage signal the session store owns, so a raw setItem wrote the
+    // same key behind the signal's back: nothing subscribed re-rendered, and the
+    // store's own copy stayed stale until the next reload.
     if (data.user)
       useStore('session').user.set(data.user)
     navigate('/dashboard')
-  }
-  catch {
-    error.set('Something went wrong. Please try again.')
-  }
-  finally {
-    loading.set(false)
-  }
+  },
+})
+
+async function handleSubmit(e: SubmitEvent): Promise<void> {
+  e.preventDefault()
+  if (signIn.loading())
+    return
+  const form = e.target
+  error.set('')
+  // mutate() rethrows after onError so a caller can await the outcome; this one
+  // has already handled it, and an unhandled rejection here would surface as a
+  // console error on a form the user has been told about properly.
+  await signIn.mutate({ email: form.elements.email.value, password: form.elements.password.value }).catch(() => {})
 }
 </script>
 
@@ -107,7 +108,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
           form's only submit control was display:none until the client runtime
           booted. `:text` overwrites the static label after hydration and never
           cloaks, so the button is present and pressable at first paint. --}}
-      <button type="submit" :disabled="loading()" :text="loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
+      <button type="submit" :disabled="signIn.loading()" :text="signIn.loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
     </form>
 
     @if (oauthError())

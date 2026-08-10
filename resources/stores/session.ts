@@ -55,6 +55,7 @@ function registerSessionStore() {
     // default is widened so the signal is MeUser | null rather than null.
     const user: StxSignal<MeUser | null> = useLocalStorage('user', null as MeUser | null)
 
+
     // ---- the viewer -------------------------------------------------------
     // GET /api/me was fetched independently by account.stx and dashboard.stx,
     // each with its own `pro` signal, so navigating between the two refetched
@@ -62,14 +63,58 @@ function registerSessionStore() {
     // request per page load, shared across SPA navigations because the store
     // registry survives a fragment swap.
     //
-    // Deliberately a plain fetch rather than useQuery. useQuery throws
-    // `HTTP <status>: <statusText>` on any non-2xx and never reads the body, so
-    // the 401 branch below — which must clear the session, not just report an
-    // error — would have to be recovered by pattern-matching an error string.
-    // The caching useQuery would buy is what this store already provides.
+    // Still a plain fetch, but no longer for the reason this comment used to
+    // give. The old note said useQuery throws `HTTP <status>: <statusText>` and
+    // never reads the body, so a 401 could only be recovered by matching an
+    // error string. That was fixed upstream (stx#1848) and is measured false
+    // now: the thrown error carries `.status`, `.statusText`, `.data` and
+    // `.response`, so `err.status === 401` and `err.data.message` both work.
+    //
+    // What keeps it a plain fetch is the in-flight de-duplication below. This is
+    // the one caller that must collapse concurrent callers onto a single
+    // promise, and it owns that promise directly. The caching useQuery offers is
+    // what this store already is.
     const viewer: StxSignal<MeUser | null> = state(null as MeUser | null)
     const pro = state(false)
     const viewerLoaded = state(false)
+
+    // One place the bearer token is attached, and one place a stale one is
+    // noticed. Applies to every stx data primitive — useFetch, useQuery,
+    // useMutation all route through the same __stxFetch — so a call site says
+    // what it wants and never how to authenticate.
+    //
+    // Hooks REPLACE rather than stack, by design upstream: a module re-evaluated
+    // by hot reload or re-run after an SPA swap must not end up sending two
+    // Authorization headers or counting one 401 twice.
+    //
+    // The token check in onRequest is not defensive noise. Sign-in and sign-up
+    // post to /login and /register with no session, and sending `Bearer ` with
+    // an empty value is not the same as sending nothing.
+    //
+    // The same check in onResponseError is what keeps a *credential* 401 apart
+    // from a *session* 401. Bad password at sign-in answers 401 too, and
+    // clearing the session there would be harmless but bouncing to /login from
+    // /login is not. A 401 while we are holding a token is the stale-session
+    // case, and only that one signs out.
+    configureFetch({
+      onRequest(ctx: StxFetchRequestContext) {
+        const bearer = token()
+        if (bearer)
+          ctx.options.headers.Authorization = `Bearer ${bearer}`
+      },
+      onResponseError(ctx: StxFetchErrorContext) {
+        if (ctx.response?.status !== 401 || !token())
+          return
+        batch(() => {
+          token.set('')
+          user.set(null)
+          viewer.set(null)
+          pro.set(false)
+          viewerLoaded.set(false)
+        })
+        navigate('/login', { reload: true })
+      },
+    })
 
     // In-flight de-duplication. A `viewerLoaded()` check alone is not enough:
     // two callers that arrive before the first response lands both pass it and
