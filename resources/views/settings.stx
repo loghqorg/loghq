@@ -271,17 +271,33 @@ function installGuide(platform: string | null | undefined, key: string): { label
 }
 const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { label: '', install: '', code: '' }
 
-// Values the client block needs verbatim. JSON-encoded on purpose: stx renders a
-// bare `{{ str }}` inside a script as a BACKTICK template literal, which a
-// backtick or `${` in the payload would break out of. `JSON.parse({{ json }})`
-// survives any content.
-const guideInstallJson = JSON.stringify(guide.install)
-const guideCodeJson = JSON.stringify(guide.code)
-const keyFullJson = JSON.stringify(keyFull)
-const keyMaskJson = JSON.stringify(keyMask)
-const projectIdJson = JSON.stringify(projectId)
-const projectNameJson = JSON.stringify(activeProject?.name || '')
-const projectActiveJson = JSON.stringify(activeProject ? activeProject.is_active !== false : true)
+// Everything the client block is allowed to read from this scope, declared.
+//
+// This was seven JSON.stringify constants paired with seven JSON.parse calls in
+// the client block. The hand-encoding existed for a real reason: a bare
+// interpolation inside a script renders as a template literal, so a backtick or
+// a dollar-brace in the value escapes it — and guide.code is generated source
+// that contains both. defineClientPayload serialises each value with
+// JSON.stringify itself and additionally escapes `<`, so it covers that case and
+// the close-tag case the local version did not.
+//
+// Declaring also makes the set closed. The implicit bridge published a server
+// binding whenever its name merely APPEARED in the client source; typecheck
+// reported eleven values crossing here, one of which the client never used.
+// Names are published because they are listed, not because they were mentioned.
+//
+// initialKeyFull / initialKeyMask are renamed on the way across: the client
+// wraps both in signals under the bare names, and a bridged `var keyFull` would
+// collide with the `const keyFull` that consumes it.
+defineClientPayload({
+  projectId,
+  projectName: activeProject?.name || '',
+  projectActive: activeProject ? activeProject.is_active !== false : true,
+  installText: guide.install,
+  codeText: guide.code,
+  initialKeyFull: keyFull,
+  initialKeyMask: keyMask,
+})
 
 useSeoMeta({
   title: 'Settings - loghq',
@@ -295,14 +311,11 @@ useSeoMeta({
 // delegated listeners doing className sniffing, manual button-label swaps, and
 // row.remove() calls. Every one of those is now state plus a binding.
 //
-// Server values arrive JSON-encoded (see the server block) because stx renders a
-// bare {{ str }} inside a script as a backtick template literal, which a backtick
-// or ${ in the payload would escape from.
-const projectId = JSON.parse({{ projectIdJson }})
-const projectName = JSON.parse({{ projectNameJson }})
-const projectActive = JSON.parse({{ projectActiveJson }})
-const installText = JSON.parse({{ guideInstallJson }})
-const codeText = JSON.parse({{ guideCodeJson }})
+// projectId, projectName, projectActive, installText, codeText and the two
+// initialKey* values are declared by defineClientPayload in the server block and
+// arrive already typed — there is nothing to declare or decode here. Do not add
+// a local `const` for any of them: the bridge skips a name the client declares
+// itself, so redeclaring one silently reverts it to undefined.
 
 // ---- theme ----
 // No mirror signal. The icon swap is a CSS rule keyed off the root element's
@@ -380,8 +393,8 @@ function switchProject(e: Event): void {
 }
 
 // ---- ingest key ----
-const keyFull = state(JSON.parse({{ keyFullJson }}))
-const keyMask = state(JSON.parse({{ keyMaskJson }}))
+const keyFull = state(initialKeyFull)
+const keyMask = state(initialKeyMask)
 const keyRevealed = state(false)
 const rotating = state(false)
 const keyNote = state('')

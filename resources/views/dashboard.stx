@@ -271,11 +271,20 @@ const stats = [
   { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, on: counts.errors > 0, color: '#f43f5e' },
 ]
 
-// Where the project switcher lands. pageUrl() is server-side — it reads the
-// filter state this render was built from — so the client cannot rebuild it.
-// Bridged as JSON rather than interpolated into a quoted attribute, which is
-// the convention settings.stx already uses for its server-computed strings.
-const switchUrlJson = JSON.stringify(pageUrl({ page: 1 }))
+// What this page lets the client block read, declared.
+//
+// switchUrl is where the project switcher lands. pageUrl() is server-side — it
+// reads the filter state this render was built from — so the client cannot
+// rebuild it. It used to cross as a hand-JSON-encoded string; defineClientPayload
+// does that encoding itself.
+//
+// needsOnboarding was already crossing on the implicit bridge, just untyped and
+// only because the name happened to appear in the client source. It is listed
+// now, so it crosses because this line says so.
+defineClientPayload({
+  switchUrl: pageUrl({ page: 1 }),
+  needsOnboarding,
+})
 
 useSeoMeta({
   title: 'Logs - loghq',
@@ -332,8 +341,9 @@ const joinLabel = t => (joining() === t ? 'Joining…' : 'Join')
 // the same cookie with the same attributes the store already declares. The
 // reload is DECLARED, as in settings.stx: the server render is keyed off that
 // cookie, so a fragment swap would repaint the old project's logs.
-const switchUrl: string = JSON.parse({{ switchUrlJson }})
-
+// switchUrl arrives from defineClientPayload in the server block, already a
+// string. Do not redeclare it here — the bridge skips any name the client
+// declares itself, which would leave it undefined.
 function switchProject(e: Event): void {
   useStore('session').project.set((e.target as HTMLSelectElement).value)
   navigate(switchUrl, { reload: true })
