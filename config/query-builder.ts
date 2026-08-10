@@ -24,6 +24,17 @@ export default {
   // runtime and stops the config from being structurally invalid.
   snapshotDir: '.qb',
 
+  // Same story as snapshotDir, one release later: bun-query-builder 0.2.25
+  // declares `migrationDir: string` as REQUIRED (types.d.ts:233), where the
+  // parallel @stacksjs/query-builder copy still has it optional
+  // (index.d.ts:139). The stacks 0.70.352 upgrade pulled in the stricter one and
+  // `tsc --noEmit` started failing on this object, which had been valid.
+  //
+  // 'database/migrations' is where this app's migrations already are, and the
+  // framework resolves the value relative to cwd (relativeMigrationDirectory),
+  // so naming it changes nothing at runtime.
+  migrationDir: 'database/migrations',
+
   dialect,
   database: databaseConfig,
   timestamps: {
