@@ -382,27 +382,30 @@ function dismissInvite(token: string): void {
   dismissed.set([...dismissed(), token])
 }
 
+// One URL, one method — the shape useMutation fits. No Authorization header: the
+// session store's configureFetch attaches the bearer, and its onResponseError
+// owns the 401, which this hand-written version had no branch for at all.
+//
+// `joining` stays a page signal rather than using acceptInvite.loading(). It
+// holds WHICH invite is in flight, not merely whether one is, because the banner
+// disables only the row being accepted.
+const acceptInvite = useMutation('/api/invites/accept', {
+  onError() {
+    // 401 included: the interceptor is already clearing the session and
+    // leaving, and releasing the row is right either way.
+    joining.set('')
+  },
+  onSuccess(body: { project: string }) {
+    useStore('session').project.set(body.project)
+    navigate('/dashboard', { reload: true })
+  },
+})
+
 async function joinInvite(token: string): Promise<void> {
   if (joining())
     return
   joining.set(token)
-  try {
-    const res = await fetch('/api/invites/accept', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${useStore('session').token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-    const body = await res.json()
-    if (!res.ok) {
-      joining.set('')
-      return
-    }
-    useStore('session').project.set(body.project)
-    navigate('/dashboard', { reload: true })
-  }
-  catch {
-    joining.set('')
-  }
+  await acceptInvite.mutate({ token }).catch(() => {})
 }
 
 // Pro status comes from the session store, which fetches /api/me once and

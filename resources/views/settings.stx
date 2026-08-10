@@ -365,6 +365,33 @@ async function readJson(res: Response): Promise<any> {
   catch { return {} }
 }
 
+/**
+ * Every authenticated call on this page goes through here.
+ *
+ * The ten mutations below are imperative one-shots against ten endpoints across
+ * four verbs, so useMutation is the wrong shape — it binds one URL and one
+ * method per instance. They stay raw fetch, but they were also the only authed
+ * calls in the app with NO 401 handling: a stale token showed "Rotate failed"
+ * or "Could not add member" and left the user on a page that would never work
+ * again, rather than signing them out.
+ *
+ * This is the same contract the session store's configureFetch gives the data
+ * primitives, applied to the one surface that cannot use them. Keep the two in
+ * step: if the interceptor's 401 behaviour changes, change it here too.
+ *
+ * signOut() clears the token cookie and does a declared full load, so a caller
+ * that keeps running after this returns is on a page that is already leaving.
+ */
+async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) },
+  })
+  if (res.status === 401)
+    useStore('session').signOut()
+  return res
+}
+
 // ---- copy buttons ----
 const copiedInstall = state(false)
 const copiedCode = state(false)
@@ -441,7 +468,7 @@ async function rotateKey(): Promise<void> {
     return
   rotating.set(true)
   try {
-    const res = await fetch(`${projUrl}/rotate-key`, { method: 'POST', headers: authHeaders() })
+    const res = await apiFetch(`${projUrl}/rotate-key`, { method: 'POST' })
     const body = await readJson(res)
     rotating.set(false)
     if (!res.ok) {
@@ -486,7 +513,7 @@ async function addInvite(): Promise<void> {
   }
   inviting.set(true)
   try {
-    const res = await fetch(`${projUrl}/members`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ email }) })
+    const res = await apiFetch(`${projUrl}/members`, { method: 'POST', body: JSON.stringify({ email }) })
     const body = await readJson(res)
     inviting.set(false)
     if (!res.ok) {
@@ -506,7 +533,7 @@ async function removeMember(id: string): Promise<void> {
     return
   removingMember.set(id)
   try {
-    const res = await fetch(`${projUrl}/members/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+    const res = await apiFetch(`${projUrl}/members/${encodeURIComponent(id)}`, { method: 'DELETE' })
     removingMember.set('')
     if (res.ok)
       removedMembers.set([...removedMembers(), id])
@@ -554,7 +581,7 @@ async function addChannel(): Promise<void> {
   adding.set(true)
   note(whNote, whNoteOk, 'Adding…', true)
   try {
-    const res = await fetch(chBase, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ type: chType(), webhook_url: url, label: whLabel().trim() }) })
+    const res = await apiFetch(chBase, { method: 'POST', body: JSON.stringify({ type: chType(), webhook_url: url, label: whLabel().trim() }) })
     const body = await readJson(res)
     if (!res.ok) {
       adding.set(false)
@@ -574,7 +601,7 @@ async function testChannel(id: string): Promise<void> {
     return
   setBusy(id, 'Sending…')
   try {
-    const res = await fetch(`${chBase}/${encodeURIComponent(id)}/test`, { method: 'POST', headers: authHeaders() })
+    const res = await apiFetch(`${chBase}/${encodeURIComponent(id)}/test`, { method: 'POST' })
     setBusy(id, res.ok ? 'Sent ✓' : 'Failed')
   }
   catch {
@@ -587,7 +614,7 @@ async function toggleChannel(id: string, initial: boolean): Promise<void> {
   const next = !isChannelOn(id, initial)
   channelOn.set({ ...channelOn(), [id]: next })
   try {
-    const res = await fetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ enabled: next }) })
+    const res = await apiFetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ enabled: next }) })
     if (!res.ok)
       channelOn.set({ ...channelOn(), [id]: !next })
   }
@@ -602,7 +629,7 @@ async function deleteChannel(id: string): Promise<void> {
     return
   setBusy(id, 'Removing…')
   try {
-    const res = await fetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+    const res = await apiFetch(`${chBase}/${encodeURIComponent(id)}`, { method: 'DELETE' })
     setBusy(id, '')
     if (res.ok)
       removedChannels.set([...removedChannels(), id])
@@ -733,7 +760,7 @@ function openDelete(e: Event): void {
 async function unarchive(): Promise<void> {
   archiving.set(true)
   try {
-    const res = await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: false }) })
+    const res = await apiFetch(`${projUrl}/archive`, { method: 'POST', body: JSON.stringify({ archived: false }) })
     if (res.ok) {
       navigate('/settings', { reload: true })
       return
@@ -752,8 +779,8 @@ async function confirmModal(): Promise<void> {
   const kind = modalKind()
   try {
     const res = kind === 'delete'
-      ? await fetch(projUrl, { method: 'DELETE', headers: authHeaders() })
-      : await fetch(`${projUrl}/archive`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ archived: true }) })
+      ? await apiFetch(projUrl, { method: 'DELETE' })
+      : await apiFetch(`${projUrl}/archive`, { method: 'POST', body: JSON.stringify({ archived: true }) })
     if (!res.ok) {
       modalBusy.set(false)
       modalNote.set(kind === 'delete' ? 'Delete failed.' : 'Archive failed.')
