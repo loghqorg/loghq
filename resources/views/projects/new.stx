@@ -8,7 +8,7 @@ useSeoMeta({
 
 <script client>
 // Create-app screen. New users land here after signup. Creates a project via
-// the authenticated API (bearer from localStorage), then drops into that
+// the authenticated API, then drops into that
 // project's dashboard, where the ingest snippet + key are shown.
 const error = state('')
 

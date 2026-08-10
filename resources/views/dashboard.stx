@@ -1,6 +1,6 @@
 <script server>
-// loghq log stream. Authenticates the current user from the token cookie
-// (mirrored from localStorage by login/register), loads THEIR projects
+// loghq log stream. Authenticates the current user from the token cookie,
+// loads THEIR projects
 // owner-scoped, and renders the active one's log stream (newest first) with
 // level-threshold, time-range, and text-search filters. Reads via __db.unsafe.
 // Static import per ch.5.3, renamed to `__db` per ch.5.8 — see the fuller note
@@ -54,8 +54,8 @@ const PAGE_SIZE = 50
 const pageParam = Number.parseInt(query.get('page') || '1', 10)
 const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
 
-// Authenticate from the token cookie (mirrored from localStorage by
-// login/register). A project the user does not own is never resolved, so no
+// Authenticate from the token cookie. A project the user does not own is
+// never resolved, so no
 // tenant can read another tenant's logs by guessing a project id.
 // `__token` is prefixed deliberately: extractBridgeData (client-script.ts:775)
 // skips `__`-prefixed bindings, and everything else in this block is a bridge
