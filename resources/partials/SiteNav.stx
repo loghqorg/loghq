@@ -73,7 +73,7 @@ const navAuthed = !!cookies.loghq_token
     </div>
 
     {{-- Server-decided, so exactly one branch is in the response and neither is
-        cloaked. The `style="display:none"` that used to sit on the Dashboard
+        cloaked. The inline display-none declaration that used to sit on the Dashboard
         link is gone with the binding that needed it. --}}
     @if (navAuthed)
       <StxLink to="/dashboard" class="nav-login">Dashboard</StxLink>

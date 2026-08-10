@@ -902,7 +902,7 @@ onMount(() => {
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
           </p>
-          <span class="mt-2 text-xs" :show="!!keyNote()" :style="keyNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ keyNote() }}</span>
+          <span class="mt-2 text-ok text-xs" :show="!!keyNote()" :class="keyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ keyNote() }}</span>
         </div>
       </section>
 
@@ -949,7 +949,7 @@ onMount(() => {
             <input :model="inviteEmail" type="email" aria-label="Invite a teammate by email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
             <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
           </div>
-          <span class="mt-2.5 text-xs" :show="!!inviteNote()" :style="inviteNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ inviteNote() }}</span>
+          <span class="mt-2.5 text-ok text-xs" :show="!!inviteNote()" :class="inviteNoteOk() ? 'mt-2.5 text-xs text-ok' : 'mt-2.5 text-xs text-accent'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             We email them a join link. They sign up (or log in) with that email, then accept from a banner in the app. Members can read the log stream; only you can manage keys, members, and deletion.
           </p>
@@ -1014,7 +1014,7 @@ onMount(() => {
           <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
             <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
-            <span class="text-xs" :show="!!whNote()" :style="whNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ whNote() }}</span>
+            <span class="text-ok text-xs" :show="!!whNote()" :class="whNoteOk() ? 'text-xs text-ok' : 'text-xs text-accent'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
             In Slack: <span class="text-muted">Apps → Incoming Webhooks → Add to a channel</span>, then paste the <span class="font-mono">hooks.slack.com/services/…</span> URL.

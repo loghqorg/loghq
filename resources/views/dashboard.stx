@@ -245,15 +245,14 @@ finally {
 }
 
 // Severity drives the one accent-adjacent semantic color on the list rail.
-function levelColor(level: LogLevel | null | undefined): string {
-  switch (level) {
-    case 'emergency': case 'alert': case 'critical': return '#f43f5e'
-    case 'error': return '#fb7185'
-    case 'warning': return '#f59e0b'
-    case 'notice': return '#38bdf8'
-    case 'info': return '#60a5fa'
-    default: return '#94a3b8' // debug
-  }
+// The level as a data attribute, not a colour. The six hex literals this used to
+// return are tokens in public/tokens.css now (--sev-*), and app-chrome.css maps
+// `data-level` onto a single `--sev` that the rail and the badge both read. Two
+// wins beyond removing the inline styles: the palette is named once instead of
+// twice, and it follows the theme, where one hardcoded set was previously used
+// on both.
+function levelKey(level: LogLevel | null | undefined): string {
+  return String(level || 'debug')
 }
 function levelLabel(level: LogLevel | null | undefined): string {
   return String(level || 'info').toUpperCase()
@@ -290,10 +289,15 @@ function prettyContext(raw: unknown): string {
 
 // Stats carry state, not just a number: the dot + number tint go live only when
 // the count is non-zero, so "are there errors right now?" reads at a glance.
+// `tone` replaces a hex literal per row. The two colours here were the same
+// amber and rose the log rows used, written a second time — so the palette could
+// drift between the stat cards and the rows below them. app-chrome.css keys the
+// dot and the number off `data-tone`, which is set only when the count is
+// non-zero; that is what `on` expressed as an inline ternary.
 const stats = [
-  { label: 'Log entries', value: counts.total.toLocaleString(), dot: false, on: false, color: null },
-  { label: 'Warnings', value: counts.warnings.toLocaleString(), dot: true, on: counts.warnings > 0, color: '#f59e0b' },
-  { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, on: counts.errors > 0, color: '#f43f5e' },
+  { label: 'Log entries', value: counts.total.toLocaleString(), dot: false, tone: '' },
+  { label: 'Warnings', value: counts.warnings.toLocaleString(), dot: true, tone: counts.warnings > 0 ? 'warning' : '' },
+  { label: 'Errors', value: counts.errors.toLocaleString(), dot: true, tone: counts.errors > 0 ? 'error' : '' },
 ]
 
 // What this page lets the client block read, declared.
@@ -596,12 +600,12 @@ onMount(() => {
         only on a non-zero count, so severity reads at a glance. --}}
     <div class="grid grid-cols-3 mb-8 border-line divide-x app-panel reveal">
       @foreach (stats as s)
-        <div class="px-5 py-5 border-line">
+        <div class="px-5 py-5 border-line" data-tone="{{ s.tone }}">
           <div class="flex gap-1.5 items-center mb-2">
-            @if (s.dot)<span class="inline-block shrink-0 h-1.5 w-1.5 rounded-full" style="background: {{ s.on ? s.color : 'var(--text-3)' }}; opacity: {{ s.on ? '1' : '0.35' }}"></span>@endif
+            @if (s.dot)<span class="inline-block shrink-0 h-1.5 w-1.5 rounded-full stat-dot"></span>@endif
             <span class="font-medium text-subtle text-xs tracking-wider uppercase">{{ s.label }}</span>
           </div>
-          <div class="font-mono font-semibold text-3xl tracking-tight tnum" style="color: {{ s.on ? s.color : 'var(--text)' }}">{{ s.value }}</div>
+          <div class="font-mono font-semibold text-3xl tracking-tight stat-value tnum">{{ s.value }}</div>
         </div>
       @endforeach
     </div>
@@ -614,10 +618,10 @@ onMount(() => {
 
       @forelse (logs as entry)
         <details class="border-b border-line">
-          <summary class="px-5 py-2.5 log-row">
-            <span class="self-stretch rounded-full" style="background: {{ levelColor(entry.level) }}; min-height: 20px"></span>
+          <summary class="px-5 py-2.5 log-row" data-level="{{ levelKey(entry.level) }}">
+            <span class="self-stretch rounded-full log-rail"></span>
             <span class="font-mono tabular-nums text-subtle text-xs tnum" x-tooltip="{{ entry.timestamp }}">{{ clockOf(entry.timestamp) }}</span>
-            <span class="inline-block px-1 py-0.5 font-mono font-semibold text-[11px] text-center whitespace-nowrap rounded tnum" style="color: {{ levelColor(entry.level) }}; background: color-mix(in srgb, {{ levelColor(entry.level) }} 14%, transparent)">{{ chipLabel(entry.level) }}</span>
+            <span class="inline-block px-1 py-0.5 font-mono font-semibold text-[11px] text-center whitespace-nowrap rounded log-level tnum">{{ chipLabel(entry.level) }}</span>
             <span class="font-mono text-[11px] text-subtle truncate tnum">{{ entry.channel || '' }}</span>
             <span class="min-w-0 font-mono text-ink text-sm truncate tnum">{{ entry.message }}</span>
           </summary>

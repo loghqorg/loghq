@@ -47,6 +47,21 @@
   --warn: #b91c1c;
   --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Log severity. These were six hex literals inside a levelColor() switch in
+   * dashboard.stx, with two of them repeated in the stats array — so the same
+   * "warning amber" was written twice and could drift.
+   *
+   * They were also a single set used on BOTH themes. The dark values below are
+   * exactly what shipped before, so dark is unchanged; light gets darker,
+   * higher-contrast variants, because #fb7185 on a #fbfbfd background is not a
+   * readable label. */
+  --sev-critical: #be123c;
+  --sev-error: #e11d48;
+  --sev-warning: #b45309;
+  --sev-notice: #0369a1;
+  --sev-info: #1d4ed8;
+  --sev-debug: #64748b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,6 +76,12 @@
     --accent-soft: rgba(251, 113, 133, 0.1);
     --ok: #4ade80;
     --warn: #f87171;
+  --sev-critical: #f43f5e;
+  --sev-error: #fb7185;
+  --sev-warning: #f59e0b;
+  --sev-notice: #38bdf8;
+  --sev-info: #60a5fa;
+  --sev-debug: #94a3b8;
   }
 }
 
@@ -75,6 +96,12 @@
   --accent-soft: rgba(251, 113, 133, 0.1);
   --ok: #4ade80;
   --warn: #f87171;
+  --sev-critical: #f43f5e;
+  --sev-error: #fb7185;
+  --sev-warning: #f59e0b;
+  --sev-notice: #38bdf8;
+  --sev-info: #60a5fa;
+  --sev-debug: #94a3b8;
 }
 
 :root[data-theme='light'] {
@@ -88,6 +115,12 @@
   --accent-soft: rgba(225, 29, 72, 0.08);
   --ok: #16a34a;
   --warn: #b91c1c;
+  --sev-critical: #be123c;
+  --sev-error: #e11d48;
+  --sev-warning: #b45309;
+  --sev-notice: #0369a1;
+  --sev-info: #1d4ed8;
+  --sev-debug: #64748b;
 }
 
 body {

@@ -254,3 +254,32 @@ select.app-panel {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 @media (prefers-color-scheme: dark) { select.app-panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); } }
+
+/* Log severity, driven by one data attribute rather than an inline style.
+ *
+ * The rail and the level badge on a log row both used
+ * `style="background: {{ levelColor(entry.level) }}"`, and the stat dot and
+ * value used `style="color: {{ s.color }}"` — four inline declarations carrying
+ * hex literals computed in the view. `data-level` on the row sets `--sev` once
+ * and both children read it, so the colour is named in exactly one place
+ * (public/tokens.css) and follows the theme.
+ *
+ * The default covers a level the server does not recognise: it falls back to
+ * the debug tone rather than to no colour, so the rail never disappears. */
+[data-level] { --sev: var(--sev-debug); }
+[data-level='emergency'], [data-level='alert'], [data-level='critical'] { --sev: var(--sev-critical); }
+[data-level='error'] { --sev: var(--sev-error); }
+[data-level='warning'] { --sev: var(--sev-warning); }
+[data-level='notice'] { --sev: var(--sev-notice); }
+[data-level='info'] { --sev: var(--sev-info); }
+.log-rail { background: var(--sev); min-height: 20px; }
+.log-level { color: var(--sev); background: color-mix(in srgb, var(--sev) 14%, transparent); }
+
+/* Stat cards. `data-tone` is set only when the count is non-zero, so an empty
+ * warnings/errors card stays neutral — which is what `s.on` expressed inline. */
+.stat-dot { background: var(--text-3); opacity: 0.35; }
+.stat-value { color: var(--text); }
+[data-tone='warning'] .stat-dot { background: var(--sev-warning); opacity: 1; }
+[data-tone='warning'] .stat-value { color: var(--sev-warning); }
+[data-tone='error'] .stat-dot { background: var(--sev-critical); opacity: 1; }
+[data-tone='error'] .stat-value { color: var(--sev-critical); }
