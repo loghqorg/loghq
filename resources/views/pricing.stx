@@ -12,33 +12,40 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/pricing' }] })
 // Upgrade button starts a Stripe Checkout (external redirect via location).
 const interval = state('monthly')
 const err = state('')
-const loading = state(false)
 
 function pick(v: 'monthly' | 'yearly'): void { interval.set(v) }
 
+// No Authorization header here — the session store's configureFetch attaches
+// the bearer to every data-primitive request. See login.stx for why `err` is a
+// page signal and not the primitive's own.
+const checkout = useMutation('/payments/checkout', {
+  onError(e: { status?: number, data?: { error?: string } }) {
+    // A 401 means the stored token is stale; the interceptor has already
+    // cleared the session and left, so this must not paint over it.
+    if (e.status === 401)
+      return
+    err.set(e.data?.error || 'Checkout is not available yet.')
+  },
+  onSuccess(data: { url?: string }) {
+    // Cross-origin Stripe Checkout. navigate() handles the origin switch itself;
+    // the second argument declares the full load.
+    if (data.url) {
+      navigate(data.url, { reload: true })
+      return
+    }
+    err.set('Checkout is not available yet.')
+  },
+})
+
 async function upgrade(): Promise<void> {
-  const token = useStore('session').token()
-  if (!token) { navigate('/login'); return }
-  loading.set(true)
+  if (!useStore('session').token()) {
+    navigate('/login')
+    return
+  }
+  if (checkout.loading())
+    return
   err.set('')
-  try {
-    const res = await fetch('/payments/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ interval: interval() }),
-    })
-    const data = await res.json().catch(() => ({}))
-    // Cross-origin Stripe Checkout. navigate() handles the origin switch
-    // itself (client.js:285); the second argument declares the full load.
-    if (res.ok && data.url) { navigate(data.url, { reload: true }); return }
-    err.set(data.error || 'Checkout is not available yet.')
-  }
-  catch {
-    err.set('Something went wrong. Please try again.')
-  }
-  finally {
-    loading.set(false)
-  }
+  await checkout.mutate({ interval: interval() }).catch(() => {})
 }
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
@@ -110,7 +117,7 @@ async function upgrade(): Promise<void> {
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Full retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Priority support</li>
         </ul>
-        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full font-semibold text-sm text-white bg-accent rounded-[10px] disabled:opacity-60 active:translate-y-px disabled:cursor-default [transition:transform_0.12s_ease,opacity_0.15s_ease]" :text="loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
+        <button @click="upgrade" :disabled="checkout.loading()" class="mt-7 py-2.5 w-full font-semibold text-sm text-white bg-accent rounded-[10px] disabled:opacity-60 active:translate-y-px disabled:cursor-default [transition:transform_0.12s_ease,opacity_0.15s_ease]" :text="checkout.loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
         @if (err())
           <p class="mt-3 text-[#ef4444] text-center text-xs">{{ err() }}</p>
         @endif

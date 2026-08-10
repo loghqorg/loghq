@@ -19,7 +19,6 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/register' }] })
 // Token auth via stx client directives (hydrated on the served page). Inputs are
 // uncontrolled and read from the submit event; error/loading are signals.
 const error = state('')
-const loading = state(false)
 
 // Invite links are /register?email=…&invite=…. Read once at hydration: the
 // invitee must sign up as the exact person invited, so the email is prefilled
@@ -29,60 +28,42 @@ const inviteParams = new URLSearchParams(location.search)
 const invitedEmail = state(inviteParams.get('email') || '')
 const isInvite = state(!!inviteParams.get('invite'))
 
+// See login.stx for why `error` is a page signal and not the primitive's own.
+const signUp = useMutation('/register', {
+  onError(err: { data?: { message?: string } }) {
+    error.set(err.data?.message || 'Could not create the account.')
+  },
+  onSuccess(data: { token?: string, access_token?: string, user?: unknown }) {
+    // One write. The cookie IS the session — every server-rendered page
+    // authenticates from it — so there is no localStorage copy to mirror.
+    useStore('session').token.set(data.token || data.access_token || '')
+    // Through the store, not localStorage directly: `user` is a useLocalStorage
+    // signal the session store owns, so a raw setItem wrote the same key behind
+    // the signal's back and nothing subscribed re-rendered.
+    if (data.user)
+      useStore('session').user.set(data.user)
+    // New accounts have no apps yet: go to create-app — unless they arrived from
+    // an invite link, in which case land on the dashboard where the join banner
+    // is waiting. Read from inviteParams, parsed once at hydration above.
+    navigate(inviteParams.get('invite') ? '/dashboard' : '/projects/new')
+  },
+})
+
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
-  if (loading())
+  if (signUp.loading())
     return
   const form = e.target
   if (form.elements.password.value.length < 8) {
     error.set('Password must be at least 8 characters.')
     return
   }
-  loading.set(true)
   error.set('')
-  try {
-    const res = await fetch('/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: form.elements.name.value,
-        email: form.elements.email.value,
-        password: form.elements.password.value,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      error.set(data.message || 'Could not create the account.')
-      return
-    }
-    const token = data.token || data.access_token || ''
-    // One write. The cookie IS the session — every server-rendered page
-    // authenticates from it — so there is no localStorage copy to mirror.
-    useStore('session').token.set(token)
-    // Through the store, not localStorage directly. `user` is a
-    // useLocalStorage signal the session store owns (session.ts:56), so a raw
-    // setItem wrote the same key behind the signal's back: nothing subscribed
-    // re-rendered, and the store's own copy stayed stale until the next reload.
-    // It was also write-only from here — the account page reads the signal.
-    if (data.user)
-      useStore('session').user.set(data.user)
-    // New accounts have no apps yet: go to create-app — unless they arrived from
-    // an invite link, in which case land on the dashboard where the join banner
-    // is waiting for them to accept.
-    //
-    // Read from inviteParams, parsed once at hydration above. This re-parsed
-    // location.search on every submit to recover a value that was already in
-    // scope, and guarded `typeof location` in a block that cannot run on the
-    // server — the same query string, parsed a second time, three lines from the
-    // first.
-    navigate(inviteParams.get('invite') ? '/dashboard' : '/projects/new')
-  }
-  catch {
-    error.set('Something went wrong. Please try again.')
-  }
-  finally {
-    loading.set(false)
-  }
+  await signUp.mutate({
+    name: form.elements.name.value,
+    email: form.elements.email.value,
+    password: form.elements.password.value,
+  }).catch(() => {})
 }
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
@@ -120,7 +101,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       </div>
 
       {{-- Static label + `:text`, never `{{ }}` in the body — see login.stx. --}}
-      <button type="submit" :disabled="loading()" :text="loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
+      <button type="submit" :disabled="signUp.loading()" :text="signUp.loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
     </form>
 
     @if (anyOauth)

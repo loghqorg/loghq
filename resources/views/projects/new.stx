@@ -11,7 +11,6 @@ useSeoMeta({
 // the authenticated API (bearer from localStorage), then drops into that
 // project's dashboard, where the ingest snippet + key are shown.
 const error = state('')
-const loading = state(false)
 
 function ensureAuthed(): void {
   // No mirror step any more: the cookie IS the session, so if the store has no
@@ -21,9 +20,30 @@ function ensureAuthed(): void {
 }
 ensureAuthed()
 
+// No Authorization header here. The session store's configureFetch attaches the
+// bearer to every data-primitive request, and its onResponseError owns the 401
+// case — which is what the hand-written `if (res.status === 401) navigate(…)`
+// branch used to do, once, in this file only.
+//
+// See login.stx for why `error` is a page signal and not the primitive's own.
+const createProject = useMutation('/api/projects', {
+  onError(err: { status?: number, data?: { error?: string } }) {
+    // A 401 has already been handled by the interceptor, which clears the
+    // session and leaves; saying anything here would paint over that.
+    if (err.status === 401)
+      return
+    error.set(err.data?.error || 'Could not create the app.')
+  },
+  onSuccess(data: { project: { id: string } }) {
+    // Straight into the new project's Settings → Install, where the setup
+    // snippet lives.
+    navigate(`/settings?project=${encodeURIComponent(data.project.id)}`, { reload: true })
+  },
+})
+
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
-  if (loading())
+  if (createProject.loading())
     return
   const form = e.target
   const name = form.elements.name.value.trim()
@@ -31,34 +51,8 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     error.set('Give your app a name.')
     return
   }
-  loading.set(true)
   error.set('')
-  try {
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${useStore('session').token()}`,
-      },
-      body: JSON.stringify({ name, platform: form.elements.platform.value }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (res.status === 401) {
-      navigate('/login', { reload: true })
-      return
-    }
-    if (!res.ok) {
-      error.set(data.error || 'Could not create the app.')
-      loading.set(false)
-      return
-    }
-    // Straight into the new project's Settings → Install, where the setup snippet lives.
-    navigate(`/settings?project=${encodeURIComponent(data.project.id)}`, { reload: true })
-  }
-  catch {
-    error.set('Something went wrong. Please try again.')
-    loading.set(false)
-  }
+  await createProject.mutate({ name, platform: form.elements.platform.value }).catch(() => {})
 }
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
@@ -101,7 +95,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       </div>
 
       {{-- Static label + `:text`, never `{{ }}` in the body — see login.stx. --}}
-      <button type="submit" :disabled="loading()" :text="loading() ? 'Creating…' : 'Create app'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create app</button>
+      <button type="submit" :disabled="createProject.loading()" :text="createProject.loading() ? 'Creating…' : 'Create app'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create app</button>
     </form>
   </div>
 </div>
