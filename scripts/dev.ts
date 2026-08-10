@@ -21,18 +21,17 @@
  * nothing is listening on, or — if another Stacks app happens to be running
  * there — to a different project's pages that look plausibly like your own.
  *
- * TWO KNOWN DEV-ONLY BREAKAGES, both in the shipped servers, neither present
- * in production. Verified against the installed build, not assumed:
+ * ONE KNOWN DEV-ONLY BREAKAGE, in the shipped server, not present in
+ * production. Verified against the installed build, not assumed:
  *
- * 1. `/docs` returns 500 here and works in production.
- *    dev/views.js:97-98 proxies `/docs` and `/docs/*` to PORT_DOCS
- *    (config/ports.ts → 3006) unconditionally, before any routing, and nothing
- *    listens on that port. resources/views/docs.stx is therefore unreachable
- *    in dev. There is no flag to turn it off — the check ignores config/ui.ts
- *    entirely. @stacksjs/buddy/dist/production-server.js has no such proxy
- *    (grep: zero hits), so the page serves normally once deployed.
+ * (`/docs` used to be a second one — dev/views.js proxied `/docs` and `/docs/*`
+ * to PORT_DOCS unconditionally, before any routing, and nothing listens there,
+ * so the route answered 500 and resources/views/docs.stx was unreachable in
+ * dev. Fixed in 0.70.352: the proxy is now conditional on the app having NO
+ * docs view of its own AND a docs/ directory, and we have the former, so the
+ * page serves. Do not re-add a workaround for it.)
  *
- * 2. The API server renders stx pages with broken @include.
+ * 1. The API server renders stx pages with broken @include.
  *    dev/api.js never passes componentsDir/layoutsDir/partialsDir, so includes
  *    resolve against pagesDir — `resources/views/partials/SiteNav.stx`, which
  *    does not exist — and the page body becomes an include error. views.js
