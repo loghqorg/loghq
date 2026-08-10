@@ -39,24 +39,19 @@ useSeoMeta({
   ogImage: 'https://loghq.org/og.png',
 })
 useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/' }] })
+
+// Auth-aware CTAs, decided on the server for the same reason as SiteNav and
+// SiteFooter: a client-evaluated branch is cloaked until hydration. The hero CTA
+// is the page's primary call to action, so it is the last thing that should wait
+// for JS or be invisible to a crawler.
+//
+// This also settles ch.9.1. Both CTAs were plain `<a href>` carrying a `:href`
+// binding, which is a same-origin navigation done as a full document load. They
+// are `<StxLink>` now — one branch, one destination, no binding to override it.
+const pageAuthed = !!cookies.loghq_token
 </script>
 
 <script client>
-// Auth-aware CTAs. Same signal as SiteNav/SiteFooter, declared here because a
-// partial's client scope does not reach the including page's markup. Replaces an
-// imperative DOM-rewriting block that also reached into the nav and footer —
-// those now reflect auth state themselves, on every page rather than only this
-// one.
-const isAuthed = state(false)
-// The store owns the token; this mirrors its derived isAuthed so the markup
-// stays a binding. Read inside onMount because useStore is NOT in the
-// usesSignals trigger list — a client script whose only stx call is useStore()
-// gets the immediate IIFE form instead of the mount wrapper and runs before the
-// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
-onMount(() => {
-  const session = useStore('session')
-  effect(() => isAuthed.set(session.isAuthed()))
-})
 
 // Launch-updates capture. The form posts on its own with scripting off (it
 // carries action and method); this upgrades it to an inline reply so the
@@ -119,7 +114,11 @@ async function subscribe() {
             works with no JavaScript. The bindings upgrade it for a signed-in
             visitor after hydration. As `{{ }}` in the body this button was
             cloaked — display:none until the runtime booted. --}}
-        <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
+        @if (pageAuthed)
+          <StxLink class="btn primary" to="/dashboard">Go to dashboard</StxLink>
+        @else
+          <StxLink class="btn primary" to="/register">Get started</StxLink>
+        @endif
         <a class="btn ghost" href="https://github.com/stacksjs/loghq">View source</a>
       </div>
     </div>
@@ -186,7 +185,11 @@ async function subscribe() {
             works with no JavaScript. The bindings upgrade it for a signed-in
             visitor after hydration. As `{{ }}` in the body this button was
             cloaked, display:none until the runtime booted. --}}
-        <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
+        @if (pageAuthed)
+          <StxLink class="btn primary" to="/dashboard">Go to dashboard</StxLink>
+        @else
+          <StxLink class="btn primary" to="/register">Get started</StxLink>
+        @endif
         <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
       </div>
     </div>
@@ -195,7 +198,8 @@ async function subscribe() {
   {{-- Launch updates. A separate intent from the buttons above: the band asks
       you to start now, this asks nothing of you but an address. Hidden from a
       signed-in visitor, who has already done more than subscribe. --}}
-  <section class="reveal section" aria-labelledby="updates-heading" :hidden="isAuthed()">
+  @if (!pageAuthed)
+  <section class="reveal section" aria-labelledby="updates-heading">
     <div class="cta-band">
       <h2 id="updates-heading">Not ready to sign up?</h2>
       <p class="sub-note">Leave an address and we will send a note when loghq is ready. No newsletter, no drip sequence.</p>
@@ -216,5 +220,6 @@ async function subscribe() {
       <p class="sub-status" role="status" aria-live="polite" :data-state="failed() ? 'error' : ''" :text="status()"></p>
     </div>
   </section>
+  @endif
 </div>
 @endsection

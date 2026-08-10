@@ -218,12 +218,30 @@ async function loadData(): Promise<void> {
   live = true
 }
 
+// The loser of a Promise.race is not cancelled, it is merely ignored. This used
+// to leave the 5s timer armed on every render where the query won, so each
+// request held a pending handle for the rest of that window for nothing. Cleared
+// in `finally`, which covers the timeout branch too.
+//
+// A server-block timer, deliberately not useTimeout: reactive APIs are inert
+// stubs in this scope, so the composable would silently never fire.
+let __queryTimer: ReturnType<typeof setTimeout> | undefined
 try {
-  if (projectId)
-    await Promise.race([loadData(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000))])
+  if (projectId) {
+    await Promise.race([
+      loadData(),
+      new Promise((_resolve, reject) => {
+        __queryTimer = setTimeout(() => reject(new Error('timeout')), 5000)
+      }),
+    ])
+  }
 }
 catch {
   live = false
+}
+finally {
+  if (__queryTimer)
+    clearTimeout(__queryTimer)
 }
 
 // Severity drives the one accent-adjacent semantic color on the list rail.
