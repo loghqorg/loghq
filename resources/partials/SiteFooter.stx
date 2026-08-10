@@ -1,22 +1,13 @@
-<script client>
-// Same auth signal as SiteNav — each partial owns its own, since a partial's
-// client scope does not reach across includes. See SiteNav.stx for why this
-// lives in the partial rather than in the pages.
-const isAuthed = state(false)
-// The store owns the token; this mirrors its derived isAuthed so the markup
-// stays a binding. Read inside onMount because useStore is NOT in the
-// usesSignals trigger list — a client script whose only stx call is useStore()
-// gets the immediate IIFE form instead of the mount wrapper and runs before the
-// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
-onMount(() => {
-  const session = useStore('session')
-  effect(() => isAuthed.set(session.isAuthed()))
-})
+<script server>
+// Server-decided auth, same as SiteNav — see the fuller note there. These three
+// links were `:show` bindings on a client signal, and every `:show` element is
+// stamped `x-cloak`, so the footer's auth links were display:none until the
+// runtime booted on every marketing page.
 //
-// Comment style here follows SiteNav.stx: JS comments inside this block, never
-// an stx template comment anywhere in the file, because a partial containing a
-// client script never has its template comments stripped. The prose lives in
-// resources/layouts/marketing.stx.
+// Each partial owns its own copy: a partial's scope does not reach across
+// includes, and this is one boolean rather than a signal plus an onMount plus an
+// effect.
+const footerAuthed = !!cookies.loghq_token
 </script>
 
 <footer class="footer shell">
@@ -66,11 +57,12 @@ onMount(() => {
       <StxLink class="footer-link" to="/docs">Docs</StxLink>
       <StxLink class="footer-link" to="/pricing">Pricing</StxLink>
       <a class="footer-link" href="https://github.com/stacksjs/loghq">GitHub</a>
-      <StxLink class="footer-link" to="/login" :show="!isAuthed()">Log in</StxLink>
-      {{-- Inline display:none is the `:show` initial state and cannot be a
-          `hidden` utility — see the explanation in SiteNav.stx. --}}
-      <StxLink class="footer-link" to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
-      <StxLink class="footer-link" :show="!isAuthed()" to="/register">Get started</StxLink>
+      @if (footerAuthed)
+        <StxLink class="footer-link" to="/dashboard">Dashboard</StxLink>
+      @else
+        <StxLink class="footer-link" to="/login">Log in</StxLink>
+        <StxLink class="footer-link" to="/register">Get started</StxLink>
+      @endif
     </div>
   </div>
 

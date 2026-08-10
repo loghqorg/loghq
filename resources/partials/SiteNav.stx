@@ -1,41 +1,39 @@
-<script client>
-// Auth-aware nav. Login/register write the token to localStorage (and mirror it
-// to a cookie so server-rendered pages authenticate), so this reads it once at
-// hydration. Not reactive to a login in another tab — logging in navigates, so
-// the next render picks it up.
+<script server>
+// Auth-aware nav, decided on the SERVER.
 //
-// This lives in the partial rather than in each page on purpose. It used to be a
-// script in index.stx only, which meant a logged-in visitor saw "Dashboard" on
-// the homepage and "Log in / Sign up" on all 20+ other pages that include this
-// nav. One source of truth for the markup deserves one for its state.
-const isAuthed = state(false)
-// The store owns the token; this mirrors its derived isAuthed so the markup
-// stays a binding. Read inside onMount because useStore is NOT in the
-// usesSignals trigger list — a client script whose only stx call is useStore()
-// gets the immediate IIFE form instead of the mount wrapper and runs before the
-// store bundle registers. onMount is a trigger, so this guarantees the wrapper.
-onMount(() => {
-  const session = useStore('session')
-  effect(() => isAuthed.set(session.isAuthed()))
-})
+// This was a client signal mirroring the session store, and the auth links were
+// `:show` bindings on it. stx stamps `x-cloak` on every `:show` and `@if`
+// element — correct, because a condition only the client can evaluate would
+// otherwise flash the wrong branch — and the cloak rule is
+// `[x-cloak]{display:none !important}`. So "Log in", "Sign up" and "Dashboard"
+// were display:none until the runtime booted, on every marketing page. Measured
+// on the served HTML: 9 cloaked elements on /, 10 on /pricing, 9 on /compare and
+// /use-cases. A crawler saw none of them.
 //
-// NOTE ON COMMENTS IN THIS FILE: this used to say that a partial containing a
-// client script never has its template comments stripped, so the prose shipped
-// in the response body of all 23 pages including this nav. That is no longer
-// true on stx 0.2.152. Re-measured after the version bump: the template
-// comments in the markup below are stripped server-side, and grepping the
-// served HTML of /, /pricing, /compare/sentry and /features/alerts for their
-// text returns zero, with no comment marker anywhere in the body. Template
-// comments are safe here again. Re-check on the next stx bump.
+// The condition was never client-only. The session token is a cookie, and the
+// serve path hands this block the request's cookies, so the branch resolves at
+// render time and ships as plain markup with no cloak and no flash in either
+// direction. Verified: a partial's server block does receive `cookies` and it
+// tracks the request.
 //
-// Do NOT write a template comment's opening marker as prose, in this or any
-// other file, not even inside a JS line comment like this one and not even in
-// backticks. The renderer scans for it textually: an unpaired opening marker
-// here opened a comment that ran to end of file, swallowed the closing script
-// tag and the entire <nav>, and every marketing page rendered as a bare
-// footer. The dev server said so plainly — "<script> 1 opened, 0 closed" —
-// which is the fastest way to spot it. Describe the syntax; never quote it.
+// This does make the response vary by cookie. That costs nothing here — these
+// pages already answer `Cache-Control: no-store` and already mint a per-request
+// CSRF cookie, so the HTML was never cacheable.
+//
+// Do NOT reintroduce a client mirror to "keep it reactive". Nothing on a
+// marketing page changes auth state in place: signing in navigates, and
+// signOut() does a declared full load, so the next render is server-truth
+// anyway.
+const navAuthed = !!cookies.loghq_token
 </script>
+
+{{-- Do NOT write a template comment's opening marker as prose anywhere in this
+    file, not even inside a script comment and not even in backticks. The
+    renderer scans for it textually: an unpaired opening marker once opened a
+    comment that ran to end of file, swallowed the closing script tag and the
+    entire nav, and every marketing page rendered as a bare footer. The dev
+    server says so plainly — it reports one script opened and none closed —
+    which is the fastest way to spot it. Describe the syntax; never quote it. --}}
 
 <nav class="nav">
   <div class="nav-inner shell">
@@ -74,18 +72,15 @@ onMount(() => {
       <a href="https://github.com/stacksjs/loghq">GitHub</a>
     </div>
 
-    <StxLink to="/login" class="nav-login" :show="!isAuthed()">Log in</StxLink>
-    {{-- `style="display:none"` is required here and must NOT become a `hidden`
-        utility, despite ch.11.5. It is the server-rendered initial state for
-        `:show`, and `:show` drives the inline declaration specifically: when
-        the expression turns true the runtime CLEARS the style attribute back
-        to "" rather than writing `display:block` (verified in the browser —
-        an authed page reports style="" on this link). A `hidden` class would
-        survive that clearing, so the link would never appear once signed in.
-        The default is hidden rather than shown so the link does not flash for
-        signed-out visitors during hydration. --}}
-    <StxLink to="/dashboard" class="nav-login" :show="isAuthed()" style="display:none">Dashboard</StxLink>
-    <StxLink class="btn nav-cta primary sm" :show="!isAuthed()" to="/register">Sign up</StxLink>
+    {{-- Server-decided, so exactly one branch is in the response and neither is
+        cloaked. The `style="display:none"` that used to sit on the Dashboard
+        link is gone with the binding that needed it. --}}
+    @if (navAuthed)
+      <StxLink to="/dashboard" class="nav-login">Dashboard</StxLink>
+    @else
+      <StxLink to="/login" class="nav-login">Log in</StxLink>
+      <StxLink class="btn nav-cta primary sm" to="/register">Sign up</StxLink>
+    @endif
 
     <details class="nav-menu">
       <summary aria-label="Open menu"><span class="burger" aria-hidden="true"></span></summary>
@@ -110,10 +105,12 @@ onMount(() => {
         <StxLink to="/pricing">Pricing</StxLink>
         <StxLink to="/docs">Docs</StxLink>
         <a href="https://github.com/stacksjs/loghq">GitHub</a>
-        <StxLink to="/login" :show="!isAuthed()">Log in</StxLink>
-        {{-- Inline display:none, for the reason given on the desktop link above. --}}
-        <StxLink to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
-        <StxLink class="btn primary sm" :show="!isAuthed()" to="/register">Sign up</StxLink>
+        @if (navAuthed)
+          <StxLink to="/dashboard">Dashboard</StxLink>
+        @else
+          <StxLink to="/login">Log in</StxLink>
+          <StxLink class="btn primary sm" to="/register">Sign up</StxLink>
+        @endif
       </div>
     </details>
   </div>
