@@ -38,7 +38,7 @@ const crumbs = [
 </section>
 
 <section class="reveal section shell" aria-label="Backend capture preview">
-  <div class="code max-w-[700px]">
+  <div class="max-w-[700px] code">
     <div class="code-bar"><span class="chart-cap">app/server.ts</span></div>
     <pre class="code-body"><code>async function loghq(message, level = 'info', context) {
   try {

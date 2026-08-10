@@ -63,16 +63,16 @@ async function upgrade(): Promise<void> {
     <header class="mb-10 text-center">
       <StxLink to="/" class="text-2xl wordmark">loghq</StxLink>
       {{-- Deliberately not the `wordmark` shortcut: that carries
-           tracking-[-0.03em], and this heading wants -0.035em. Two tracking
-           utilities of equal specificity are decided by their order in the
-           generated sheet, not by the class attribute, so the winner would be
-           whichever Crosswind emitted last. Spelling out font-bold plus the
-           one tracking value keeps it unambiguous. --}}
-      <h1 class="mt-6 font-bold text-3xl md:text-4xl tracking-[-0.035em]">Simple, honest pricing</h1>
+          tracking-[-0.03em], and this heading wants -0.035em. Two tracking
+          utilities of equal specificity are decided by their order in the
+          generated sheet, not by the class attribute, so the winner would be
+          whichever Crosswind emitted last. Spelling out font-bold plus the
+          one tracking value keeps it unambiguous. --}}
+      <h1 class="mt-6 font-bold text-3xl tracking-[-0.035em] md:text-4xl">Simple, honest pricing</h1>
       <p class="mt-3 text-base text-subtle">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
       <div class="inline-flex gap-1 items-center mt-6 p-1 text-sm border border-line rounded-[999px]">
-        <button @click="pick('monthly')" class="px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white" :class="interval() === 'monthly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Monthly</button>
-        <button @click="pick('yearly')" class="px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted" :class="interval() === 'yearly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Yearly <span class="opacity-80">-17%</span></button>
+        <button @click="pick('monthly')" class="px-4 py-1.5 font-medium text-white bg-accent border-none rounded-[999px] cursor-pointer" :class="interval() === 'monthly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Monthly</button>
+        <button @click="pick('yearly')" class="px-4 py-1.5 font-medium text-muted bg-transparent border-none rounded-[999px] cursor-pointer" :class="interval() === 'yearly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Yearly <span class="opacity-80">-17%</span></button>
       </div>
     </header>
 
@@ -91,15 +91,15 @@ async function upgrade(): Promise<void> {
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> 30-day retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Community support</li>
         </ul>
-        <StxLink to="/register" class="block mt-7 py-2.5 w-full text-center text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease] active:translate-y-px border border-line text-muted">Get started</StxLink>
+        <StxLink to="/register" class="block mt-7 py-2.5 w-full font-semibold text-center text-muted text-sm border border-line rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease]">Get started</StxLink>
       </div>
 
-      <div class="p-7 bg-panel border rounded-2xl border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] shadow-[0_12px_40px_color-mix(in_srgb,var(--accent)_12%,transparent)]">
+      <div class="p-7 bg-panel border border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] rounded-2xl shadow-[0_12px_40px_color-mix(in_srgb,var(--accent)_12%,transparent)]">
         <div class="font-semibold text-accent text-sm tracking-wider uppercase">Pro</div>
         {{-- Monthly is the resting state (`state('monthly')` at :13), so it is
-             written statically and `:text` takes over once the toggle is live.
-             As `{{ }}` in the body, the Pro price was cloaked — the price on the
-             pricing page did not exist for a crawler or before hydration. --}}
+            written statically and `:text` takes over once the toggle is live.
+            As `{{ }}` in the body, the Pro price was cloaked — the price on the
+            pricing page did not exist for a crawler or before hydration. --}}
         <div class="mt-3">
           <span class="text-4xl wordmark" :text="interval() === 'yearly' ? '$190' : '$19'">$19</span><span class="text-sm text-subtle" :text="interval() === 'yearly' ? ' / year' : ' / month'"> / month</span>
         </div>
@@ -110,9 +110,9 @@ async function upgrade(): Promise<void> {
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Full retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Priority support</li>
         </ul>
-        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease] active:translate-y-px bg-accent text-white disabled:opacity-60 disabled:cursor-default" :text="loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
+        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full font-semibold text-sm text-white bg-accent rounded-[10px] disabled:opacity-60 active:translate-y-px disabled:cursor-default [transition:transform_0.12s_ease,opacity_0.15s_ease]" :text="loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
         @if (err())
-          <p class="mt-3 text-center text-xs text-[#ef4444]">{{ err() }}</p>
+          <p class="mt-3 text-[#ef4444] text-center text-xs">{{ err() }}</p>
         @endif
       </div>
     </div>

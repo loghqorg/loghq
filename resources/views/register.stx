@@ -125,10 +125,10 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 
     @if (anyOauth)
     {{-- The two rules on this element were `.divider::before` and
-         `.divider::after`. Crosswind generates nothing for a `before:` or
-         `after:` utility — verified against the served sheet — so the
-         hairlines are real elements rather than pseudo-elements. --}}
-    <div class="flex gap-3 items-center my-5 text-subtle text-[12px]">
+        `.divider::after`. Crosswind generates nothing for a `before:` or
+        `after:` utility — verified against the served sheet — so the
+        hairlines are real elements rather than pseudo-elements. --}}
+    <div class="flex gap-3 items-center my-5 text-[12px] text-subtle">
       <span class="flex-1 h-px bg-line"></span>or<span class="flex-1 h-px bg-line"></span>
     </div>
 

@@ -805,7 +805,7 @@ onMount(() => {
           <Icon name="lucide:sun" size="17" class="h-[17px] w-[17px] ic-sun" />
           <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>
-        <StxLink to="/dashboard" class="px-3.5 py-2 font-medium text-sm border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">← Dashboard</StxLink>
+        <StxLink to="/dashboard" class="px-3.5 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">← Dashboard</StxLink>
       </div>
     </header>
 
@@ -814,12 +814,12 @@ onMount(() => {
     @endif
 
     {{-- Say the database is unreachable rather than leaving the skeleton above
-         in place, which is what an unguarded throw produced: HTTP 200, a page
-         truncated to "Loading…", and nothing to act on. --}}
+        in place, which is what an unguarded throw produced: HTTP 200, a page
+        truncated to "Loading…", and nothing to act on. --}}
     @if (user && projectsUnavailable)
       <div class="py-24 text-center">
-        <p class="text-sm text-muted"><span class="font-semibold text-ink">Can't reach your settings right now.</span> Make sure Postgres is provisioned.</p>
-        <p class="mt-2 text-xs text-subtle">Nothing has been changed — reload once the database is back.</p>
+        <p class="text-muted text-sm"><span class="font-semibold text-ink">Can't reach your settings right now.</span> Make sure Postgres is provisioned.</p>
+        <p class="mt-2 text-subtle text-xs">Nothing has been changed — reload once the database is back.</p>
       </div>
     @endif
 
@@ -828,47 +828,47 @@ onMount(() => {
         <div class="flex flex-wrap gap-3 items-center">
           <h2 class="font-semibold text-xl tracking-[-0.02em]">Settings</h2>
           @if (projects.length > 1)
-            <select @change="switchProject" class="px-3 py-1.5 text-muted text-sm font-mono app-panel">
+            <select @change="switchProject" class="px-3 py-1.5 font-mono text-muted text-sm app-panel">
               @foreach (projects as p)
                 <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}</option>
               @endforeach
             </select>
           @else
-            <span class="text-muted text-sm font-mono">{{ activeProject.name }}</span>
+            <span class="font-mono text-muted text-sm">{{ activeProject.name }}</span>
           @endif
         </div>
         <p class="mt-1.5 text-sm text-subtle">Manage the API key, team, alerts, and deletion for this project.</p>
       </div>
 
       <nav class="flex gap-2 items-center mb-8 text-sm">
-        <a href="#install" class="px-3 py-1.5 font-medium text-muted border border-line rounded-[999px] [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Install</a>
-        <a href="#keys" class="px-3 py-1.5 font-medium text-muted border border-line rounded-[999px] [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Keys</a>
-        <a href="#members" class="px-3 py-1.5 font-medium text-muted border border-line rounded-[999px] [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Members</a>
-        <a href="#alerts" class="px-3 py-1.5 font-medium text-muted border border-line rounded-[999px] [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Alerts</a>
-        <a href="#danger" class="px-3 py-1.5 font-medium text-muted border border-line rounded-[999px] [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Danger</a>
+        <a href="#install" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Install</a>
+        <a href="#keys" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Keys</a>
+        <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
+        <a href="#alerts" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Alerts</a>
+        <a href="#danger" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Danger</a>
       </nav>
 
       {{-- ============================ INSTALL ============================ --}}
       <section id="install" class="mb-10 scroll-mt-[84px]">
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">Install</div>
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Install</div>
         <div class="px-5 py-5 app-panel">
           <div class="flex gap-3 items-center justify-between mb-3.5">
-            <p class="text-sm text-subtle">Send logs to <span class="text-muted font-mono">{{ activeProject.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
-            <span class="shrink-0 rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] text-accent">{{ guide.label }}</span>
+            <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
+            <span class="shrink-0 px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">{{ guide.label }}</span>
           </div>
           @if (guide.install)
             <div class="relative mb-2">
-              <div class="bg-canvas border border-line rounded-[10px] text-muted font-mono text-[12px] leading-[1.5] py-3 pl-4 pr-16 overflow-x-auto">{{ guide.install }}</div>
-              <button type="button" @click="copyText(installText, copiedInstall)" class="absolute top-2 right-2 font-sans font-medium text-[11px] leading-none px-[9px] py-[5px] rounded-[7px] border border-line bg-panel text-subtle cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
+              <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted bg-canvas border border-line rounded-[10px]">{{ guide.install }}</div>
+              <button type="button" @click="copyText(installText, copiedInstall)" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
             </div>
           @endif
           <div class="relative">
-            <div class="bg-canvas border border-line rounded-[10px] text-muted font-mono text-[12px] leading-[1.5] py-3 pl-4 pr-16 overflow-x-auto whitespace-pre">{{ guide.code }}</div>
-            <button type="button" @click="copyText(codeText, copiedCode)" class="absolute top-2 right-2 font-sans font-medium text-[11px] leading-none px-[9px] py-[5px] rounded-[7px] border border-line bg-panel text-subtle cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
+            <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted whitespace-pre bg-canvas border border-line rounded-[10px]">{{ guide.code }}</div>
+            <button type="button" @click="copyText(codeText, copiedCode)" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Native SDKs are in progress. Until then this is the whole integration — the
-            <a href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md" class="text-muted underline underline-offset-2 decoration-[var(--border)] [transition:color_0.15s_ease,text-decoration-color_0.15s_ease] hover:text-ink hover:decoration-[currentColor]" target="_blank" rel="noreferrer">ingest spec</a>
+            <a href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md" class="text-muted underline underline-offset-2 hover:text-ink [transition:color_0.15s_ease,text-decoration-color_0.15s_ease] decoration-[var(--border)] hover:decoration-[currentColor]" target="_blank" rel="noreferrer">ingest spec</a>
             documents every field, limit, and retry rule if you want batching or backoff.
           </p>
         </div>
@@ -876,17 +876,17 @@ onMount(() => {
 
       {{-- ============================ KEYS ============================ --}}
       <section id="keys" class="mb-10 scroll-mt-[84px]">
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">API key</div>
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">API key</div>
         <div class="px-5 py-5 app-panel">
           <p class="mb-4 text-sm text-subtle">
-            This key authorizes log ingest for <span class="text-muted font-mono">{{ activeProject.name }}</span>.
+            This key authorizes log ingest for <span class="font-mono text-muted">{{ activeProject.name }}</span>.
             It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
           </p>
           <div class="flex flex-wrap gap-2 items-center">
-            <code class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] font-mono" :text="keyShown()">{{ keyMask }}</code>
-            <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-sm border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
-            <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-sm border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
-            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn">Rotate</button>
+            <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" :text="keyShown()">{{ keyMask }}</code>
+            <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
+            <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
+            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm text-warn hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Rotate</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
@@ -897,46 +897,46 @@ onMount(() => {
 
       {{-- ============================ MEMBERS ============================ --}}
       <section id="members" class="mb-10 scroll-mt-[84px]">
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">Members</div>
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Members</div>
         <div class="flex flex-col gap-2.5 mb-4">
           {{-- Owner (always first, not removable) --}}
           <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel">
-            <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold rounded-lg bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] text-accent">{{ (ownerEmail || '?').charAt(0).toUpperCase() }}</span>
+            <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-accent bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] rounded-lg">{{ (ownerEmail || '?').charAt(0).toUpperCase() }}</span>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-sm truncate">{{ ownerEmail }}</div>
               <div class="mt-0.5 text-subtle text-xs">Full access</div>
             </div>
-            <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] text-accent">Owner</span>
+            <span class="px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_16%,var(--panel))] rounded-[999px]">Owner</span>
           </div>
           @foreach (memberView as m)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ m.id }}')">
-              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted rounded-lg bg-[color-mix(in_srgb,var(--text-3)_16%,var(--panel))]">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-muted bg-[color-mix(in_srgb,var(--text-3)_16%,var(--panel))] rounded-lg">{{ (m.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ m.email }}</div>
                 <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
               </div>
-              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] text-accent">Member</span>
-              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" x-tooltip="Remove">Remove</button>
+              <span class="px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">Member</span>
+              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
             </div>
           @endforeach
           @foreach (inviteView as i)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isMemberRemoved('{{ i.id }}')">
-              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle rounded-lg bg-[color-mix(in_srgb,var(--text-3)_12%,var(--panel))]">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
+              <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle bg-[color-mix(in_srgb,var(--text-3)_12%,var(--panel))] rounded-lg">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ i.email }}</div>
                 <div class="mt-0.5 text-subtle text-xs">{{ i.registered ? 'Has an account — pending accept' : 'Invite sent — awaiting sign-up' }}</div>
               </div>
-              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] text-muted" x-tooltip="Pending — becomes a member once they accept">Invited</span>
-              <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" x-tooltip="Copy join link">Copy link</button>
-              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" x-tooltip="Revoke invite">Remove</button>
+              <span class="px-[9px] py-0.5 font-semibold text-[11px] text-muted tracking-[0.02em] bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] rounded-[999px]" x-tooltip="Pending — becomes a member once they accept">Invited</span>
+              <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-muted text-xs hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" x-tooltip="Copy join link">Copy link</button>
+              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Revoke invite">Remove</button>
             </div>
           @endforeach
         </div>
         <div class="px-5 py-5 app-panel">
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
-            <input :model="inviteEmail" type="email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]" placeholder="teammate@company.com" autocomplete="off">
-            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm bg-accent text-white rounded-[10px] [transition:background_0.15s_ease,opacity_0.15s_ease] hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] disabled:opacity-55 disabled:cursor-default" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
+            <input :model="inviteEmail" type="email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
+            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
           </div>
           <span class="mt-2.5 text-xs" :show="!!inviteNote()" :style="inviteNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -947,7 +947,7 @@ onMount(() => {
 
       {{-- ============================ ALERTS ============================ --}}
       <section id="alerts" class="mb-10 scroll-mt-[84px]">
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-subtle">Alerts</div>
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Alerts</div>
         <p class="mb-4 text-sm text-subtle">
           Add a Slack or Discord webhook and send a test to verify it. Automatic delivery isn't live yet —
           channels you add here are saved and testable, but loghq won't fire on its own until log-based alert rules ship.
@@ -956,35 +956,35 @@ onMount(() => {
           @forelse (channelView as c)
             <div class="flex gap-3.5 items-center px-4 py-3.5 app-panel" :show="!isChannelRemoved('{{ c.id }}')">
               {{-- The class used to be `badge-{{ c.type }}`, which emits
-                   `badge-slack` or `badge-discord` — and neither class exists
-                   anywhere in the project, so the pill rendered unstyled. A
-                   name assembled by interpolation cannot be found by grepping
-                   for the class either, which is why it survived this long.
-                   The brand treatment here matches .seg-slack / .seg-discord in
-                   app-chrome.css: solid brand background, white text. --}}
+                  `badge-slack` or `badge-discord` — and neither class exists
+                  anywhere in the project, so the pill rendered unstyled. A
+                  name assembled by interpolation cannot be found by grepping
+                  for the class either, which is why it survived this long.
+                  The brand treatment here matches .seg-slack / .seg-discord in
+                  app-chrome.css: solid brand background, white text. --}}
               <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 text-white {{ c.type === 'slack' ? 'bg-[var(--slack)]' : 'bg-[var(--discord)]' }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ c.label }}</div>
-                <div class="mt-0.5 text-subtle text-xs truncate font-mono">{{ c.mask }}</div>
+                <div class="mt-0.5 font-mono text-subtle text-xs truncate">{{ c.mask }}</div>
               </div>
-              <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" x-tooltip="Send a test message">Test</button>
+              <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-muted text-xs hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" x-tooltip="Send a test message">Test</button>
               {{-- A real <button>, not a <div role="switch">. As a div this had
-                   no tabindex, no key handler and no accessible name: measured
-                   in a browser it reported focusable:false and ariaLabel:null,
-                   so the only control for enabling an alert channel was
-                   unreachable by keyboard and anonymous to a screen reader.
-                   A button gives focusability, Space/Enter activation and the
-                   focus ring for free, which is precisely the behaviour that
-                   should not be hand-rolled.
+                  no tabindex, no key handler and no accessible name: measured
+                  in a browser it reported focusable:false and ariaLabel:null,
+                  so the only control for enabling an alert channel was
+                  unreachable by keyboard and anonymous to a screen reader.
+                  A button gives focusability, Space/Enter activation and the
+                  focus ring for free, which is precisely the behaviour that
+                  should not be hand-rolled.
 
-                   NOT the shipped <Switch>: it renders a 74x38 blue track
-                   (bg-blue-500, sizeConfig.md) against this app's 38x22
-                   var(--ok) one, and its state colours are hard-coded rather
-                   than tokenised. Adopting it means restyling the control to
-                   match the component instead of the product. The a11y gap was
-                   the defect; the platform element closes it. --}}
-              <button type="button" role="switch" aria-label="Enable {{ c.label }}" data-on="{{ c.enabled ? '1' : '0' }}" aria-checked="{{ c.enabled ? 'true' : 'false' }}" class="tgl relative h-[22px] w-[38px] rounded-[999px] bg-line flex-none cursor-pointer border-none p-0 appearance-none [transition:background_0.15s_ease]" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
-              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-xs border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn" x-tooltip="Remove">Remove</button>
+                  NOT the shipped <Switch>: it renders a 74x38 blue track
+                  (bg-blue-500, sizeConfig.md) against this app's 38x22
+                  var(--ok) one, and its state colours are hard-coded rather
+                  than tokenised. Adopting it means restyling the control to
+                  match the component instead of the product. The a11y gap was
+                  the defect; the platform element closes it. --}}
+              <button type="button" role="switch" aria-label="Enable {{ c.label }}" data-on="{{ c.enabled ? '1' : '0' }}" aria-checked="{{ c.enabled ? 'true' : 'false' }}" class="relative flex-none p-0 h-[22px] w-[38px] bg-line border-none rounded-[999px] appearance-none cursor-pointer [transition:background_0.15s_ease] tgl" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
+              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
             </div>
           @empty
             <div class="px-5 py-8 text-center app-panel">
@@ -996,13 +996,13 @@ onMount(() => {
         <div class="px-5 py-5 app-panel">
           <div class="mb-3.5 font-semibold text-sm">Add a channel</div>
           <div class="grid gap-2 grid-cols-2 mb-3">
-            <button type="button" @click="chType.set('slack')" data-sel="1" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-slack">Slack</button>
-            <button type="button" @click="chType.set('discord')" data-sel="0" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-sm seg border border-line rounded-[10px] text-muted bg-panel [transition:all_0.12s_ease] seg-discord">Discord</button>
+            <button type="button" @click="chType.set('slack')" data-sel="1" :data-sel="chType() === 'slack' ? '1' : '0'" class="px-3 py-2.5 font-medium text-muted text-sm bg-panel border border-line rounded-[10px] [transition:all_0.12s_ease] seg seg-slack">Slack</button>
+            <button type="button" @click="chType.set('discord')" data-sel="0" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-muted text-sm bg-panel border border-line rounded-[10px] [transition:all_0.12s_ease] seg seg-discord">Discord</button>
           </div>
-          <input :model="whUrl" :placeholder="whPlaceholder()" type="url" class="mb-2 px-3.5 py-2.5 w-full text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] font-mono" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
-          <input :model="whLabel" type="text" class="mb-3 px-3.5 py-2.5 w-full text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
+          <input :model="whUrl" :placeholder="whPlaceholder()" type="url" class="mb-2 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
+          <input :model="whLabel" type="text" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
-            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm bg-accent text-white rounded-[10px] [transition:background_0.15s_ease,opacity_0.15s_ease] hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] disabled:opacity-55 disabled:cursor-default" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
             <span class="text-xs" :show="!!whNote()" :style="whNoteOk() ? 'color: var(--ok)' : 'color: var(--accent)'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1014,33 +1014,33 @@ onMount(() => {
       {{-- ============================ DANGER ============================ --}}
       <section id="danger" class="mb-6 scroll-mt-[84px]">
         {{-- The section-heading utilities WITHOUT their text-subtle: this
-             heading is warn-coloured, and two colour utilities of equal
-             specificity are decided by their order in the generated sheet.
-             It was pinned inline until settings' <style> block went, because
-             `.sec-title` set var(--text-3) and outranked the utility. --}}
-        <div class="mb-3 text-[13px] font-semibold tracking-[0.04em] uppercase text-warn">Danger zone</div>
-        <div class="bg-panel border rounded-xl border-[color-mix(in_srgb,var(--warn)_40%,var(--border))]" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
+            heading is warn-coloured, and two colour utilities of equal
+            specificity are decided by their order in the generated sheet.
+            It was pinned inline until settings' <style> block went, because
+            `.sec-title` set var(--text-3) and outranked the utility. --}}
+        <div class="mb-3 font-semibold text-[13px] text-warn tracking-[0.04em] uppercase">Danger zone</div>
+        <div class="bg-panel border border-[color-mix(in_srgb,var(--warn)_40%,var(--border))] rounded-xl" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
           {{-- Archive / Unarchive --}}
           <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
               @if (activeProject.is_active === false)
                 <div class="mb-0.5 font-semibold text-sm">Unarchive this project</div>
-                <p class="text-sm text-subtle"><span class="text-muted font-mono">{{ activeProject.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
+                <p class="text-sm text-subtle"><span class="font-mono text-muted">{{ activeProject.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
               @else
                 <div class="mb-0.5 font-semibold text-sm">Archive this project</div>
-                <p class="text-sm text-subtle">Rejects new log entries for <span class="text-muted font-mono">{{ activeProject.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
+                <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
               @endif
             </div>
-            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm whitespace-nowrap border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn">{{ activeProject.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject.is_active === false ? 'Unarchive' : 'Archive' }}</button>
           </div>
           <div class="h-px bg-[color-mix(in_srgb,var(--warn)_20%,var(--border))]"></div>
           {{-- Delete --}}
           <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
               <div class="mb-0.5 font-semibold text-sm">Delete this project</div>
-              <p class="text-sm text-subtle">Permanently deletes <span class="text-muted font-mono">{{ activeProject.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
+              <p class="text-sm text-subtle">Permanently deletes <span class="font-mono text-muted">{{ activeProject.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
             </div>
-            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm whitespace-nowrap border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn">Delete</button>
+            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Delete</button>
           </div>
         </div>
       </section>
@@ -1056,17 +1056,17 @@ onMount(() => {
           into template-literal mode, and the name of the root element or of a
           script tag in one silently disables the document shell. Describe
           syntax in prose here; never quote it. --}}
-      <div class="dz-overlay fixed inset-0 z-[60] flex items-center justify-center p-5 bg-[rgba(2,4,10,0.62)] backdrop-blur-[3px] [animation:dz-fade_0.12s_ease]" :show="modalOpen()" @click="closeModal">
-        <div ref="modalPanel" @keydown="onModalKeydown" class="w-full max-w-[440px] p-[22px] shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] app-panel" role="dialog" aria-modal="true" @click.stop>
+      <div class="flex fixed inset-0 z-[60] items-center justify-center p-5 bg-[rgba(2,4,10,0.62)] backdrop-blur-[3px] [animation:dz-fade_0.12s_ease] dz-overlay" :show="modalOpen()" @click="closeModal">
+        <div ref="modalPanel" @keydown="onModalKeydown" class="p-[22px] max-w-[440px] w-full shadow-[0_24px_70px_rgba(0,0,0,0.5)] [animation:dz-pop_0.14s_cubic-bezier(0.2,0.8,0.3,1)] app-panel" role="dialog" aria-modal="true" @click.stop>
           <div class="mb-1 font-semibold text-base">{{ modalTitle() }}</div>
           <p class="mb-4 text-muted text-sm">{{ modalDesc() }}</p>
-          <label class="block mb-1.5 text-subtle text-xs">Type <span class="text-muted font-mono">{{ projectName }}</span> to confirm</label>
-          <input :model="modalInput" type="text" class="mb-4 px-3.5 py-2.5 w-full text-sm bg-canvas border border-line rounded-[10px] text-ink focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] font-mono" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <label class="block mb-1.5 text-subtle text-xs">Type <span class="font-mono text-muted">{{ projectName }}</span> to confirm</label>
+          <input :model="modalInput" type="text" class="mb-4 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="flex gap-2 items-center justify-end">
-            <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-sm border border-line text-muted rounded-[9px] bg-panel [transition:color_0.15s_ease,border-color_0.15s_ease] hover:text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Cancel</button>
-            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] text-warn rounded-[9px] bg-panel [transition:all_0.15s_ease] hover:text-white hover:bg-warn hover:border-warn"></button>
+            <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Cancel</button>
+            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm text-warn hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]"></button>
           </div>
-          <span class="mt-2.5 text-xs text-accent" :show="!!modalNote()">{{ modalNote() }}</span>
+          <span class="mt-2.5 text-accent text-xs" :show="!!modalNote()">{{ modalNote() }}</span>
         </div>
       </div>
     @endif

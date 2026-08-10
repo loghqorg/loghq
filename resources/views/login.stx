@@ -101,12 +101,12 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       </div>
 
       {{-- The label is a `:text` binding with the resting label written into the
-           element, not a `{{ }}` expression in the body. stx cloaks any element
-           whose TEXT contains an unresolved expression (misc-directives.ts:228)
-           and the cloak rule is `[x-cloak]{display:none !important}` — so the
-           form's only submit control was display:none until the client runtime
-           booted. `:text` overwrites the static label after hydration and never
-           cloaks, so the button is present and pressable at first paint. --}}
+          element, not a `{{ }}` expression in the body. stx cloaks any element
+          whose TEXT contains an unresolved expression (misc-directives.ts:228)
+          and the cloak rule is `[x-cloak]{display:none !important}` — so the
+          form's only submit control was display:none until the client runtime
+          booted. `:text` overwrites the static label after hydration and never
+          cloaks, so the button is present and pressable at first paint. --}}
       <button type="submit" :disabled="loading()" :text="loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
     </form>
 
@@ -116,19 +116,19 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 
     @if (anyOauth)
     {{-- The two rules on this element were `.divider::before` and
-         `.divider::after`. Crosswind generates nothing for a `before:` or
-         `after:` utility — verified against the served sheet — so the
-         hairlines are real elements rather than pseudo-elements. --}}
-    <div class="flex gap-3 items-center my-5 text-subtle text-[12px]">
+        `.divider::after`. Crosswind generates nothing for a `before:` or
+        `after:` utility — verified against the served sheet — so the
+        hairlines are real elements rather than pseudo-elements. --}}
+    <div class="flex gap-3 items-center my-5 text-[12px] text-subtle">
       <span class="flex-1 h-px bg-line"></span>or<span class="flex-1 h-px bg-line"></span>
     </div>
 
     {{-- The two SVGs below are the only inline ones left in the app, and they
-         stay inline deliberately. Every library icon is an <Icon> now, but
-         these are BRAND marks: the Google mark is four fixed brand colours that
-         must not inherit currentColor, and neither is in the lucide collection.
-         Adding @iconify-json/simple-icons for two marks would be a dependency
-         for nothing. Do not "finish the job" by converting them. --}}
+        stay inline deliberately. Every library icon is an <Icon> now, but
+        these are BRAND marks: the Google mark is four fixed brand colours that
+        must not inherit currentColor, and neither is in the lucide collection.
+        Adding @iconify-json/simple-icons for two marks would be a dependency
+        for nothing. Do not "finish the job" by converting them. --}}
     <div class="space-y-2.5">
       @if (githubEnabled)
       <a href="/api/auth/github/redirect" data-no-router class="flex gap-2 items-center justify-center py-2.5 w-full font-medium text-sm oauth-btn">

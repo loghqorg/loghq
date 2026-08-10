@@ -48,24 +48,24 @@ onMount(() => {
       <div class="mega">
         <StxLink class="mega-trigger" to="/#features" aria-haspopup="true">Features</StxLink>
         <div class="mega-panel" role="menu" aria-label="Features">
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/capture"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Automatic capture</span><span class="text-subtle text-[0.8rem] leading-[1.4]">One init call captures every uncaught error with full context.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/stack-traces"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Readable stack traces</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Source maps turn minified frames back into your code.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/grouping"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Fingerprint grouping</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Identical errors fold into one issue with a live count.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/alerts"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Alerts and triage</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Told when an issue is new or spiking, quiet for the rest.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/releases"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Releases and environments</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Tag every event so a regression names its own deploy.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/features/self-host"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Self-hosting</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Open source, on your own Postgres. Data stays with you.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/capture"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Automatic capture</span><span class="leading-[1.4] text-[0.8rem] text-subtle">One init call captures every uncaught error with full context.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/stack-traces"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Readable stack traces</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Source maps turn minified frames back into your code.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/grouping"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Fingerprint grouping</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Identical errors fold into one issue with a live count.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/alerts"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Alerts and triage</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Told when an issue is new or spiking, quiet for the rest.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/releases"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Releases and environments</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Tag every event so a regression names its own deploy.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/features/self-host"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Self-hosting</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Open source, on your own Postgres. Data stays with you.</span></StxLink>
         </div>
       </div>
 
       <div class="mega">
         <StxLink class="mega-trigger" to="/use-cases" aria-haspopup="true">Use cases</StxLink>
         <div class="mega-panel" role="menu" aria-label="Use cases">
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">All use cases</span><span class="text-subtle text-[0.8rem] leading-[1.4]">How different teams put loghq to work in production.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases/frontend"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Frontend</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Catch browser errors with source-mapped traces.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases/backend"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Backend</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Server, edge, and job errors tied to the request.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases/mobile"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Mobile</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Native crashes grouped by build and release.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases/on-call"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">On-call and SRE</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Alert on new and spiking issues, not known noise.</span></StxLink>
-          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] rounded-[var(--r-sm)] hover:bg-[var(--surface-2)]" role="menuitem" to="/use-cases/agencies"><span class="text-ink text-[0.9rem] font-semibold tracking-[-0.01em]">Agencies</span><span class="text-subtle text-[0.8rem] leading-[1.4]">Every client site as its own isolated project.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">All use cases</span><span class="leading-[1.4] text-[0.8rem] text-subtle">How different teams put loghq to work in production.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases/frontend"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Frontend</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Catch browser errors with source-mapped traces.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases/backend"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Backend</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Server, edge, and job errors tied to the request.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases/mobile"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Mobile</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Native crashes grouped by build and release.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases/on-call"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">On-call and SRE</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Alert on new and spiking issues, not known noise.</span></StxLink>
+          <StxLink class="flex flex-col gap-[0.2rem] px-[0.72rem] py-[0.62rem] hover:bg-[var(--surface-2)] rounded-[var(--r-sm)]" role="menuitem" to="/use-cases/agencies"><span class="font-semibold text-[0.9rem] text-ink tracking-[-0.01em]">Agencies</span><span class="leading-[1.4] text-[0.8rem] text-subtle">Every client site as its own isolated project.</span></StxLink>
         </div>
       </div>
 
@@ -76,21 +76,21 @@ onMount(() => {
 
     <StxLink to="/login" class="nav-login" :show="!isAuthed()">Log in</StxLink>
     {{-- `style="display:none"` is required here and must NOT become a `hidden`
-         utility, despite ch.11.5. It is the server-rendered initial state for
-         `:show`, and `:show` drives the inline declaration specifically: when
-         the expression turns true the runtime CLEARS the style attribute back
-         to "" rather than writing `display:block` (verified in the browser —
-         an authed page reports style="" on this link). A `hidden` class would
-         survive that clearing, so the link would never appear once signed in.
-         The default is hidden rather than shown so the link does not flash for
-         signed-out visitors during hydration. --}}
+        utility, despite ch.11.5. It is the server-rendered initial state for
+        `:show`, and `:show` drives the inline declaration specifically: when
+        the expression turns true the runtime CLEARS the style attribute back
+        to "" rather than writing `display:block` (verified in the browser —
+        an authed page reports style="" on this link). A `hidden` class would
+        survive that clearing, so the link would never appear once signed in.
+        The default is hidden rather than shown so the link does not flash for
+        signed-out visitors during hydration. --}}
     <StxLink to="/dashboard" class="nav-login" :show="isAuthed()" style="display:none">Dashboard</StxLink>
     <StxLink class="btn nav-cta primary sm" :show="!isAuthed()" to="/register">Sign up</StxLink>
 
     <details class="nav-menu">
       <summary aria-label="Open menu"><span class="burger" aria-hidden="true"></span></summary>
       <div class="nav-menu-panel">
-        <span class="px-[0.7rem] pt-[0.55rem] pb-[0.2rem] font-mono text-[0.68rem] tracking-[0.12em] uppercase text-subtle nav-menu-group">Features</span>
+        <span class="pb-[0.2rem] pt-[0.55rem] px-[0.7rem] font-mono text-[0.68rem] text-subtle tracking-[0.12em] uppercase nav-menu-group">Features</span>
         <StxLink to="/features/capture">Automatic capture</StxLink>
         <StxLink to="/features/stack-traces">Readable stack traces</StxLink>
         <StxLink to="/features/grouping">Fingerprint grouping</StxLink>
@@ -98,7 +98,7 @@ onMount(() => {
         <StxLink to="/features/releases">Releases and environments</StxLink>
         <StxLink to="/features/self-host">Self-hosting</StxLink>
 
-        <span class="px-[0.7rem] pt-[0.55rem] pb-[0.2rem] font-mono text-[0.68rem] tracking-[0.12em] uppercase text-subtle nav-menu-group">Use cases</span>
+        <span class="pb-[0.2rem] pt-[0.55rem] px-[0.7rem] font-mono text-[0.68rem] text-subtle tracking-[0.12em] uppercase nav-menu-group">Use cases</span>
         <StxLink to="/use-cases">All use cases</StxLink>
         <StxLink to="/use-cases/frontend">Frontend</StxLink>
         <StxLink to="/use-cases/backend">Backend</StxLink>
@@ -106,7 +106,7 @@ onMount(() => {
         <StxLink to="/use-cases/on-call">On-call and SRE</StxLink>
         <StxLink to="/use-cases/agencies">Agencies</StxLink>
 
-        <span class="px-[0.7rem] pt-[0.55rem] pb-[0.2rem] font-mono text-[0.68rem] tracking-[0.12em] uppercase text-subtle nav-menu-group">More</span>
+        <span class="pb-[0.2rem] pt-[0.55rem] px-[0.7rem] font-mono text-[0.68rem] text-subtle tracking-[0.12em] uppercase nav-menu-group">More</span>
         <StxLink to="/pricing">Pricing</StxLink>
         <StxLink to="/docs">Docs</StxLink>
         <a href="https://github.com/stacksjs/loghq">GitHub</a>

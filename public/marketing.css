@@ -254,16 +254,16 @@ a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
 .cta-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; margin-top: 1.5rem; }
 
 /* subscribe form
-   Sized to the band's own rhythm: the input borrows the .btn min-height so the
-   field and its button line up without a magic number, and the row collapses to
-   a stack under 30rem rather than squeezing a 40-character field. */
+  Sized to the band's own rhythm: the input borrows the .btn min-height so the
+  field and its button line up without a magic number, and the row collapses to
+  a stack under 30rem rather than squeezing a 40-character field. */
 .sub-form { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin: 1.5rem auto 0; max-width: 27rem; }
 .sub-field { flex: 1 1 15rem; min-width: 0; min-height: 44px; padding: 0 0.9rem; border: 1px solid var(--border-strong, var(--border)); border-radius: calc(var(--r) - 4px); background: var(--bg); color: var(--text); font: inherit; font-size: 0.95rem; transition: border-color 0.16s ease, box-shadow 0.16s ease; }
 .sub-field::placeholder { color: var(--text-3); }
 .sub-field:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 /* Defined here rather than assumed from the utility layer: this stylesheet is
-   the page's own contract, and a visually-hidden helper that silently is not
-   emitted shows up as a stray label sitting above the field. */
+  the page's own contract, and a visually-hidden helper that silently is not
+  emitted shows up as a stray label sitting above the field. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .sub-note { margin: 0.85rem auto 0; max-width: 40ch; color: var(--text-3); font-size: 0.84rem; line-height: 1.5; }
 .sub-note a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }

@@ -21,13 +21,13 @@ onMount(() => {
 
 <footer class="footer shell">
   {{-- The two source rules were `@media (max-width: 900px)` and
-       `(max-width: 560px)`. Crosswind emits nothing for a max-width
-       variant, so this is the same design stated mobile-first: one column
-       by default, two from bp-sm (561px), the 1.4fr lead column from bp-md
-       (901px). The breakpoints are declared in config/crosswind.ts and sit
-       one pixel above the max-widths they replace, which is what keeps the
-       boundaries identical. --}}
-  <div class="grid grid-cols-1 gap-x-8 gap-y-7 pt-4 pb-9 bp-sm:grid-cols-2 bp-md:grid-cols-[1.4fr_1fr_1fr_1fr] bp-md:gap-x-10 bp-md:gap-y-8 footer-cols">
+      `(max-width: 560px)`. Crosswind emits nothing for a max-width
+      variant, so this is the same design stated mobile-first: one column
+      by default, two from bp-sm (561px), the 1.4fr lead column from bp-md
+      (901px). The breakpoints are declared in config/crosswind.ts and sit
+      one pixel above the max-widths they replace, which is what keeps the
+      boundaries identical. --}}
+  <div class="grid gap-x-8 gap-y-7 grid-cols-1 bp-md:gap-x-10 bp-md:gap-y-8 bp-md:grid-cols-[1.4fr_1fr_1fr_1fr] bp-sm:grid-cols-2 pb-9 pt-4 footer-cols">
     <div class="flex flex-col gap-[0.6rem] footer-col">
       <h4 class="footer-head">Product</h4>
       <StxLink class="footer-link" to="/features/capture">Automatic capture</StxLink>
@@ -68,7 +68,7 @@ onMount(() => {
       <a class="footer-link" href="https://github.com/stacksjs/loghq">GitHub</a>
       <StxLink class="footer-link" to="/login" :show="!isAuthed()">Log in</StxLink>
       {{-- Inline display:none is the `:show` initial state and cannot be a
-           `hidden` utility — see the explanation in SiteNav.stx. --}}
+          `hidden` utility — see the explanation in SiteNav.stx. --}}
       <StxLink class="footer-link" to="/dashboard" :show="isAuthed()" style="display:none">Dashboard</StxLink>
       <StxLink class="footer-link" :show="!isAuthed()" to="/register">Get started</StxLink>
     </div>

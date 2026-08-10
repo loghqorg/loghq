@@ -97,8 +97,8 @@ onMount(() => {
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">loghq</StxLink>
     <div class="flex gap-2.5 items-center">
-      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Dashboard</StxLink>
-      <button @click="logout" class="px-3.5 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Log out</button>
+      <StxLink to="/dashboard" class="px-3.5 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Dashboard</StxLink>
+      <button @click="logout" class="px-3.5 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Log out</button>
     </div>
   </header>
 
@@ -113,28 +113,28 @@ onMount(() => {
     <section class="mb-5 p-6 bg-panel border border-line rounded-[14px]">
       <div class="flex gap-4 items-center">
         {{-- The initials block is the fallback for BOTH "no avatar" and "the
-             avatar failed to load", so the two :show conditions are exact
-             complements — avatarOk() and !avatarOk() — and exactly one of the
-             pair is ever visible.
+            avatar failed to load", so the two :show conditions are exact
+            complements — avatarOk() and !avatarOk() — and exactly one of the
+            pair is ever visible.
 
-             `:src` deliberately has NO static counterpart, unlike every other
-             binding in this app. There is no server-known avatar: it arrives
-             from /api/me after paint. A static src="" would be worse than
-             nothing — the browser resolves an empty src against the current
-             URL and requests the page again as an image. The element is hidden
-             by :show until avatarOk() is true, so there is no first-paint state
-             to encode. --}}
-        <img class="h-14 w-14 rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" alt="" width="56" height="56" :show="avatarOk()" :src="avatarUrl()" @error="onAvatarError">
-        <div class="grid place-items-center h-14 w-14 font-bold text-xl text-accent rounded-[999px] object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]" :show="!avatarOk()" :text="avatarInitial()"></div>
+            `:src` deliberately has NO static counterpart, unlike every other
+            binding in this app. There is no server-known avatar: it arrives
+            from /api/me after paint. A static src="" would be worse than
+            nothing — the browser resolves an empty src against the current
+            URL and requests the page again as an image. The element is hidden
+            by :show until avatarOk() is true, so there is no first-paint state
+            to encode. --}}
+        <img class="object-cover h-14 w-14 bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]" alt="" width="56" height="56" :show="avatarOk()" :src="avatarUrl()" @error="onAvatarError">
+        <div class="grid object-cover place-items-center h-14 w-14 font-bold text-accent text-xl bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]" :show="!avatarOk()" :text="avatarInitial()"></div>
         <div class="min-w-0">
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the
               skeleton needs a fixed box the real text must not inherit. --}}
-          <div class="w-[160px] h-5 rounded-md bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] [animation:loghq-pulse_1.4s_ease-in-out_infinite] motion-reduce:[animation:none]" :show="!loaded()"></div>
+          <div class="h-5 w-[160px] bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] rounded-md [animation:loghq-pulse_1.4s_ease-in-out_infinite] motion-reduce:[animation:none]" :show="!loaded()"></div>
           <div class="font-semibold text-lg" :show="loaded()" :text="displayName()"></div>
           <div class="mt-1.5 text-muted text-sm" :text="email()"></div>
         </div>
-        <span class="ml-auto px-2.5 py-1 border border-line rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase text-muted" :show="!!provider()" :text="provider()"></span>
+        <span class="ml-auto px-2.5 py-1 font-mono text-[11px] text-muted tracking-[0.04em] uppercase border border-line rounded-[999px]" :show="!!provider()" :text="provider()"></span>
       </div>
     </section>
 
@@ -144,29 +144,29 @@ onMount(() => {
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Plan</div>
           <div class="mt-1 font-semibold text-base">
             {{-- Its own <span> because the parent also holds the badge below,
-                 and `:text` on the parent would erase it. Free is the resting
-                 state: `pro` is false until /api/me answers. --}}
+                and `:text` on the parent would erase it. Free is the resting
+                state: `pro` is false until /api/me answers. --}}
             <span :text="pro() ? 'Pro' : 'Free'">Free</span>{{-- The badge base without its `text-muted`/`border-line`: this is the Pro
-                 variant and both would fight the accent pair below. `.badge-pro`
-                 used to win by cascade order inside one <style> block; two
-                 utilities of equal specificity are decided by their order in the
-                 GENERATED sheet instead, and text-muted lands after text-accent
-                 there — the Pro badge came out grey. --}}
-                <span class="ml-1 px-2 py-0.5 border rounded-[999px] font-mono text-[11px] tracking-[0.04em] uppercase border-accent text-accent" :show="pro()">active</span>
+                variant and both would fight the accent pair below. `.badge-pro`
+                used to win by cascade order inside one <style> block; two
+                utilities of equal specificity are decided by their order in the
+                GENERATED sheet instead, and text-muted lands after text-accent
+                there — the Pro badge came out grey. --}}
+                <span class="ml-1 px-2 py-0.5 font-mono text-[11px] text-accent tracking-[0.04em] uppercase border border-accent rounded-[999px]" :show="pro()">active</span>
           </div>
         </div>
         {{-- Two anchors rather than one rewritten in place: the pro and free CTAs
             differ in destination, label and variant, so branching the markup is
             clearer than mutating three attributes. --}}
-        <StxLink to="/pricing" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px bg-accent text-white hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)]" :show="!pro()">Upgrade to Pro</StxLink>
-        <StxLink to="/pricing" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]" :show="pro()">Manage plan</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :show="!pro()">Upgrade to Pro</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :show="pro()">Manage plan</StxLink>
       </div>
       <div class="flex items-center justify-between px-6 py-4 [border-top:1px_solid_var(--border)]">
         <div>
           <div class="font-mono text-subtle text-xs tracking-wide uppercase">Member since</div>
           <div class="mt-1 text-base text-muted" :text="memberSince()"></div>
         </div>
-        <StxLink to="/dashboard" class="px-4 py-2 text-sm rounded-[10px] font-semibold [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] active:translate-y-px border border-line text-ink hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]">Open dashboard</StxLink>
+        <StxLink to="/dashboard" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Open dashboard</StxLink>
       </div>
     </section>
 

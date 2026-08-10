@@ -105,23 +105,23 @@ async function subscribe() {
       <p class="hero-sub">Stream every log line from your app into a fast, searchable UI. Filter by level, search messages, and inspect structured context instead of tailing a file.</p>
       <div class="hero-actions">
         {{-- Label and href carry their logged-OUT state statically: that is the
-             SSR truth, it is what a crawler and a first-time visitor see, and it
-             works with no JavaScript. The bindings upgrade it for a signed-in
-             visitor after hydration. As `{{ }}` in the body this button was
-             cloaked — display:none until the runtime booted. --}}
+            SSR truth, it is what a crawler and a first-time visitor see, and it
+            works with no JavaScript. The bindings upgrade it for a signed-in
+            visitor after hydration. As `{{ }}` in the body this button was
+            cloaked — display:none until the runtime booted. --}}
         <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
         <a class="btn ghost" href="https://github.com/stacksjs/loghq">View source</a>
       </div>
     </div>
 
-    <div class="overflow-hidden border border-line rounded-[var(--r)] bg-[var(--code-bg)] hero-code reveal [animation-delay:0.08s]">
+    <div class="overflow-hidden bg-[var(--code-bg)] border border-line rounded-[var(--r)] [animation-delay:0.08s] hero-code reveal">
       {{-- marketing.css also defines .code-bar, with a wider gap and less
-           vertical padding. This element used to beat it with a
-           `.hero-code .code-bar` descendant rule; the utilities beat it on
-           source order instead, the Crosswind sheet being emitted after
-           /marketing.css. --}}
+          vertical padding. This element used to beat it with a
+          `.hero-code .code-bar` descendant rule; the utilities beat it on
+          source order instead, the Crosswind sheet being emitted after
+          /marketing.css. --}}
       <div class="flex gap-[0.55rem] items-center px-4 py-[0.8rem] [border-bottom:1px_solid_rgba(148,163,184,0.14)] code-bar">
-        <span class="h-[9px] w-[9px] rounded-[999px] bg-accent" aria-hidden="true"></span>
+        <span class="h-[9px] w-[9px] bg-accent rounded-[999px]" aria-hidden="true"></span>
         <span class="chart-cap">config/logging.php</span>
       </div>
       <pre class="code-body"><code>{{ snippet }}</code></pre>
@@ -161,8 +161,8 @@ async function subscribe() {
   </section>
 
   <section class="reveal section" aria-label="Open source and self-hosting">
-    <div class="flex flex-wrap gap-5 items-center justify-between px-8 py-7 border border-line rounded-[var(--r)] bg-[var(--surface)]">
-      <p class="m-0 max-w-[52ch] text-muted text-[1rem] leading-[1.55]"><strong class="text-ink font-semibold">Open source, and yours to run.</strong> Host loghq on your own Postgres so sensitive log data never leaves your infrastructure, or start on the hosted tier in a minute.</p>
+    <div class="flex flex-wrap gap-5 items-center justify-between px-8 py-7 bg-[var(--surface)] border border-line rounded-[var(--r)]">
+      <p class="m-0 max-w-[52ch] leading-[1.55] text-[1rem] text-muted"><strong class="font-semibold text-ink">Open source, and yours to run.</strong> Host loghq on your own Postgres so sensitive log data never leaves your infrastructure, or start on the hosted tier in a minute.</p>
       <StxLink class="btn ghost" to="/features/self-host">Read about self-hosting</StxLink>
     </div>
   </section>
@@ -172,10 +172,10 @@ async function subscribe() {
       <h2>Stop tailing log files.</h2>
       <div class="cta-actions">
         {{-- Label and href carry their logged-OUT state statically: that is the
-             SSR truth, it is what a crawler and a first-time visitor see, and it
-             works with no JavaScript. The bindings upgrade it for a signed-in
-             visitor after hydration. As `{{ }}` in the body this button was
-             cloaked, display:none until the runtime booted. --}}
+            SSR truth, it is what a crawler and a first-time visitor see, and it
+            works with no JavaScript. The bindings upgrade it for a signed-in
+            visitor after hydration. As `{{ }}` in the body this button was
+            cloaked, display:none until the runtime booted. --}}
         <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
         <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
       </div>
@@ -183,8 +183,8 @@ async function subscribe() {
   </section>
 
   {{-- Launch updates. A separate intent from the buttons above: the band asks
-       you to start now, this asks nothing of you but an address. Hidden from a
-       signed-in visitor, who has already done more than subscribe. --}}
+      you to start now, this asks nothing of you but an address. Hidden from a
+      signed-in visitor, who has already done more than subscribe. --}}
   <section class="reveal section" aria-labelledby="updates-heading" :hidden="isAuthed()">
     <div class="cta-band">
       <h2 id="updates-heading">Not ready to sign up?</h2>
