@@ -2,7 +2,9 @@
 // Projects list. Server-authenticates from the token cookie and shows the
 // user's own apps; each links into its dashboard. New users (or logged-out
 // visitors) are handled by the client guard at the bottom.
-const { db } = await import('@stacksjs/database')
+// Static import per ch.5.3, renamed to `__db` per ch.5.8 — see the fuller note
+// in settings.stx.
+import { db as __db } from '@stacksjs/database'
 
 // `__`-prefixed so the server→client bridge cannot publish it — see the note in
 // settings.stx. This page does not leak today only because the word "token"
@@ -24,7 +26,7 @@ let projects: ProjectRow[] = []
 let projectsUnavailable = false
 if (user) {
   try {
-    projects = (await db.unsafe(
+    projects = (await __db.unsafe(
       // ingest_key is not selected: nothing on this page renders it, and
       // `projects` is a server→client bridge candidate.
       'SELECT id, name, platform, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',

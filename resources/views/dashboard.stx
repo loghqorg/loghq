@@ -2,8 +2,13 @@
 // loghq log stream. Authenticates the current user from the token cookie
 // (mirrored from localStorage by login/register), loads THEIR projects
 // owner-scoped, and renders the active one's log stream (newest first) with
-// level-threshold, time-range, and text-search filters. Reads via db.unsafe.
-const { db } = await import('@stacksjs/database')
+// level-threshold, time-range, and text-search filters. Reads via __db.unsafe.
+// Static import per ch.5.3, renamed to `__db` per ch.5.8 — see the fuller note
+// in settings.stx. The rewrite exports every top-level binding into the template
+// context, and `db` is an object rather than a function, so without the prefix it
+// is a bridge candidate that only stays unpublished while no client block happens
+// to contain the word.
+import { db as __db } from '@stacksjs/database'
 
 // __stxServeSearch is a context local, injected onto THIS render's context by
 // the serve path immediately before the block runs — not a global to reach
@@ -89,7 +94,7 @@ if (user) {
   // Measured by renaming project_invites out from under a live server: 22845
   // bytes of dashboard became 14842 bytes of permanent spinner.
   try {
-    projects = (await db.unsafe(
+    projects = (await __db.unsafe(
       // No p.ingest_key. This page has no key UI, and `projects` is a bridge
       // candidate, so selecting the column published every project's ingest
       // credential — the only thing routes/logs.ts checks — into the HTML.
@@ -101,7 +106,7 @@ if (user) {
       ORDER BY p.created_at DESC NULLS LAST, p.id`,
       [Number(user.id), userEmail],
     )) ?? []
-    pendingInvites = (await db.unsafe(
+    pendingInvites = (await __db.unsafe(
       `SELECT i.token, p.name AS project_name FROM project_invites i
       JOIN projects p ON p.id = i.project_id
       WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
@@ -159,7 +164,7 @@ async function loadData(): Promise<void> {
   const params = [projectId]
   if (levelSet) {
     // Individual placeholders (`IN (...)`), not `= ANY($n)` with an array param:
-    // db.unsafe binds a JS array as a malformed Postgres array literal.
+    // __db.unsafe binds a JS array as a malformed Postgres array literal.
     const placeholders = levelSet.map((_, i) => `$${params.length + i + 1}`).join(',')
     levelSet.forEach(l => params.push(l))
     conds.push(`level IN (${placeholders})`)
@@ -174,12 +179,12 @@ async function loadData(): Promise<void> {
   }
   const where = conds.join(' AND ')
 
-  const filteredTotal = Number((await db.unsafe(`SELECT COUNT(*) AS n FROM log_entries WHERE ${where}`, params))?.[0]?.n ?? 0)
+  const filteredTotal = Number((await __db.unsafe(`SELECT COUNT(*) AS n FROM log_entries WHERE ${where}`, params))?.[0]?.n ?? 0)
   const pages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE))
   const page = Math.min(requestedPage, pages)
   const offset = (page - 1) * PAGE_SIZE
 
-  logs = (await db.unsafe(
+  logs = (await __db.unsafe(
     `SELECT id, level, message, channel, environment, release, framework, host, context, timestamp
     FROM log_entries WHERE ${where} ORDER BY timestamp DESC, id DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
     params,
@@ -202,7 +207,7 @@ async function loadData(): Promise<void> {
   const cconds = ['project_id = $1']
   if (activeRange.interval)
     cconds.push(`timestamp::timestamptz >= NOW() - INTERVAL '${activeRange.interval}'`)
-  const c = (await db.unsafe(
+  const c = (await __db.unsafe(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE level = 'warning') AS warnings,
             COUNT(*) FILTER (WHERE level IN ('error','critical','alert','emergency')) AS errors

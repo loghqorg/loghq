@@ -5,8 +5,19 @@
 // preference the dashboard uses), scoped to projects the user OWNS — members can
 // read the log stream but only an owner administers a project. Reads happen here
 // server-side; mutations go client-side to the owner-scoped /api endpoints.
-const { db } = await import('@stacksjs/database')
-const { appUrl, ingestUrl } = await import('../../app/Support/urls')
+// Static imports, per ch.5.3: the CommonJS rewrite turns these into the
+// `await import()` form itself and adds the module.exports line, which the
+// hand-written form does not get.
+//
+// `db as __db` on purpose. The rewrite's export line puts every top-level
+// binding into the template context, and the bridge publishes any non-function
+// context value whose bare name appears in the client script. `db` is an object,
+// not a function, so it is a bridge candidate — it stays out of the HTML today
+// only because the word happens not to appear in the client block below. The
+// `__` prefix makes that a guarantee instead of an accident (ch.5.8).
+// appUrl/ingestUrl need no prefix: functions are dropped by the bridge.
+import { db as __db } from '@stacksjs/database'
+import { appUrl, ingestUrl } from '../../app/Support/urls'
 // APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
 // (a separate host in local dev). Both are absolute and env-driven, falling
 // back to the local servers. See app/Support/urls.ts.
@@ -80,7 +91,7 @@ if (user) {
   // 200; see the note in dashboard.stx.
   try {
     // Owned projects only — settings is the owner's admin surface.
-    __projectRows = (await db.unsafe(
+    __projectRows = (await __db.unsafe(
       'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
     )) ?? []
@@ -90,17 +101,17 @@ if (user) {
       __activeRow = __projectRows.find(p => p.id === requestedProject) || __projectRows.find(p => p.id === cookieProject) || __projectRows[0]
 
     if (__activeRow) {
-      __channelRows = (await db.unsafe(
+      __channelRows = (await __db.unsafe(
         `SELECT id, type, label, webhook_url, enabled, created_at
         FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
         [__activeRow.id],
       )) ?? []
-      __memberRows = (await db.unsafe(
+      __memberRows = (await __db.unsafe(
         `SELECT m.id, m.email, m.role FROM project_members m
         WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
         [__activeRow.id],
       )) ?? []
-      __inviteRows = (await db.unsafe(
+      __inviteRows = (await __db.unsafe(
         `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
         FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
         WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,

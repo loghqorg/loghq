@@ -75,13 +75,23 @@ async function subscribe() {
   failed.set(false)
 
   try {
-    const res = await fetch('/api/subscribe', {
+    // The framework's own signup action: rate limited, CSRF-skipped, and it
+    // owns the Subscriber model including the unsubscribe token the footer
+    // link needs. A hand-rolled endpoint beside it would be a second writer to
+    // the same table with none of that.
+    const res = await fetch('/api/email/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email(), source: 'marketing-home' }),
     })
-    const data = await res.json()
-    status.set(data.message ?? 'You are on the list.')
+
+    if (!res.ok) {
+      failed.set(true)
+      status.set('That did not send. Please try again in a moment.')
+      return
+    }
+
+    status.set('You are on the list. We will be in touch when loghq is ready.')
     email.set('')
   }
   catch {
@@ -189,7 +199,7 @@ async function subscribe() {
     <div class="cta-band">
       <h2 id="updates-heading">Not ready to sign up?</h2>
       <p class="sub-note">Leave an address and we will send a note when loghq is ready. No newsletter, no drip sequence.</p>
-      <form class="sub-form" action="/api/subscribe" method="POST" @submit.prevent="subscribe()">
+      <form class="sub-form" action="/api/email/subscribe" method="POST" @submit.prevent="subscribe()">
         <label class="sr-only" for="subscribe-email">Email address</label>
         <input
           id="subscribe-email"
