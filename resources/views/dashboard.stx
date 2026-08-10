@@ -513,7 +513,7 @@ onMount(() => {
       <div class="flex gap-3 items-center">
         <StxLink to="/projects" class="wordmark-link"><h1 class="font-sans leading-none text-2xl md:text-[28px] wordmark">loghq</h1></StxLink>
         @if (projects.length > 1)
-          <select @change="switchProject" class="px-3 py-1.5 font-mono text-muted text-sm app-panel tnum">
+          <select @change="switchProject" aria-label="Switch project" class="px-3 py-1.5 font-mono text-muted text-sm app-panel tnum">
             @foreach (projects as p)
               <option value="{{ p.id }}" {{ p.id === projectId ? 'selected' : '' }}>{{ p.name }}{{ p.is_active === false ? ' (archived)' : '' }}</option>
             @endforeach
@@ -578,7 +578,7 @@ onMount(() => {
     <form method="get" action="/dashboard" class="flex gap-2 items-center mb-6">
       @if (levelFilter !== 'all')<input type="hidden" name="level" value="{{ levelFilter }}">@endif
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
-      <input type="search" name="q" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
+      <input type="search" name="q" aria-label="Search log messages" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
             class="flex-1 px-4 py-2.5 font-mono text-sm search-input tnum" />
       <button type="submit" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent border border-accent pill">Search</button>
       @if (search)
