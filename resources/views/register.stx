@@ -69,8 +69,13 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     // New accounts have no apps yet: go to create-app — unless they arrived from
     // an invite link, in which case land on the dashboard where the join banner
     // is waiting for them to accept.
-    const invited = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('invite')
-    navigate(invited ? '/dashboard' : '/projects/new')
+    //
+    // Read from inviteParams, parsed once at hydration above. This re-parsed
+    // location.search on every submit to recover a value that was already in
+    // scope, and guarded `typeof location` in a block that cannot run on the
+    // server — the same query string, parsed a second time, three lines from the
+    // first.
+    navigate(inviteParams.get('invite') ? '/dashboard' : '/projects/new')
   }
   catch {
     error.set('Something went wrong. Please try again.')
