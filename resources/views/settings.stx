@@ -13,9 +13,21 @@ const { appUrl, ingestUrl } = await import('../../app/Support/urls')
 const APP_BASE = appUrl()
 const INGEST_BASE = ingestUrl()
 
-const query = new URLSearchParams((typeof globalThis !== 'undefined' && globalThis.__stxServeSearch) || '')
+// Context locals, injected onto this render's context by the serve path just
+// before the block runs.
+//
+// These replaced the ambient request-context global that used to be read here.
+// That global is not part of stx — it is installed by whichever server booted,
+// and the two servers resolve it differently: dev goes through an
+// AsyncLocalStorage that only fills in after the first top-level await, while
+// production reads a mutable global shared across requests. Context locals have
+// neither an ordering requirement nor anything to race on.
+//
+// Deliberately not naming that global here: the ch.5.5 gate greps for it by
+// name, and prose in a comment would keep the check permanently non-zero.
+const query = new URLSearchParams(__stxServeSearch || '')
 const requestedProject = query.get('project')
-const cookieProject = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_project')) || ''
+const cookieProject = cookies.loghq_project ?? ''
 
 // ---------------------------------------------------------------------------
 // THE `__` PREFIX IS A SECURITY BOUNDARY IN THIS FILE. READ BEFORE RENAMING.
@@ -40,7 +52,7 @@ const cookieProject = (typeof requestContext !== 'undefined' && requestContext.c
 // Renaming a `__` binding to a bare one re-opens the leak silently, with no lint
 // error and no test failure.
 // ---------------------------------------------------------------------------
-const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+const __token = cookies.loghq_token ?? ''
 let user: AuthUser | null = null
 if (__token) {
   try {

@@ -7,7 +7,7 @@ const { db } = await import('@stacksjs/database')
 // `__`-prefixed so the server→client bridge cannot publish it — see the note in
 // settings.stx. This page does not leak today only because the word "token"
 // happens not to appear in its client block; that is an accident, not a design.
-const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+const __token = cookies.loghq_token ?? ''
 let user: AuthUser | null = null
 if (__token) {
   try {

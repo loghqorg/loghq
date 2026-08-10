@@ -57,6 +57,43 @@ onMount(() => {
   const session = useStore('session')
   effect(() => isAuthed.set(session.isAuthed()))
 })
+
+// Launch-updates capture. The form posts on its own with scripting off (it
+// carries action and method); this upgrades it to an inline reply so the
+// visitor is not dropped on a JSON body.
+const email = state('')
+const sending = state(false)
+const status = state('')
+const failed = state(false)
+
+async function subscribe() {
+  if (sending())
+    return
+
+  sending.set(true)
+  status.set('')
+  failed.set(false)
+
+  try {
+    const res = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email(), source: 'marketing-home' }),
+    })
+    const data = await res.json()
+    status.set(data.message ?? 'You are on the list.')
+    email.set('')
+  }
+  catch {
+    // The address is not lost to the visitor: the field keeps its value, so a
+    // retry is one click and not a retype.
+    failed.set(true)
+    status.set('That did not send. Check your connection and try again.')
+  }
+  finally {
+    sending.set(false)
+  }
+}
 </script>
 
 
@@ -138,10 +175,35 @@ onMount(() => {
              SSR truth, it is what a crawler and a first-time visitor see, and it
              works with no JavaScript. The bindings upgrade it for a signed-in
              visitor after hydration. As `{{ }}` in the body this button was
-             cloaked — display:none until the runtime booted. --}}
+             cloaked, display:none until the runtime booted. --}}
         <a class="btn primary" href="/register" :href="isAuthed() ? '/dashboard' : '/register'" :text="isAuthed() ? 'Go to dashboard' : 'Get started'">Get started</a>
         <StxLink class="btn ghost" to="/use-cases">See use cases</StxLink>
       </div>
+    </div>
+  </section>
+
+  {{-- Launch updates. A separate intent from the buttons above: the band asks
+       you to start now, this asks nothing of you but an address. Hidden from a
+       signed-in visitor, who has already done more than subscribe. --}}
+  <section class="reveal section" aria-labelledby="updates-heading" :hidden="isAuthed()">
+    <div class="cta-band">
+      <h2 id="updates-heading">Not ready to sign up?</h2>
+      <p class="sub-note">Leave an address and we will send a note when loghq is ready. No newsletter, no drip sequence.</p>
+      <form class="sub-form" action="/api/subscribe" method="POST" @submit.prevent="subscribe()">
+        <label class="sr-only" for="subscribe-email">Email address</label>
+        <input
+          id="subscribe-email"
+          class="sub-field"
+          type="email"
+          name="email"
+          autocomplete="email"
+          placeholder="you@company.com"
+          required
+          x-model="email"
+        >
+        <button class="btn primary" type="submit" :disabled="sending()" :text="sending() ? 'Sending' : 'Keep me posted'">Keep me posted</button>
+      </form>
+      <p class="sub-status" role="status" aria-live="polite" :data-state="failed() ? 'error' : ''" :text="status()"></p>
     </div>
   </section>
 </div>

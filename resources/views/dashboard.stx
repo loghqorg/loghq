@@ -5,9 +5,11 @@
 // level-threshold, time-range, and text-search filters. Reads via db.unsafe.
 const { db } = await import('@stacksjs/database')
 
-// Query params come from globalThis.__stxServeSearch (the dev server stashes
-// url.search there).
-const query = new URLSearchParams((typeof globalThis !== 'undefined' && globalThis.__stxServeSearch) || '')
+// __stxServeSearch is a context local, injected onto THIS render's context by
+// the serve path immediately before the block runs — not a global to reach
+// through globalThis for. Reading it bare has no ordering requirement and no
+// cross-request global to race on.
+const query = new URLSearchParams(__stxServeSearch || '')
 
 // Level filter is a MINIMUM-severity threshold: the key names the floor, and we
 // expand it to the set of levels at or above it. Whitelisted — the raw param is
@@ -41,7 +43,7 @@ const rangeFilter = RANGES.some(r => r.key === query.get('range')) ? query.get('
 const activeRange = RANGES.find(r => r.key === rangeFilter)
 
 const requestedProject = query.get('project')
-const cookieProject = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_project')) || ''
+const cookieProject = cookies.loghq_project ?? ''
 
 const PAGE_SIZE = 50
 const pageParam = Number.parseInt(query.get('page') || '1', 10)
@@ -57,7 +59,7 @@ const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 
 // put the raw session credential in the page source of every /dashboard render,
 // because `useStore('session').token()` appears in the client block below. See
 // the fuller note in settings.stx.
-const __token = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('loghq_token')) || ''
+const __token = cookies.loghq_token ?? ''
 let user: AuthUser | null = null
 if (__token) {
   try {
