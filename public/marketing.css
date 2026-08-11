@@ -276,10 +276,21 @@ a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
 .footer { padding: 2.5rem 0; }
 .footer-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-3); font-size: 0.88rem; }
 
-/* motion */
-.reveal { opacity: 0; transform: translateY(12px); animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-@keyframes reveal { to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+/* motion — `.reveal` is NOT declared here.
+ *
+ * It used to be, and app-chrome.css declared it too: two `.reveal` rules and
+ * two identically-named `@keyframes reveal` in two sheets that are both loaded
+ * on every marketing page. This file wins on order, so marketing pages animated
+ * over 0.6s/12px and the dashboard — the one app page that uses .reveal, and
+ * which never loads this file — animated over 0.5s/10px. Nothing intended that
+ * split; it was drift between two copies.
+ *
+ * The single definition lives in app-chrome.css, which is the site-wide sheet,
+ * and it carries these values because 23 marketing pages used them against the
+ * dashboard's one. A same-named @keyframes in a later sheet REPLACES rather
+ * than merges, so the duplicate was also a live footgun: editing the copy here
+ * would have silently changed marketing pages only.
+ */
 
 /* responsive */
 @media (max-width: 900px) {

@@ -224,13 +224,30 @@ summary::-webkit-details-marker { display: none; }
 .chrome-upgrade:active { transform: translateY(1px); }
 /* Pro is a status, not an action: no link, no hover lift. */
 .chrome-pro, .chrome-pro:hover { background: transparent; color: var(--accent); border: 1px solid var(--accent); cursor: default; filter: none; }
-.reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
+/* The ONLY .reveal in the app. marketing.css carried a second copy with
+  different values (0.6s/12px against this one's 0.5s/10px) and a second
+  @keyframes of the same name; both sheets load on every marketing page, so the
+  marketing copy won there and this one only ever reached the dashboard. These
+  are the marketing values, kept because 23 pages used them and one did not. */
+.reveal { opacity: 0; transform: translateY(12px); animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes reveal { to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
 /* Keyboard focus — a visible ring on every interactive control (accessibility,
-  not optional). Search gets an inset ring so it doesn't clash with its pill. */
+  not optional). Search gets an inset ring so it doesn't clash with its pill.
+
+  This rule used to also declare `border-radius: 8px`, which was not a property
+  of the ring — it RESHAPED THE ELEMENT for as long as it held focus. Tabbing
+  onto a filter tab squared off its 999px pill; the same happened to the pager
+  and to every rounded control here, because `a:focus-visible` (0,1,1) outranks
+  `.pill` (0,1,0). Nothing about a keyboard user's focus should change an
+  element's geometry.
+
+  Nothing replaces it: `outline` has followed the element's own border-radius
+  since Chrome 94 / Firefox 88 / Safari 16.4, so the ring is correctly rounded
+  on a pill and correctly square on a square control, which is what the 8px was
+  reaching for in the first place. */
 a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
+  outline: 2px solid var(--accent); outline-offset: 2px;
 }
 summary:focus-visible { outline-offset: -2px; }
 .search-input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -283,3 +300,67 @@ select.app-panel {
 [data-tone='warning'] .stat-value { color: var(--sev-warning); }
 [data-tone='error'] .stat-dot { background: var(--sev-critical); opacity: 1; }
 [data-tone='error'] .stat-value { color: var(--sev-critical); }
+
+/* ---------------------------------------------------------------------------
+ * Narrow viewports
+ *
+ * This sheet had NO width query at all, while marketing.css has four. The app
+ * surface is the half that people actually work in, and it was the half with no
+ * mobile behaviour — the two rules below are both fixed geometry that a phone
+ * cannot satisfy.
+ *
+ * Everything here adjusts rules THIS FILE owns. It deliberately does not try to
+ * override a utility (the page's own `px-5 py-10`, for instance): this sheet is
+ * linked before the Crosswind sheet precisely so utilities win a specificity
+ * tie, so a `.page-dashboard { padding-top }` here would be silently dead. Any
+ * responsive change to a utility-styled element belongs in the markup as an
+ * `sm:`/`md:` variant.
+ *
+ * 40rem rather than a round 375px: the breakpoint is where the content stops
+ * fitting, and it is in rem so it also fires for someone at a large default
+ * font size on a wider screen, who has the same problem for a different reason.
+ * ------------------------------------------------------------------------ */
+@media (max-width: 40rem) {
+  /* The log stream was a single row of five fixed columns:
+   *   3px rail + 4.75rem time + 3.75rem level + 6rem channel
+   * plus four 0.75rem gaps and the row's own 20px side padding — 323px spoken
+   * for before the message column starts. On a 375px phone that leaves the
+   * message 52px, about four characters, on the one line that carries what
+   * actually happened. The row was not narrow, it was empty.
+   *
+   * It becomes two rows: metadata above, message across the full width below.
+   * Nothing is dropped — the channel is not repeated in the expanded panel, so
+   * hiding it would have lost the only place it appears.
+   *
+   * Addressed by position because these are bare spans in the markup with no
+   * hooks of their own, and the order is fixed by the template: rail, time,
+   * level, channel, message. */
+  .log-row {
+    grid-template-columns: 3px auto auto minmax(0, 1fr);
+    column-gap: 0.5rem;
+    row-gap: 0.2rem;
+  }
+
+  /* The rail spans both rows so it stays one continuous severity stripe beside
+   * the whole entry rather than a stub next to the timestamp. */
+  .log-row > :nth-child(1) { grid-row: 1 / span 2; }
+  .log-row > :nth-child(5) { grid-column: 2 / -1; }
+
+  /* The floating chrome is positioned for a desktop margin: `top: 16px` with
+   * 8px padding puts its lower edge at about 46px, and the page's own content
+   * starts at 40px. On a wide screen the centred column leaves that gutter
+   * empty so nothing shows; on a phone the column is the full width and the
+   * header runs underneath the buttons.
+   *
+   * Smaller and tighter, so the chrome's lower edge lands near 32px and closes
+   * the overlap window rather than merely making it less likely. */
+  .chrome-logout, .chrome-upgrade {
+    top: 10px;
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .chrome-logout { right: 12px; }
+  .chrome-upgrade { right: 88px; }
+}
