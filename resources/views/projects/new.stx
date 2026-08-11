@@ -41,11 +41,21 @@ const createProject = useMutation('/api/projects', {
   },
 })
 
+// The controls this handler reads. `platform` is a <select>, not an <input> —
+// the distinction the compiler can now hold for us. See login.stx for why the
+// type is declared inline rather than in types/app.d.ts.
+interface NewProjectForm extends HTMLFormElement {
+  elements: HTMLFormControlsCollection & {
+    name: HTMLInputElement
+    platform: HTMLSelectElement
+  }
+}
+
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (createProject.loading())
     return
-  const form = e.target
+  const form = e.target as NewProjectForm
   const name = form.elements.name.value.trim()
   if (!name) {
     error.set('Give your app a name.')

@@ -55,11 +55,32 @@ const signIn = useMutation('/login', {
   },
 })
 
+// The controls this handler reads, named so the compiler can check them.
+//
+// `e.target` is typed `EventTarget | null` and `HTMLFormControlsCollection`
+// indexes to `Element`, so `form.elements.email.value` was three separate
+// errors: possibly-null, no `elements`, no `value`. tsc never reported any of
+// them — it cannot see inside a .stx script block at all — and `stx typecheck`
+// is what surfaced them.
+//
+// Declared inline rather than in types/app.d.ts because `stx typecheck` does
+// not load the app's .d.ts files; a type declared there comes back as
+// "Cannot find name". Inline also keeps the contract next to the form it
+// describes: add a field here and the compiler tells you where to read it.
+interface SignInForm extends HTMLFormElement {
+  elements: HTMLFormControlsCollection & {
+    email: HTMLInputElement
+    password: HTMLInputElement
+  }
+}
+
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (signIn.loading())
     return
-  const form = e.target
+  // `target`, not `currentTarget`: a submit event targets the form, and this
+  // keeps the runtime read exactly as it was. The cast is the whole change.
+  const form = e.target as SignInForm
   error.set('')
   // mutate() rethrows after onError so a caller can await the outcome; this one
   // has already handled it, and an unhandled rejection here would surface as a

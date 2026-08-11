@@ -490,13 +490,13 @@ const inviteEmail = state('')
 const inviting = state(false)
 const inviteNote = state('')
 const inviteNoteOk = state(true)
-const removedMembers: StxSignal<string[]> = state([])
+const removedMembers = state<string[]>([])
 const removingMember = state('')
 const copiedJoin = state('')
 
-const isMemberRemoved = id => removedMembers().includes(id)
-const memberBtnLabel = id => (removingMember() === id ? 'Removing…' : 'Remove')
-const joinBtnLabel = id => (copiedJoin() === id ? 'Copied ✓' : 'Copy link')
+const isMemberRemoved = (id: string): boolean => removedMembers().includes(id)
+const memberBtnLabel = (id: string): string => (removingMember() === id ? 'Removing…' : 'Remove')
+const joinBtnLabel = (id: string): string => (copiedJoin() === id ? 'Copied ✓' : 'Copy link')
 
 async function copyJoin(id: string, link: string): Promise<void> {
   try { await navigator.clipboard.writeText(link) }
@@ -544,13 +544,19 @@ async function removeMember(id: string): Promise<void> {
 }
 
 // ---- alert channels ----
-const chType = state('slack')
+// The two channel kinds, as a type rather than a convention. `state('slack')`
+// infers `string`, which made PLACEHOLDERS[chType()] and HELPS[chType()] index
+// a two-key object with an arbitrary string — an implicit `any` that would have
+// returned undefined for a typo instead of failing. The only writers are the
+// two segmented buttons, which set exactly these values.
+type ChannelType = 'slack' | 'discord'
+const chType = state<ChannelType>('slack')
 const whUrl = state('')
 const whLabel = state('')
 const adding = state(false)
 const whNote = state('')
 const whNoteOk = state(true)
-const removedChannels: StxSignal<string[]> = state([])
+const removedChannels = state<string[]>([])
 const channelBusy: StxSignal<Record<string, string>> = state({})
 const channelOn: StxSignal<Record<string, boolean>> = state({})
 
@@ -562,9 +568,9 @@ const HELPS = {
 const whPlaceholder = (): string => PLACEHOLDERS[chType()]
 const whHelp = (): string => HELPS[chType()]
 
-const isChannelRemoved = id => removedChannels().includes(id)
-const testLabel = id => channelBusy()[id] || 'Test'
-const deleteLabel = id => (channelBusy()[id] === 'Removing…' ? 'Removing…' : 'Remove')
+const isChannelRemoved = (id: string): boolean => removedChannels().includes(id)
+const testLabel = (id: string): string => channelBusy()[id] || 'Test'
+const deleteLabel = (id: string): string => (channelBusy()[id] === 'Removing…' ? 'Removing…' : 'Remove')
 /** Enabled state, defaulting to the server-rendered value until toggled. */
 const isChannelOn = (id: string, initial: boolean): boolean => (id in channelOn() ? channelOn()[id] : initial)
 
@@ -801,14 +807,23 @@ async function confirmModal(): Promise<void> {
 }
 
 // Escape closes the modal. Bound to the document because no element owns the
-// keyboard globally — this is a listener on a thing no component owns, not
-// render wiring.
-// useEventListener registers the matching removeEventListener via onDestroy.
-// Bound to the document because no element owns the keyboard globally.
-useEventListener('keydown', (e: KeyboardEvent) => {
+// keyboard globally — a listener on a thing no component owns, not render
+// wiring. useEventListener registers the matching removeEventListener via
+// onDestroy.
+//
+// The target is the FIRST argument, not an option. This read
+// `useEventListener('keydown', handler, { target: document })`, and the
+// implementation branches on `typeof args[0] === 'string'`: a string first
+// argument means target = window and args[2] = the options bag. So the listener
+// went on window, and `{ target: document }` was handed to addEventListener as
+// an option it does not recognise and silently dropped. It worked anyway —
+// keydown bubbles to window — so the only symptom was a comment that described
+// something the code was not doing. `stx typecheck` caught it; tsc cannot see
+// into this block at all.
+useEventListener(document, 'keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && modalOpen())
     closeModal()
-}, { target: document })
+})
 
 // Onboarding bounce. The server block already computed needsOnboarding, and it
 // crosses to here through the server-to-client bridge, so this is not a second
@@ -872,7 +887,7 @@ onMount(() => {
               @endforeach
             </select>
           @else
-            <span class="font-mono text-muted text-sm">{{ activeProject.name }}</span>
+            <span class="font-mono text-muted text-sm">{{ activeProject?.name }}</span>
           @endif
         </div>
         <p class="mt-1.5 text-sm text-subtle">Manage the API key, team, alerts, and deletion for this project.</p>
@@ -896,7 +911,7 @@ onMount(() => {
         <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Install</div>
         <div class="px-5 py-5 app-panel">
           <div class="flex gap-3 items-center justify-between mb-3.5">
-            <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
+            <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject?.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
             <span class="shrink-0 px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">{{ guide.label }}</span>
           </div>
           @if (guide.install)
@@ -922,7 +937,7 @@ onMount(() => {
         <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">API key</div>
         <div class="px-5 py-5 app-panel">
           <p class="mb-4 text-sm text-subtle">
-            This key authorizes log ingest for <span class="font-mono text-muted">{{ activeProject.name }}</span>.
+            This key authorizes log ingest for <span class="font-mono text-muted">{{ activeProject?.name }}</span>.
             It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
           </p>
           <div class="flex flex-wrap gap-2 items-center">
@@ -1062,26 +1077,26 @@ onMount(() => {
             It was pinned inline until settings' <style> block went, because
             `.sec-title` set var(--text-3) and outranked the utility. --}}
         <div class="mb-3 font-semibold text-[13px] text-warn tracking-[0.04em] uppercase">Danger zone</div>
-        <div class="bg-panel border border-[color-mix(in_srgb,var(--warn)_40%,var(--border))] rounded-xl" data-project-name="{{ activeProject.name }}" data-active="{{ activeProject.is_active === false ? '0' : '1' }}">
+        <div class="bg-panel border border-[color-mix(in_srgb,var(--warn)_40%,var(--border))] rounded-xl" data-project-name="{{ activeProject?.name }}" data-active="{{ activeProject?.is_active === false ? '0' : '1' }}">
           {{-- Archive / Unarchive --}}
           <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
               @if (activeProject.is_active === false)
                 <div class="mb-0.5 font-semibold text-sm">Unarchive this project</div>
-                <p class="text-sm text-subtle"><span class="font-mono text-muted">{{ activeProject.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
+                <p class="text-sm text-subtle"><span class="font-mono text-muted">{{ activeProject?.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
               @else
                 <div class="mb-0.5 font-semibold text-sm">Archive this project</div>
-                <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
+                <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject?.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
               @endif
             </div>
-            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</button>
           </div>
           <div class="h-px bg-[color-mix(in_srgb,var(--warn)_20%,var(--border))]"></div>
           {{-- Delete --}}
           <div class="flex gap-4 items-center justify-between px-5 py-4">
             <div class="min-w-0">
               <div class="mb-0.5 font-semibold text-sm">Delete this project</div>
-              <p class="text-sm text-subtle">Permanently deletes <span class="font-mono text-muted">{{ activeProject.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
+              <p class="text-sm text-subtle">Permanently deletes <span class="font-mono text-muted">{{ activeProject?.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
             </div>
             <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Delete</button>
           </div>

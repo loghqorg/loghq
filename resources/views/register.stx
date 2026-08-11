@@ -49,11 +49,21 @@ const signUp = useMutation('/register', {
   },
 })
 
+// The controls this handler reads. See login.stx for why the type is declared
+// inline rather than in types/app.d.ts, and why the cast is on `target`.
+interface SignUpForm extends HTMLFormElement {
+  elements: HTMLFormControlsCollection & {
+    name: HTMLInputElement
+    email: HTMLInputElement
+    password: HTMLInputElement
+  }
+}
+
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (signUp.loading())
     return
-  const form = e.target
+  const form = e.target as SignUpForm
   if (form.elements.password.value.length < 8) {
     error.set('Password must be at least 8 characters.')
     return

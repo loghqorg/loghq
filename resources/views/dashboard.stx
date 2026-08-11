@@ -27,7 +27,16 @@ const LEVEL_TABS = [
   { key: 'warning', label: 'Warn+' },
   { key: 'error', label: 'Error+' },
 ]
-const levelFilter = LEVEL_TABS.some(t => t.key === query.get('level')) ? query.get('level') : 'all'
+// `find(...)?.key ?? default` rather than `some(...) ? get() : default`.
+//
+// The old form asked the same question twice — once in `some`, once by reading
+// the param again — and the compiler could not carry the proof from the first
+// to the second, so `levelFilter` stayed `string | null` and
+// `LEVEL_ORDER.indexOf(levelFilter)` on the next line was a type error. This
+// form states the whitelist lookup once and lands on `string`, which is what
+// the code always meant. Same behaviour: an unknown or absent level is 'all'.
+const levelParam = query.get('level')
+const levelFilter = LEVEL_TABS.find(t => t.key === levelParam)?.key ?? 'all'
 const levelSet = (levelFilter === 'all' || levelFilter === 'debug')
   ? null
   : LEVEL_ORDER.slice(LEVEL_ORDER.indexOf(levelFilter))
@@ -37,15 +46,36 @@ const search = (query.get('q') || '').slice(0, 200)
 
 // Date ranges are a whitelist: the key comes from the URL, but only the mapped
 // interval string (never the raw param) is ever interpolated into SQL.
-const RANGES = [
+interface LogRange {
+  key: string
+  label: string
+  interval: string | null
+}
+
+// Named, and placed in the list rather than duplicated beside it, so the
+// fallback below cannot drift from the tab the UI renders as selected.
+const DEFAULT_RANGE: LogRange = { key: '24h', label: '24h', interval: '24 hours' }
+
+const RANGES: LogRange[] = [
   { key: '1h', label: '1h', interval: '1 hour' },
-  { key: '24h', label: '24h', interval: '24 hours' },
+  DEFAULT_RANGE,
   { key: '7d', label: '7d', interval: '7 days' },
   { key: '30d', label: '30d', interval: '30 days' },
   { key: 'all', label: 'All time', interval: null },
 ]
-const rangeFilter = RANGES.some(r => r.key === query.get('range')) ? query.get('range') : '24h'
-const activeRange = RANGES.find(r => r.key === rangeFilter)
+
+// `activeRange` is the lookup, and `rangeFilter` is derived from it — the
+// reverse of before, where a `some` guarded a ternary and then a separate
+// `find` repeated the same predicate and returned `LogRange | undefined`.
+//
+// That `undefined` was never discharged, so `activeRange.interval` was
+// dereferenced unguarded in four places, including one that interpolates into
+// SQL. It held only because the two predicates agreed; nothing said they had
+// to, and an edit to either would have failed at runtime with the type system
+// silent. Now there is one predicate and a total fallback.
+const rangeParam = query.get('range')
+const activeRange = RANGES.find(r => r.key === rangeParam) ?? DEFAULT_RANGE
+const rangeFilter = activeRange.key
 
 const requestedProject = query.get('project')
 const cookieProject = cookies.loghq_project ?? ''
@@ -283,8 +313,14 @@ function dayOf(iso: string | null | undefined): string {
 // Pretty-print stored JSON context for the expanded row (best-effort).
 function prettyContext(raw: unknown): string {
   if (!raw) return ''
-  try { return JSON.stringify(JSON.parse(raw), null, 2) }
-  catch { return String(raw) }
+  // JSON.parse takes a string, and `raw` is unknown — context comes from a text
+  // column, so it is a string in practice, but the signature does not say so.
+  // The coercion is exactly what JSON.parse was doing implicitly with anything
+  // else, and both paths still land on the same value: a non-string stringifies
+  // to something unparseable, throws, and falls out of the catch unchanged.
+  const text = typeof raw === 'string' ? raw : String(raw)
+  try { return JSON.stringify(JSON.parse(text), null, 2) }
+  catch { return text }
 }
 
 // Stats carry state, not just a number: the dot + number tint go live only when
@@ -353,11 +389,11 @@ function signOut(): void {
 // Invite banner. Was one delegated listener on the container doing className
 // sniffing and row.remove(); each row now owns its own handlers and the state
 // is keyed by invite token.
-const dismissed: StxSignal<string[]> = state([])
+const dismissed = state<string[]>([])
 const joining = state('')
 
-const isDismissed = t => dismissed().includes(t)
-const joinLabel = t => (joining() === t ? 'Joining…' : 'Join')
+const isDismissed = (t: string): boolean => dismissed().includes(t)
+const joinLabel = (t: string): string => (joining() === t ? 'Joining…' : 'Join')
 
 // ---- project switcher ----
 //
@@ -532,7 +568,7 @@ onMount(() => {
             @endforeach
           </select>
         @else
-          <span class="font-mono text-muted text-sm tnum">{{ activeProject.name }}{{ activeProject.is_active === false ? ' (archived)' : '' }}</span>
+          <span class="font-mono text-muted text-sm tnum">{{ activeProject?.name }}{{ activeProject?.is_active === false ? ' (archived)' : '' }}</span>
         @endif
         <StxLink to="/projects" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">All apps</StxLink>
         <StxLink to="/projects/new" class="px-3 py-1.5 font-medium text-muted text-sm border border-line pill">+ New app</StxLink>
