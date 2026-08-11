@@ -171,7 +171,7 @@ onMount(() => {
         {{-- Two anchors rather than one rewritten in place: the pro and free CTAs
             differ in destination, label and variant, so branching the markup is
             clearer than mutating three attributes. --}}
-        <StxLink to="/pricing" class="px-4 py-2 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :show="!pro()">Upgrade to Pro</StxLink>
+        <StxLink to="/pricing" class="px-4 py-2 font-semibold text-sm text-accent-ink bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :show="!pro()">Upgrade to Pro</StxLink>
         <StxLink to="/pricing" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :show="pro()">Manage plan</StxLink>
       </div>
       <div class="flex items-center justify-between px-6 py-4 [border-top:1px_solid_var(--border)]">

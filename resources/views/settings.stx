@@ -811,19 +811,29 @@ async function confirmModal(): Promise<void> {
 // wiring. useEventListener registers the matching removeEventListener via
 // onDestroy.
 //
-// The target is the FIRST argument, not an option. This read
-// `useEventListener('keydown', handler, { target: document })`, and the
-// implementation branches on `typeof args[0] === 'string'`: a string first
-// argument means target = window and args[2] = the options bag. So the listener
-// went on window, and `{ target: document }` was handed to addEventListener as
-// an option it does not recognise and silently dropped. It worked anyway —
-// keydown bubbles to window — so the only symptom was a comment that described
-// something the code was not doing. `stx typecheck` caught it; tsc cannot see
-// into this block at all.
-useEventListener(document, 'keydown', (e: KeyboardEvent) => {
+// The target is an OPTION here, not the first argument. Two different
+// functions ship under this name and only one of them is in scope:
+//
+//   browser-composables.ts  target-first — (target, event, handler, options?)
+//   signals.ts              (event, handler, options) with options.target,
+//                           defaulting to window
+//
+// A bare call in a <script client> block resolves to the signals.ts one,
+// because that is what the runtime-globals preamble injects. So this form is
+// correct and `{ target: document }` is honoured — `var target = (options &&
+// options.target) || window`.
+//
+// Do not "fix" this to the target-first form. I did, on 0.2.176, after reading
+// browser-composables.js and taking it for the implementation: it passes
+// `document` as the EVENT NAME and the handler as the options bag, so Escape
+// silently stops closing the modal. types/stx-runtime.d.ts already documented
+// the split; the shipped stx.d.ts declares only the window-target overloads,
+// which is why `stx typecheck` reports TS2769 on the correct code. That
+// diagnostic is the checker's, not ours.
+useEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && modalOpen())
     closeModal()
-})
+}, { target: document })
 
 // Onboarding bounce. The server block already computed needsOnboarding, and it
 // crosses to here through the server-to-client bridge, so this is not a second
@@ -944,7 +954,7 @@ onMount(() => {
             <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" :text="keyShown()">{{ keyMask }}</code>
             <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
             <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
-            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm text-warn hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Rotate</button>
+            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Rotate</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
@@ -974,7 +984,7 @@ onMount(() => {
                 <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
               </div>
               <span class="px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">Member</span>
-              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
+              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
             </div>
           @endforeach
           @foreach (inviteView as i)
@@ -986,7 +996,7 @@ onMount(() => {
               </div>
               <span class="px-[9px] py-0.5 font-semibold text-[11px] text-muted tracking-[0.02em] bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] rounded-[999px]" x-tooltip="Pending — becomes a member once they accept">Invited</span>
               <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-muted text-xs hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" x-tooltip="Copy join link">Copy link</button>
-              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Revoke invite">Remove</button>
+              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Revoke invite">Remove</button>
             </div>
           @endforeach
         </div>
@@ -994,7 +1004,7 @@ onMount(() => {
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
             <input :model="inviteEmail" type="email" aria-label="Invite a teammate by email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
-            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
+            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm text-accent-ink bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
           </div>
           <span class="mt-2.5 text-ok text-xs" :show="!!inviteNote()" :class="inviteNoteOk() ? 'mt-2.5 text-xs text-ok' : 'mt-2.5 text-xs text-accent'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1020,7 +1030,7 @@ onMount(() => {
                   for the class either, which is why it survived this long.
                   The brand treatment here matches .seg-slack / .seg-discord in
                   app-chrome.css: solid brand background, white text. --}}
-              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 text-white {{ c.type === 'slack' ? 'bg-[var(--slack)]' : 'bg-[var(--discord)]' }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
+              <span class="rounded-[999px] text-[11px] font-semibold tracking-[0.02em] px-[9px] py-0.5 text-accent-ink {{ c.type === 'slack' ? 'bg-[var(--slack)]' : 'bg-[var(--discord)]' }}">{{ c.type === 'slack' ? 'Slack' : 'Discord' }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ c.label }}</div>
                 <div class="mt-0.5 font-mono text-subtle text-xs truncate">{{ c.mask }}</div>
@@ -1042,7 +1052,7 @@ onMount(() => {
                   match the component instead of the product. The a11y gap was
                   the defect; the platform element closes it. --}}
               <button type="button" role="switch" aria-label="Enable {{ c.label }}" data-on="{{ c.enabled ? '1' : '0' }}" aria-checked="{{ c.enabled ? 'true' : 'false' }}" class="relative flex-none p-0 h-[22px] w-[38px] bg-line border-none rounded-[999px] appearance-none cursor-pointer [transition:background_0.15s_ease] tgl" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
-              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
+              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
             </div>
           @empty
             <div class="px-5 py-8 text-center app-panel">
@@ -1060,7 +1070,7 @@ onMount(() => {
           <input :model="whUrl" :placeholder="whPlaceholder()" type="url" aria-label="Webhook URL" class="mb-2 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
           <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
-            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm text-accent-ink bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
             <span class="text-ok text-xs" :show="!!whNote()" :class="whNoteOk() ? 'text-xs text-ok' : 'text-xs text-accent'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1089,7 +1099,7 @@ onMount(() => {
                 <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject?.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
               @endif
             </div>
-            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</button>
           </div>
           <div class="h-px bg-[color-mix(in_srgb,var(--warn)_20%,var(--border))]"></div>
           {{-- Delete --}}
@@ -1098,7 +1108,7 @@ onMount(() => {
               <div class="mb-0.5 font-semibold text-sm">Delete this project</div>
               <p class="text-sm text-subtle">Permanently deletes <span class="font-mono text-muted">{{ activeProject?.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
             </div>
-            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Delete</button>
+            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Delete</button>
           </div>
         </div>
       </section>
@@ -1122,7 +1132,7 @@ onMount(() => {
           <input :model="modalInput" type="text" :aria-label="modalTitle()" aria-label="Type the project name to confirm" class="mb-4 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="flex gap-2 items-center justify-end">
             <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Cancel</button>
-            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm text-warn hover:text-white bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Confirm</button>
+            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Confirm</button>
           </div>
           <span class="mt-2.5 text-accent text-xs" :show="!!modalNote()">{{ modalNote() }}</span>
         </div>

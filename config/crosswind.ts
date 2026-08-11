@@ -65,6 +65,13 @@ export default {
         // so the compare tables can mark their loghq column with a class
         // instead of a `:nth-child(3n+2)` rule in a per-page <style> block.
         'accent-soft': 'var(--accent-soft)',
+        // Ink for text sitting ON a saturated fill. `text-white` was hardcoded
+        // at 19 sites, which is only correct in light mode — dark makes the
+        // fills lighter (--accent #fb7185, the dashboard's indigo #818cf8),
+        // where white measures 2.69:1 and 2.98:1 against a 4.5:1 requirement.
+        // This token is #fff in light and near-black in dark, so one class is
+        // right in both. See public/tokens.css.
+        'accent-ink': 'var(--accent-ink)',
       },
       // The site's own two breakpoints, as min-widths. public/marketing.css
       // states them as `max-width: 560px` and `max-width: 900px`; Crosswind
@@ -111,7 +118,7 @@ export default {
       + 'focus:outline-none focus:border-accent '
       + 'focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]',
 
-    'btn-solid': 'bg-accent text-white rounded-[10px] '
+    'btn-solid': 'bg-accent text-accent-ink rounded-[10px] '
       + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
       + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
       + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',

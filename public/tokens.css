@@ -55,9 +55,33 @@
   --border: rgba(15, 23, 42, 0.09);
   --text: #0b0f19;
   --text-2: #4b5565;
-  --text-3: #97a1b2;
+  /* --text-3 was #97a1b2, which measured 2.52:1 against --bg and 2.61:1
+   * against --panel. WCAG AA wants 4.5:1 for body text, so every "subtle"
+   * label in the app failed it — 73 elements in light and 82 in dark, measured
+   * in a real browser across seven pages. It is the same token in both themes
+   * and it failed in both (dark was #667085, 3.73:1 on --panel).
+   *
+   * #6b7280 gives 4.83:1 on --panel and 4.68:1 on --bg; the dark #79839a gives
+   * 4.88:1 and 5.18:1. Both are the smallest step that clears AA on the worse
+   * of the two surfaces, so "subtle" still reads as subtle. */
+  --text-3: #6b7280;
   --accent: #e11d48;
   --accent-soft: rgba(225, 29, 72, 0.08);
+  /* Ink for text sitting ON a saturated fill — the accent, --warn, and the
+   * Slack/Discord brand colours.
+   *
+   * It cannot be a hardcoded #fff, which is what the app markup and
+   * app-chrome.css assumed. In dark mode the fills get LIGHTER, not darker:
+   * --accent is #fb7185 and the dashboard's indigo is #818cf8, where white
+   * measures 2.69:1 and 2.98:1. The dark value here measures 7.30:1 and 6.58:1
+   * on those same fills, and 7.10:1 on the dark --warn.
+   *
+   * marketing.css has had this token, correctly themed, since the marketing
+   * pages were built; it just never reached the app surface, because that
+   * sheet only loads on marketing routes. Declared here it covers both, and
+   * marketing.css no longer declares its own copy — see the .reveal note there
+   * for what two copies of one token cost. */
+  --accent-ink: #ffffff;
   --ok: #16a34a;
   --warn: #b91c1c;
   --sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
@@ -87,9 +111,10 @@
     --border: rgba(148, 163, 184, 0.12);
     --text: #f3f5f9;
     --text-2: #b3bccb;
-    --text-3: #667085;
+    --text-3: #79839a;
     --accent: #fb7185;
     --accent-soft: rgba(251, 113, 133, 0.1);
+    --accent-ink: #1a0509;
     --ok: #4ade80;
     --warn: #f87171;
   --sev-critical: #f43f5e;
@@ -108,9 +133,10 @@
   --border: rgba(148, 163, 184, 0.12);
   --text: #f3f5f9;
   --text-2: #b3bccb;
-  --text-3: #667085;
+  --text-3: #79839a;
   --accent: #fb7185;
   --accent-soft: rgba(251, 113, 133, 0.1);
+  --accent-ink: #1a0509;
   --ok: #4ade80;
   --warn: #f87171;
   --sev-critical: #f43f5e;
@@ -128,9 +154,10 @@
   --border: rgba(15, 23, 42, 0.09);
   --text: #0b0f19;
   --text-2: #4b5565;
-  --text-3: #97a1b2;
+  --text-3: #6b7280;
   --accent: #e11d48;
   --accent-soft: rgba(225, 29, 72, 0.08);
+  --accent-ink: #ffffff;
   --ok: #16a34a;
   --warn: #b91c1c;
   --sev-critical: #be123c;

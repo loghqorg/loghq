@@ -129,7 +129,7 @@ html {
 /* settings: the Slack/Discord channel picker. Selected state is attribute
  * driven, and each brand paints its own fill. */
 .seg[data-sel='1'] {
-  color: #fff;
+  color: var(--accent-ink);
   border-color: transparent;
 }
 
@@ -201,8 +201,8 @@ a.pill:active, button.pill:active { transform: translateY(1px); }
   outrank the hover rules above and could not be themed. The two levels differ
   because the severity tabs are the primary control and the range tabs are
   secondary. */
-.pill-on { color: #fff; background: var(--accent); border-color: var(--accent); }
-a.pill-on:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+.pill-on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+a.pill-on:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .pill-off { color: var(--text-2); border-color: var(--border); }
 .pill-on-soft { color: var(--accent); border-color: var(--accent); }
 .pill-off-soft { color: var(--text-3); border-color: var(--border); }
@@ -219,7 +219,7 @@ summary::-webkit-details-marker { display: none; }
 .chrome-logout, .chrome-upgrade { position: fixed; top: 16px; z-index: 60; padding: 8px 13px; border-radius: 9px; font-size: 13px; line-height: 1; font-family: var(--sans, ui-sans-serif); }
 .chrome-logout { right: 18px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); transition: color 0.15s ease, border-color 0.15s ease; }
 .chrome-logout:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.chrome-upgrade { right: 112px; font-weight: 600; text-decoration: none; background: var(--accent); color: #fff; transition: filter 0.15s ease, transform 0.12s ease; }
+.chrome-upgrade { right: 112px; font-weight: 600; text-decoration: none; background: var(--accent); color: var(--accent-ink); transition: filter 0.15s ease, transform 0.12s ease; }
 .chrome-upgrade:hover { filter: brightness(1.12); }
 .chrome-upgrade:active { transform: translateY(1px); }
 /* Pro is a status, not an action: no link, no hover lift. */

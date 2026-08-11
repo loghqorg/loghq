@@ -543,7 +543,7 @@ onMount(() => {
           <div class="flex flex-wrap gap-3 items-center mb-2.5 px-5 py-3.5 bg-[color-mix(in_srgb,var(--accent)_6%,var(--panel))] border border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] rounded-xl" :show="!isDismissed('{{ inv.token }}')">
             <span class="text-sm">🎉 You've been invited to <span class="font-semibold">{{ inv.project_name }}</span>.</span>
             <div class="flex gap-2 items-center ml-auto">
-              <button class="px-4 py-1.5 font-semibold text-sm text-white bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
+              <button class="px-4 py-1.5 font-semibold text-sm text-accent-ink bg-accent border border-accent js-invite-join pill" @click="joinInvite('{{ inv.token }}')" :disabled="joining() === '{{ inv.token }}'" :text="joinLabel('{{ inv.token }}')">Join</button>
               <button class="px-3 py-1.5 text-sm text-subtle border border-line js-invite-dismiss pill" x-tooltip="Hide for now" @click="dismissInvite('{{ inv.token }}')">Dismiss</button>
             </div>
           </div>
@@ -629,7 +629,7 @@ onMount(() => {
       @if (rangeFilter !== '24h')<input type="hidden" name="range" value="{{ rangeFilter }}">@endif
       <input type="search" name="q" aria-label="Search log messages" value="{{ search }}" placeholder="Search log messages…" autocomplete="off"
             class="flex-1 px-4 py-2.5 font-mono text-sm search-input tnum" />
-      <button type="submit" class="px-4 py-2.5 font-semibold text-sm text-white bg-accent border border-accent pill">Search</button>
+      <button type="submit" class="px-4 py-2.5 font-semibold text-sm text-accent-ink bg-accent border border-accent pill">Search</button>
       @if (search)
         <StxLink to="{{ pageUrl({ q: '', page: 1 }) }}" class="px-3 py-2.5 text-sm text-subtle border border-line pill">Clear</StxLink>
       @endif

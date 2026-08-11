@@ -78,8 +78,8 @@ async function upgrade(): Promise<void> {
       <h1 class="mt-6 font-bold text-3xl tracking-[-0.035em] md:text-4xl">Simple, honest pricing</h1>
       <p class="mt-3 text-base text-subtle">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
       <div class="inline-flex gap-1 items-center mt-6 p-1 text-sm border border-line rounded-[999px]">
-        <button @click="pick('monthly')" class="px-4 py-1.5 font-medium text-white bg-accent border-none rounded-[999px] cursor-pointer" :class="interval() === 'monthly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Monthly</button>
-        <button @click="pick('yearly')" class="px-4 py-1.5 font-medium text-muted bg-transparent border-none rounded-[999px] cursor-pointer" :class="interval() === 'yearly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-white' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Yearly <span class="opacity-80">-17%</span></button>
+        <button @click="pick('monthly')" class="px-4 py-1.5 font-medium text-accent-ink bg-accent border-none rounded-[999px] cursor-pointer" :class="interval() === 'monthly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-accent-ink' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Monthly</button>
+        <button @click="pick('yearly')" class="px-4 py-1.5 font-medium text-muted bg-transparent border-none rounded-[999px] cursor-pointer" :class="interval() === 'yearly' ? 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-accent text-accent-ink' : 'px-4 py-1.5 font-medium rounded-[999px] cursor-pointer border-none bg-transparent text-muted'">Yearly <span class="opacity-80">-17%</span></button>
       </div>
     </header>
 
@@ -117,7 +117,7 @@ async function upgrade(): Promise<void> {
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Full retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Priority support</li>
         </ul>
-        <button @click="upgrade" :disabled="checkout.loading()" class="mt-7 py-2.5 w-full font-semibold text-sm text-white bg-accent rounded-[10px] disabled:opacity-60 active:translate-y-px disabled:cursor-default [transition:transform_0.12s_ease,opacity_0.15s_ease]" :text="checkout.loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
+        <button @click="upgrade" :disabled="checkout.loading()" class="mt-7 py-2.5 w-full font-semibold text-sm text-accent-ink bg-accent rounded-[10px] disabled:opacity-60 active:translate-y-px disabled:cursor-default [transition:transform_0.12s_ease,opacity_0.15s_ease]" :text="checkout.loading() ? 'Redirecting…' : 'Upgrade to Pro'">Upgrade to Pro</button>
         @if (err())
           <p class="mt-3 text-[#ef4444] text-center text-xs">{{ err() }}</p>
         @endif
