@@ -878,7 +878,12 @@ onMount(() => {
         <p class="mt-1.5 text-sm text-subtle">Manage the API key, team, alerts, and deletion for this project.</p>
       </div>
 
-      <nav class="flex gap-2 items-center mb-8 text-sm">
+      {{-- flex-wrap for the same reason as the dashboard header: five pills on
+          one unbreakable line pushed settings 31px past a 375px viewport, so
+          the whole page scrolled sideways. Wrapping rather than
+          `overflow-x-auto` because these are the page's section links — all
+          five should be visible, not discovered by swiping a strip. --}}
+      <nav class="flex flex-wrap gap-2 items-center mb-8 text-sm">
         <a href="#install" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Install</a>
         <a href="#keys" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Keys</a>
         <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
