@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "bun-plugin-auto-imports": "^0.4.1",
-    "stacks": "^0.70.352"
+    "stacks": "^0.70.362"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.121",
