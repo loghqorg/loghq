@@ -93,8 +93,21 @@ onMount(() => {
 @extends('layouts/default')
 
 @section('content')
+{{-- Content measure: max-w-2xl, matching settings.stx.
+    The app had four measures across four pages — dashboard 1024, projects 896,
+    account 768, settings 672 — so the column resized on every navigation. It
+    has three now, and each one is a category rather than a coincidence:
+
+      max-w-5xl  data surfaces (dashboard's five-column log stream, the app list)
+      max-w-2xl  the settings-style forms (this page, settings)
+      max-w-sm   focused single-purpose cards (sign in, register, new app)
+
+    This page and settings are both stacked forms reached from the same chrome,
+    so the 768/672 split between them was the indefensible one. Both header and
+    body carry the measure and must move together, or the header stops aligning
+    with the content beneath it. --}}
 <div class="min-h-[100dvh]">
-  <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
+  <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-2xl">
     <StxLink to="/" class="text-lg wordmark">loghq</StxLink>
     <div class="flex gap-2.5 items-center">
       <StxLink to="/dashboard" class="px-3.5 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Dashboard</StxLink>
@@ -107,7 +120,7 @@ onMount(() => {
       ambiguous, because the server slices between the first opening main tag
       and the last closing one. Tag names are described rather than spelled
       here — see the note in resources/partials/SiteNav.stx. --}}
-  <div class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
+  <div class="mx-auto px-5 py-8 md:px-6 max-w-2xl">
     <h1 class="mb-6 text-2xl wordmark">Account</h1>
 
     <section class="mb-5 p-6 bg-panel border border-line rounded-[14px]">

@@ -92,7 +92,11 @@ function logout(): void {
     prefers-color-scheme, which the three copies here never did. --}}
 
 <div class="px-5 py-10 md:px-10 min-h-[100dvh]">
-  <div class="mx-auto max-w-4xl">
+  {{-- max-w-5xl, matching dashboard.stx. Clicking a row here goes straight to
+      the dashboard, and at max-w-4xl the content column jumped 896 to 1024 on
+      that one click — a resize in the middle of a single flow. See the measure
+      rule written out in account.stx. --}}
+  <div class="mx-auto max-w-5xl">
 
     <header class="flex gap-4 items-center justify-between mb-9">
       <div>
