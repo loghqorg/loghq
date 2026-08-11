@@ -71,6 +71,8 @@
   },
   "dependencies": {
     "bun-plugin-auto-imports": "^0.4.1",
+    "bun-query-builder": "^0.2.26",
+    "pickier": "^0.1.56",
     "stacks": "^0.70.362"
   },
   "devDependencies": {
