@@ -1,4 +1,9 @@
 <script server>
+// Static, not a dynamic import inside the action — see the note in login.stx:
+// the dynamic form resolves through stx's own node_modules, which links into a
+// sibling project, and loads an auth package whose ORM has no model for this
+// database.
+import { register } from '@stacksjs/auth'
 // Show a provider's sign-in button only when it's actually configured, so the
 // buttons stay hidden until credentials are set (then reappear automatically —
 // no code change). See config/services.ts.
@@ -13,69 +18,69 @@ useSeoMeta({
   ogImage: 'https://loghq.org/og.png',
 })
 useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/register' }] })
-</script>
 
-<script client>
-// Token auth via stx client directives (hydrated on the served page). Inputs are
-// uncontrolled and read from the submit event; error/loading are signals.
-const error = state('')
+// Invite context, read on the server so it is part of the first render rather
+// than something hydration adds.
+//
+// It has to survive the POST too. The form posts to /register with no query
+// string, so both values are carried as hidden inputs below — that is the
+// no-JS equivalent of the client reading location.search on every submit.
+const __regQuery = new URLSearchParams(__stxServeSearch || '')
+const isInvite = !!__regQuery.get('invite')
+const invitedEmail = __regQuery.get('email') || ''
 
-// Invite links are /register?email=…&invite=…. Read once at hydration: the
-// invitee must sign up as the exact person invited, so the email is prefilled
-// and locked. `invitedEmail` only prefills the DOM value — the field stays
-// uncontrolled, so handleSubmit still reads it from form.elements.
-const inviteParams = new URLSearchParams(location.search)
-const invitedEmail = state(inviteParams.get('email') || '')
-const isInvite = state(!!inviteParams.get('invite'))
+// Resting values for what the action merges back on a rejected submit.
+let formError = ''
+let values: { name?: string, email?: string } = {}
 
-// See login.stx for why `error` is a page signal and not the primitive's own.
-const signUp = useMutation('/register', {
-  onError(err: { data?: { message?: string } }) {
-    error.set(err.data?.message || 'Could not create the account.')
-  },
-  onSuccess(data: { token?: string, access_token?: string, user?: unknown }) {
-    // One write. The cookie IS the session — every server-rendered page
-    // authenticates from it — so there is no localStorage copy to mirror.
-    useStore('session').token.set(data.token || data.access_token || '')
-    // Through the store, not localStorage directly: `user` is a useLocalStorage
-    // signal the session store owns, so a raw setItem wrote the same key behind
-    // the signal's back and nothing subscribed re-rendered.
-    if (data.user)
-      useStore('session').user.set(data.user)
-    // New accounts have no apps yet: go to create-app — unless they arrived from
-    // an invite link, in which case land on the dashboard where the join banner
-    // is waiting. Read from inviteParams, parsed once at hydration above.
-    navigate(inviteParams.get('invite') ? '/dashboard' : '/projects/new')
-  },
-})
+// The page handles its own POST (stx#1847). Same contract as login.stx: a 303
+// carrying the session cookie, or a context merge that redraws this template
+// with the message and the fields still filled.
+const action = async ({ form, request }: { form: Record<string, string | string[]>, request: Request }) => {
+  const name = String(form.name ?? '').trim()
+  const email = String(form.email ?? '').trim()
+  const password = String(form.password ?? '')
+  const invited = !!String(form.invite ?? '')
+  const kept = { name, email }
 
-// The controls this handler reads. See login.stx for why the type is declared
-// inline rather than in types/app.d.ts, and why the cast is on `target`.
-interface SignUpForm extends HTMLFormElement {
-  elements: HTMLFormControlsCollection & {
-    name: HTMLInputElement
-    email: HTMLInputElement
-    password: HTMLInputElement
+  if (!name || !email || !password)
+    return { formError: 'Fill in your name, email and password.', values: kept }
+  if (password.length < 8)
+    return { formError: 'Password must be at least 8 characters.', values: kept }
+
+  // `register` throws an HttpError for an invalid address, a short password or
+  // a duplicate. Its duplicate message is deliberately vague — the framework
+  // treats "this email exists" as an enumeration oracle — so it is surfaced
+  // as-is rather than replaced with something more specific.
+  let result
+  try {
+    result = await register({ name, email, password })
+  }
+  catch (err) {
+    return { formError: (err as Error)?.message || 'Could not create the account.', values: kept }
+  }
+
+  if (!result?.token)
+    return { formError: 'Could not create the account.', values: kept }
+
+  // An invited user goes straight to the dashboard — the project already
+  // exists, they were asked to join it. Everyone else has no project yet, so
+  // they land on the create-your-first-app page.
+  return {
+    redirect: invited ? '/dashboard' : '/projects/new',
+    cookies: {
+      loghq_token: {
+        value: result.token,
+        maxAge: 2592000,
+        sameSite: 'Lax',
+        path: '/',
+        secure: new URL(request.url).protocol === 'https:',
+      },
+    },
   }
 }
-
-async function handleSubmit(e: SubmitEvent): Promise<void> {
-  e.preventDefault()
-  if (signUp.loading())
-    return
-  const form = e.target as SignUpForm
-  if (form.elements.password.value.length < 8) {
-    error.set('Password must be at least 8 characters.')
-    return
-  }
-  error.set('')
-  await signUp.mutate({
-    name: form.elements.name.value,
-    email: form.elements.email.value,
-    password: form.elements.password.value,
-  }).catch(() => {})
-}
 </script>
+
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
     path is not relied on. --}}
 @extends('layouts/default')
@@ -88,30 +93,36 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <p class="mt-2 text-sm text-subtle">Create your account</p>
     </div>
 
-    @if (isInvite())
+    @if (isInvite)
       <p class="mb-3.5 invite-hint">You've been invited to a project — sign up to join it.</p>
     @endif
 
-    <form @submit="handleSubmit" class="space-y-4">
-      @if (error())
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ error() }}</div>
+    {{-- Posts to itself; the action in the server block handles it. --}}
+    <form action="/register" method="POST" class="space-y-4">
+      {{-- The invite context, carried across the POST. Without these the query
+          string is lost on submit and an invited user would be sent to
+          /projects/new to create a project they were invited to. --}}
+      @if (isInvite)<input type="hidden" name="invite" value="1">@endif
+      @if (formError)
+        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
       @endif
 
       <div>
         <label for="register-name" class="block mb-1.5 font-medium text-muted text-xs">Name</label>
-        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" value="{{ values?.name || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <label for="register-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field" :value="invitedEmail()" :readonly="!!invitedEmail()" :style="invitedEmail() ? 'opacity:0.85' : ''">
+        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" value="{{ values?.email || invitedEmail }}" {{ invitedEmail ? 'readonly' : '' }} class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <label for="register-password" class="block mb-1.5 font-medium text-muted text-xs">Password</label>
         <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 
-      {{-- Static label + `:text`, never `{{ }}` in the body — see login.stx. --}}
-      <button type="submit" :disabled="signUp.loading()" :text="signUp.loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
+      {{-- A plain button with a static label. The loading bindings that were
+          here read a client mutation this page no longer has. --}}
+      <button type="submit" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
     </form>
 
     @if (anyOauth)

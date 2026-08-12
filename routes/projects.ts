@@ -12,6 +12,9 @@ import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
 import { type ChannelType, sendTestAlert, validateWebhook } from '../app/Errors/channels'
 import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites'
+// Shared with the page action in resources/views/projects/new.stx, so the two
+// callers cannot drift on how an id or an ingest key is minted.
+import { newIngestKey, newProjectId } from '../app/Support/projects'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -76,26 +79,6 @@ async function userFromCookie(request: any): Promise<any | null> {
   catch {
     return null
   }
-}
-
-/** A short, readable, unique project id: slug of the name + a random suffix. */
-function newProjectId(name: string): string {
-  const slug = (name || 'app')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 24) || 'app'
-  const rand = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 6)
-  return `${slug}-${rand}`
-}
-
-/**
- * A public, revocable ingest key (not a secret; ships in client code). The
- * `loghq_` prefix makes it recognizable as a loghq key at a glance (Stripe/
- * GitHub style) and greppable in code and logs.
- */
-function newIngestKey(): string {
-  return `loghq_${(globalThis.crypto.randomUUID() + globalThis.crypto.randomUUID()).replace(/-/g, '')}`
 }
 
 function newMemberId(): string {

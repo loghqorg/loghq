@@ -1,70 +1,64 @@
 <script server>
+// Static imports — see login.stx for why a dynamic one inside the action loads
+// a sibling project's package. `db as __db` per ch.5.8: it is an object, so
+// without the prefix it is a server→client bridge candidate.
+import { Auth } from '@stacksjs/auth'
+import { db as __db } from '@stacksjs/database'
+// Shared with routes/projects.ts so the two callers cannot drift on how an id
+// or an ingest key is minted.
+import { newIngestKey, newProjectId } from '../../../app/Support/projects'
 useSeoMeta({
   title: 'New app - loghq',
   description: 'Create an app to get an ingest key and start streaming logs.',
   robots: 'noindex, nofollow',
 })
-</script>
 
-<script client>
-// Create-app screen. New users land here after signup. Creates a project via
-// the authenticated API, then drops into that
-// project's dashboard, where the ingest snippet + key are shown.
-const error = state('')
+// Server-side session check, replacing a client guard that navigated away
+// after hydration. A logged-out visitor now gets an honest prompt in the first
+// response instead of a create form that flashes and disappears.
+const authed = !!cookies.loghq_token
 
-function ensureAuthed(): void {
-  // No mirror step any more: the cookie IS the session, so if the store has no
-  // token there is nothing to copy from and nothing to reload for.
-  if (!useStore('session').token())
-    navigate('/login', { reload: true })
-}
-ensureAuthed()
+// Resting values for what the action merges back.
+let formError = ''
+let values: { name?: string, platform?: string } = {}
 
-// No Authorization header here. The session store's configureFetch attaches the
-// bearer to every data-primitive request, and its onResponseError owns the 401
-// case — which is what the hand-written `if (res.status === 401) navigate(…)`
-// branch used to do, once, in this file only.
+// The page handles its own POST (stx#1847).
 //
-// See login.stx for why `error` is a page signal and not the primitive's own.
-const createProject = useMutation('/api/projects', {
-  onError(err: { status?: number, data?: { error?: string } }) {
-    // A 401 has already been handled by the interceptor, which clears the
-    // session and leaves; saying anything here would paint over that.
-    if (err.status === 401)
-      return
-    error.set(err.data?.error || 'Could not create the app.')
-  },
-  onSuccess(data: { project: { id: string } }) {
-    // Straight into the new project's Settings → Install, where the setup
-    // snippet lives.
-    navigate(`/settings?project=${encodeURIComponent(data.project.id)}`, { reload: true })
-  },
-})
+// Authenticates from the cookie the action is handed, rather than trusting the
+// page render: a POST is its own request, and the session could have expired
+// between drawing the form and submitting it.
+const action = async ({ form, cookies: reqCookies }: { form: Record<string, string | string[]>, cookies: Record<string, string> }) => {
+  const token = reqCookies.loghq_token || ''
+  const user = token ? await Auth.getUserFromToken(token) : null
+  if (!user)
+    return { redirect: '/login' }
 
-// The controls this handler reads. `platform` is a <select>, not an <input> —
-// the distinction the compiler can now hold for us. See login.stx for why the
-// type is declared inline rather than in types/app.d.ts.
-interface NewProjectForm extends HTMLFormElement {
-  elements: HTMLFormControlsCollection & {
-    name: HTMLInputElement
-    platform: HTMLSelectElement
-  }
-}
+  const name = String(form.name ?? '').trim()
+  const platform = String(form.platform ?? 'javascript').slice(0, 60)
+  const kept = { name, platform }
 
-async function handleSubmit(e: SubmitEvent): Promise<void> {
-  e.preventDefault()
-  if (createProject.loading())
-    return
-  const form = e.target as NewProjectForm
-  const name = form.elements.name.value.trim()
-  if (!name) {
-    error.set('Give your app a name.')
-    return
-  }
-  error.set('')
-  await createProject.mutate({ name, platform: form.elements.platform.value }).catch(() => {})
+  if (!name)
+    return { formError: 'Give your app a name.', values: kept }
+  if (name.length > 255)
+    return { formError: 'That name is too long.', values: kept }
+
+  const id = newProjectId(name)
+
+  await __db.insertInto('projects').values({
+    id,
+    name,
+    platform,
+    ingest_key: newIngestKey(),
+    owner_id: Number(user.id),
+    is_active: true,
+  }).execute()
+
+  // Straight to the new project's settings, which is where the ingest key and
+  // the install snippet are — the next thing you need after creating an app.
+  return { redirect: `/settings?project=${encodeURIComponent(id)}` }
 }
 </script>
+
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
     path is not relied on. --}}
 @extends('layouts/default')
@@ -81,14 +75,24 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <p class="mt-2 text-sm text-subtle">Each app gets its own log stream and ingest key.</p>
     </div>
 
-    <form @submit="handleSubmit" class="space-y-4">
-      @if (error())
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ error() }}</div>
+    @if (!authed)
+      {{-- Reached without a session. The client guard this replaces navigated
+          away after hydration, so a logged-out visitor saw the form flash
+          first; this is the honest answer in the first response. --}}
+      <div class="px-3 py-3 text-sm rounded-lg err-box">You need to be signed in to create an app.</div>
+      <p class="mt-6 text-center text-sm text-subtle">
+        <StxLink to="/login" class="font-medium text-accent">Go to sign in</StxLink>
+      </p>
+    @else
+    {{-- Posts to itself; the action is in the server block. --}}
+    <form action="/projects/new" method="POST" class="space-y-4">
+      @if (formError)
+        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
       @endif
 
       <div>
         <label for="newapp-name" class="block mb-1.5 font-medium text-muted text-xs">App name</label>
-        <input id="newapp-name" name="name" type="text" required autofocus placeholder="Acme Web" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="newapp-name" name="name" type="text" required autofocus placeholder="Acme Web" value="{{ values?.name || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <label for="newapp-platform" class="block mb-1.5 font-medium text-muted text-xs">Platform</label>
@@ -104,9 +108,10 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
         </select>
       </div>
 
-      {{-- Static label + `:text`, never `{{ }}` in the body — see login.stx. --}}
-      <button type="submit" :disabled="createProject.loading()" :text="createProject.loading() ? 'Creating…' : 'Create app'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create app</button>
+      {{-- A plain button; no client mutation to bind a loading state to. --}}
+      <button type="submit" class="py-2.5 w-full font-semibold text-sm btn-solid">Create app</button>
     </form>
+    @endif
   </div>
 </div>
 @endsection
