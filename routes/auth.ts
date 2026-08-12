@@ -2,17 +2,25 @@ import { passwordResets } from '@stacksjs/auth'
 import { response, route } from '@stacksjs/router'
 
 /**
- * Auth endpoints, re-registered at the root with `.skipCsrf()`.
+ * `/logout`, re-registered at the root with `.skipCsrf()`.
  *
- * These use the framework's default Auth actions (resolved by string), but the
- * defaults are CSRF-gated — which blocks the same-origin `fetch()` from the
- * login/register pages. Token auth is CSRF-immune (bearer tokens aren't sent
- * automatically by the browser the way cookies are), so skipping CSRF here is
- * safe; the rate limits are kept. User route files load before the framework
- * defaults, so these win on the duplicate method+path.
+ * The framework's default Auth actions are CSRF-gated, which blocks a
+ * same-origin `fetch()`. Token auth is CSRF-immune — a bearer token is not sent
+ * automatically by the browser the way a cookie is — so skipping CSRF here is
+ * safe. User route files load before the framework defaults, so this wins on
+ * the duplicate method+path.
+ *
+ * `/login` and `/register` USED to be re-registered here for the same reason,
+ * and are deliberately gone. Their whole justification was the same-origin
+ * fetch from the sign-in and sign-up pages, and those pages do not fetch any
+ * more: each handles its own POST through a page action (see login.stx and
+ * register.stx). Removing them means the framework's own CSRF-gated defaults
+ * apply to those paths again, which is strictly tighter than what was here —
+ * this app no longer has two sign-in entry points, one of them CSRF-exempt.
+ *
+ * `/logout` stays because it is still a same-origin fetch: the session store
+ * calls it fire-and-forget from signOut().
  */
-route.post('/login', 'Actions/Auth/LoginAction').skipCsrf().rateLimit(5, 'minute')
-route.post('/register', 'Actions/Auth/RegisterAction').skipCsrf().rateLimit(3, 'minute')
 route.post('/logout', 'Actions/Auth/LogoutAction').skipCsrf()
 route.get('/api/me', 'Actions/MeAction').skipCsrf()
 

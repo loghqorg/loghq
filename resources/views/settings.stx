@@ -416,6 +416,26 @@ const copiedInstall = state(false)
 const copiedCode = state(false)
 const copiedKey = state(false)
 
+/**
+ * Copy to the clipboard and light up the button that asked.
+ *
+ * `stx codemod` flags the `navigator.clipboard` call here and suggests
+ * `useClipboard()`. It does not fit, for three separate reasons, all checked
+ * against the shipped composable rather than assumed:
+ *
+ *   1. One instance owns ONE `copied` ref. This page has three independent
+ *      copy buttons — the install snippet, the code snippet and the ingest key
+ *      — and each needs its own lit state, so it would take three instances.
+ *   2. That `copied` is a `{ readonly value: boolean }` ref, not a signal, so
+ *      the template bindings that drive these buttons could not read it the
+ *      way they read everything else on this page.
+ *   3. It is not injected as a bare runtime global — reaching it means
+ *      `window.stx`, and a bare `window.*` in a script block is exactly what
+ *      the DOM guard forbids.
+ *
+ * So this stays. The flag is passed IN, which is what lets one helper serve
+ * three buttons and one shared reset timer.
+ */
 async function copyText(text: string, flag: StxSignal<boolean>): Promise<void> {
   try { await navigator.clipboard.writeText(text) }
   catch {}
