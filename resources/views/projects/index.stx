@@ -4,6 +4,20 @@
 // visitors) are handled by the client guard at the bottom.
 // Static import per ch.5.3, renamed to `__db` per ch.5.8 — see the fuller note
 // in settings.stx.
+// STATIC, not `await import('@stacksjs/auth')` inside the guard below.
+//
+// A dynamic import in a server block is resolved in the context of the module
+// evaluating it — stx's variable-extractor — and the stx fork's
+// node_modules/@stacksjs/auth is a symlink into a SIBLING PROJECT. So the
+// dynamic form loaded another app's auth package, whose @stacksjs/orm has no
+// User model for this database. Proven on login.stx, where it threw
+// `User.where is not a function` with that project's path in the stack trace
+// (fixed in 62d46ce); this page only escaped it because getUserFromToken
+// leans on raw db queries rather than the ORM.
+//
+// The catch below would have hidden that: an import failure becomes
+// `user = null`, which renders as signed-out rather than as an error.
+import { Auth } from '@stacksjs/auth'
 import { db as __db } from '@stacksjs/database'
 
 // `__`-prefixed so the server→client bridge cannot publish it — see the note in
@@ -13,10 +27,15 @@ const __token = cookies.loghq_token ?? ''
 let user: AuthUser | null = null
 if (__token) {
   try {
-    const { Auth } = await import('@stacksjs/auth')
     user = await Auth.getUserFromToken(__token)
   }
-  catch { user = null }
+  catch (err) {
+    // Fail closed, but leave a trace. This used to be a bare `catch {}`, so a
+    // database blip and a genuinely signed-out visitor were indistinguishable
+    // both on the page and in the log.
+    console.error('[auth] getUserFromToken failed:', err instanceof Error ? err.message : err)
+    user = null
+  }
 }
 
 let projects: ProjectRow[] = []
