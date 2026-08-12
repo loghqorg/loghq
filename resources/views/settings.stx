@@ -333,6 +333,11 @@ const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { 
 // collide with the `const keyFull` that consumes it.
 defineClientPayload({
   projectId,
+  // The client block's onMount bounce reads this. It was NOT listed, so the
+  // bounce threw `ReferenceError: needsOnboarding is not defined` on every
+  // render and never ran — the same value is listed in dashboard.stx, which is
+  // why only this page was broken.
+  needsOnboarding,
   projectName: activeProject?.name || '',
   projectActive: activeProject ? activeProject.is_active !== false : true,
   installText: guide.install,
@@ -436,6 +441,31 @@ const copiedKey = state(false)
  * So this stays. The flag is passed IN, which is what lets one helper serve
  * three buttons and one shared reset timer.
  */
+/**
+ * Named per-button handlers.
+ *
+ * The markup used to call `copyText(installText, copiedInstall)` straight from
+ * `@click`, passing the signal as an argument. A template expression resolves
+ * an identifier to its VALUE, so what arrived was the boolean `false`, not the
+ * signal — and the click died on `flag.set is not a function`, silently,
+ * because the only visible effect was a button that did nothing.
+ *
+ * Signals therefore stay inside the client block and the template calls a
+ * no-argument handler. `stx typecheck` had been pointing here for weeks with
+ * TS2349 "This expression is not callable" on the third of these.
+ */
+function copyInstall(): void {
+  void copyText(installText, copiedInstall)
+}
+
+function copyCode(): void {
+  void copyText(codeText, copiedCode)
+}
+
+function copyKey(): void {
+  void copyText(keyFull(), copiedKey)
+}
+
 async function copyText(text: string, flag: StxSignal<boolean>): Promise<void> {
   try { await navigator.clipboard.writeText(text) }
   catch {}
@@ -966,12 +996,12 @@ onMount(() => {
           @if (guide.install)
             <div class="relative mb-2">
               <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted bg-canvas border border-line rounded-[10px]">{{ guide.install }}</div>
-              <button type="button" @click="copyText(installText, copiedInstall)" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
+              <button type="button" @click="copyInstall" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
             </div>
           @endif
           <div class="relative">
             <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted whitespace-pre bg-canvas border border-line rounded-[10px]">{{ guide.code }}</div>
-            <button type="button" @click="copyText(codeText, copiedCode)" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
+            <button type="button" @click="copyCode" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Native SDKs are in progress. Until then this is the whole integration — the
@@ -992,7 +1022,7 @@ onMount(() => {
           <div class="flex flex-wrap gap-2 items-center">
             <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" :text="keyShown()">{{ keyMask }}</code>
             <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
-            <button @click="copyText(keyFull(), copiedKey)" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
+            <button @click="copyKey" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
             <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Rotate</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
