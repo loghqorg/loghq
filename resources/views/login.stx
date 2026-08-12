@@ -1,4 +1,17 @@
 <script server>
+// STATIC import, and that is load-bearing — do not turn it into an
+// `await import('@stacksjs/auth')` inside the action below.
+//
+// A static import here is resolved against this project. A dynamic import
+// evaluated inside an action's body is resolved in the context of the module
+// running it — stx's variable-extractor — and the stx fork's
+// node_modules/@stacksjs/auth is a symlink into a SIBLING PROJECT (bughq). So
+// the dynamic form loaded another app's auth package, whose `@stacksjs/orm`
+// has no User model generated for this database, and `Auth.login` died on
+// `User.where is not a function`. Measured, not theorised: the stack trace
+// named bughq's path.
+import { Auth } from '@stacksjs/auth'
+
 // Show a provider's sign-in button only when it's actually configured, so the
 // buttons stay hidden until credentials are set (then reappear automatically —
 // no code change). See config/services.ts.
@@ -13,81 +26,87 @@ useSeoMeta({
   ogImage: 'https://loghq.org/og.png',
 })
 useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/login' }] })
-</script>
 
-<script client>
-// Token auth via stx client directives. Uncontrolled inputs read from the submit
-// event.
-const error = state('')
-// OAuth failures come back as ?error= on a full-page redirect from the provider,
-// so this is read once at hydration rather than watched. Separate from `error`
-// (which is the credential form's own failure) because both can be on screen.
-const oauthError = state(new URLSearchParams(location.search).get('error') || '')
+// OAuth failures come back as ?error= on a full-page redirect from the
+// provider. Read here rather than from location.search in a client block: it is
+// server-known at render time, so reading it on the client meant the message
+// could not exist until hydration.
+const oauthError = new URLSearchParams(__stxServeSearch || '').get('error') || ''
 
-// useMutation owns the request, the in-flight flag and the failure path. What it
-// replaced was a manual loading toggle, a try/catch/finally, a res.ok branch and
-// a json().catch(() => ({})) — all of it the same shape on five other pages.
+// What the action merges back on a rejected submit, declared with its
+// resting values.
 //
-// `error` stays a page signal rather than binding `signIn.error()` directly. The
-// primitive's error signal is the thrown message, which is prefixed:
-// "HTTP 401: Unauthorized - Incorrect email or password". Measured against the
-// real runtime, not assumed. `err.data` is the server's body, so the page shows
-// what the server actually said (stx#1848 made that reachable).
-//
-// A network failure has no `.data`, so it falls through to the generic copy.
-const signIn = useMutation('/login', {
-  onError(err: { data?: { message?: string } }) {
-    error.set(err.data?.message || 'Invalid email or password.')
-  },
-  onSuccess(data: { token?: string, access_token?: string, user?: unknown }) {
-    // One write. The cookie IS the session — every server-rendered page
-    // authenticates from it — so there is no localStorage copy to mirror and no
-    // reload afterwards to make the server see it. useCookie serialises path,
-    // max-age, SameSite and Secure itself.
-    useStore('session').token.set(data.token || data.access_token || '')
-    // Through the store, not localStorage directly. `user` is a
-    // useLocalStorage signal the session store owns, so a raw setItem wrote the
-    // same key behind the signal's back: nothing subscribed re-rendered, and the
-    // store's own copy stayed stale until the next reload.
-    if (data.user)
-      useStore('session').user.set(data.user)
-    navigate('/dashboard')
-  },
-})
+// Not decoration. On a GET neither name exists at all, so the template's
+// `@if (formError)` and `values?.email` were reading undeclared identifiers —
+// harmless at runtime, because an undefined name is falsy, but it left the
+// page's own contract implicit and unreadable. Declaring them states what the
+// action returns and gives the template something real to read on both paths.
+// The action's `Object.assign` overwrites these on the POST render.
+let formError = ''
+let values: { email?: string } = {}
 
-// The controls this handler reads, named so the compiler can check them.
+// ---------------------------------------------------------------------------
+// The page handles its own POST (stx#1847).
 //
-// `e.target` is typed `EventTarget | null` and `HTMLFormControlsCollection`
-// indexes to `Element`, so `form.elements.email.value` was three separate
-// errors: possibly-null, no `elements`, no `value`. tsc never reported any of
-// them — it cannot see inside a .stx script block at all — and `stx typecheck`
-// is what surfaced them.
+// `action` is picked up off the render context, so a plain top-level binding in
+// this block is the declaration — and being a function it is dropped by the
+// server→client bridge, so it never reaches the HTML.
 //
-// Declared inline rather than in types/app.d.ts because `stx typecheck` does
-// not load the app's .d.ts files; a type declared there comes back as
-// "Cannot find name". Inline also keeps the contract next to the form it
-// describes: add a field here and the compiler tells you where to read it.
-interface SignInForm extends HTMLFormElement {
-  elements: HTMLFormControlsCollection & {
-    email: HTMLInputElement
-    password: HTMLInputElement
+// This is the whole form now. There is no fetch, no preventDefault and no
+// client mirror of the error: the browser posts the form, this runs, and either
+// a 303 carries the session cookie to /dashboard or the same template
+// re-renders with `formError` and `values` merged into its context. That is one
+// handler for the scripting-off path and the scripting-on path, which is what
+// the app never had — measured in stx#1847, five of five forms inert without
+// JavaScript.
+//
+// `Auth.login` carries the rate limiting with it: `Auth.attempt` calls
+// RateLimiter.isRateLimited before verifying and records a failed attempt after,
+// keyed by email. So dropping `.rateLimit(5, 'minute')` from the route does not
+// drop the protection — it moves into the same function that checks the
+// password.
+//
+// The cookie is deliberately NOT httpOnly. loghq's session store reads
+// `loghq_token` with useCookie to attach the bearer to API calls, so making it
+// httpOnly here would sign the user in and then leave every client fetch
+// unauthenticated. Same name, maxAge and SameSite the store writes, so a
+// session established here and one established by the enhanced path are
+// indistinguishable afterwards.
+const action = async ({ form, request }: { form: Record<string, string | string[]>, request: Request }) => {
+  const email = String(form.email ?? '').trim()
+  const password = String(form.password ?? '')
+
+  // Cheap checks first, in the same shape the failure path uses, so an empty
+  // submit does not cost a database round trip.
+  if (!email || !password)
+    return { formError: 'Enter your email and password.', values: { email } }
+
+  const result = await Auth.login({ email, password })
+
+  // One message for "no such account" and "wrong password" on purpose — saying
+  // which is an account-enumeration oracle. The framework made the same change
+  // for its own auth in 0.70.362.
+  if (!result?.token)
+    return { formError: 'Invalid email or password.', values: { email } }
+
+  return {
+    redirect: '/dashboard',
+    cookies: {
+      loghq_token: {
+        value: result.token,
+        maxAge: 2592000,
+        sameSite: 'Lax',
+        path: '/',
+        // Secure only where it can be honoured. Setting it unconditionally
+        // would make the cookie undeliverable over plain http, which is what
+        // local dev serves.
+        secure: new URL(request.url).protocol === 'https:',
+      },
+    },
   }
 }
-
-async function handleSubmit(e: SubmitEvent): Promise<void> {
-  e.preventDefault()
-  if (signIn.loading())
-    return
-  // `target`, not `currentTarget`: a submit event targets the form, and this
-  // keeps the runtime read exactly as it was. The cast is the whole change.
-  const form = e.target as SignInForm
-  error.set('')
-  // mutate() rethrows after onError so a caller can await the outcome; this one
-  // has already handled it, and an unhandled rejection here would surface as a
-  // console error on a form the user has been told about properly.
-  await signIn.mutate({ email: form.elements.email.value, password: form.elements.password.value }).catch(() => {})
-}
 </script>
+
 
 {{-- Explicit layout binding, per ch.3.4. Without it the page relies on
     the implicit path (process.js:310-338), which applies defaultLayout only
@@ -105,14 +124,17 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <p class="mt-2 text-sm text-subtle">Sign in to your account</p>
     </div>
 
-    <form @submit="handleSubmit" class="space-y-4">
-      @if (error())
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ error() }}</div>
+    {{-- action and method, so the browser can submit this on its own. The page
+        handles its own POST — see the action in the server block — so there is
+        no separate endpoint and no handler to keep in step with one. --}}
+    <form action="/login" method="POST" class="space-y-4">
+      @if (formError)
+        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
       @endif
 
       <div>
         <label for="login-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" value="{{ values?.email || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <div class="flex items-center justify-between mb-1.5">
@@ -129,11 +151,17 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
           form's only submit control was display:none until the client runtime
           booted. `:text` overwrites the static label after hydration and never
           cloaks, so the button is present and pressable at first paint. --}}
-      <button type="submit" :disabled="signIn.loading()" :text="signIn.loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
+      {{-- A plain button. The `:disabled` and `:text` bindings that used to sit
+          here read a client mutation's loading flag; with a native submit the
+          browser owns that state, and a binding onto a signal this page no
+          longer has would have been a dangling expression. The label is static
+          markup, so it is present and pressable at first paint rather than
+          waiting on hydration to be written. --}}
+      <button type="submit" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
     </form>
 
-    @if (oauthError())
-      <div class="mt-4 px-3 py-2 text-sm rounded-lg err-box">{{ oauthError() }}</div>
+    @if (oauthError)
+      <div class="mt-4 px-3 py-2 text-sm rounded-lg err-box">{{ oauthError }}</div>
     @endif
 
     @if (anyOauth)
