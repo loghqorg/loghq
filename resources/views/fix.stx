@@ -1,0 +1,321 @@
+<script server>
+// "Fix with AI" for one log entry. Reached from the expanded row on the
+// dashboard as `/fix?log=<id>`.
+//
+// A query parameter rather than a `[id]` path segment: every other page here
+// reads `__stxServeSearch`, no view in this app uses a dynamic segment, and the
+// param-extraction dance a segment needs (URL parse, then query fallback, then
+// requestContext.params) is three ways to get one value. One way is better.
+//
+// Static imports per ch.5.3 - a dynamic import inside a server block resolves
+// against the stx fork's node_modules, which symlinks into a sibling project.
+// `__`-prefixed where the binding is an object, per ch.5.8: every top-level
+// binding is a server-to-client bridge candidate and publishes into the page
+// source as soon as its name appears anywhere in a client block.
+import { Auth } from '@stacksjs/auth'
+import { analyzeEntry, fixableLevel, fixConfigured, fixEnabled, latestRunFor, parseAnalysis } from '../../app/Fix/analyze'
+import { fingerprintOf } from '../../app/Fix/fingerprint'
+import { logEntryFor } from '../../app/Support/access'
+
+useSeoMeta({
+  title: 'Fix with AI - loghq',
+  description: 'Root cause and a suggested fix for a single log entry.',
+  robots: 'noindex, nofollow',
+})
+
+const query = new URLSearchParams(__stxServeSearch || '')
+const logId = (query.get('log') || '').slice(0, 255)
+
+const __token = cookies.loghq_token ?? ''
+let __user: any = null
+if (__token) {
+  try {
+    __user = await Auth.getUserFromToken(__token)
+  }
+  catch (err) {
+    // Fail closed but leave a trace, matching dashboard.stx: a database blip
+    // and a genuinely signed-out visitor must not look the same in the log.
+    console.error('[fix] token lookup failed:', err instanceof Error ? err.message : err)
+    __user = null
+  }
+}
+const authed = !!__user
+
+// Resting values. `entry` is the only bridge-safe one - it is what the template
+// renders - and it is narrowed to the fields the page shows rather than passed
+// through whole, so `context` and `user_context` never reach the markup.
+let entry: {
+  id: string
+  level: string
+  message: string
+  channel: string
+  environment: string
+  framework: string
+  release: string
+  host: string
+  timestamp: string
+  hasContext: boolean
+} | null = null
+
+let run: any = null
+let analysis: any = null
+
+// Action failures come back through the URL rather than through the context
+// merge, and that is not a style choice.
+//
+// A form POST carries no query string, so on a re-render `logId` is '' and
+// `entry` is null - which means a merged `formError` would be drawn in a branch
+// that says "Log entry not found" instead of the page the user was just
+// looking at. Redirecting back to the GET with a code restores the id, and the
+// analysis it reports on is stored anyway, so nothing is lost by the round
+// trip. Codes, not messages, so the URL can never render attacker-chosen text.
+const FORM_ERRORS: Record<string, string> = {
+  missing: 'No log entry was selected.',
+  unconfigured: 'AI analysis is not configured on this server.',
+  gone: 'That log entry is no longer available.',
+}
+const formError = FORM_ERRORS[query.get('error') || ''] ?? ''
+
+const enabled = fixEnabled()
+const configured = fixConfigured()
+
+if (authed && logId) {
+  const row = await logEntryFor(__user, logId)
+  if (row) {
+    entry = {
+      id: String(row.id),
+      level: String(row.level || 'info'),
+      message: String(row.message || ''),
+      channel: String(row.channel || ''),
+      environment: String(row.environment || ''),
+      framework: String(row.framework || ''),
+      release: String(row.release || ''),
+      host: String(row.host || ''),
+      timestamp: String(row.timestamp || ''),
+      hasContext: !!row.context,
+    }
+    run = await latestRunFor(String(row.project_id), fingerprintOf(row))
+    analysis = parseAnalysis(run)
+  }
+}
+
+// True when the run on screen was produced from a different entry - the same
+// error shape analyzed earlier. Said out loud on the page, because an answer
+// about "this line" that was actually computed from another one is misleading
+// even when it is correct.
+const reused = !!run && !!entry && run.log_entry_id !== entry.id
+const worthFixing = !!entry && fixableLevel(entry.level)
+const canAnalyze = authed && !!entry && enabled && configured
+
+/**
+ * `YYYY-MM-DD HH:MM:SS`, always UTC.
+ *
+ * Via `new Date()` rather than slicing the value: `log_fix_runs.completed_at`
+ * is a real timestamp column and comes back as a Date object, so stringifying
+ * it yields `Fri Aug 14 2026 05:52:42 GMT+0800` - which a 19-character slice
+ * cuts to `Fri Aug 14 2026 05:`, in local time, under a label reading UTC.
+ * `log_entries.timestamp` is a varchar of ISO-8601, so one helper has to take
+ * both.
+ */
+function stampOf(value: unknown): string {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString().replace('T', ' ').slice(0, 19)
+}
+
+const analyzedAt = stampOf(run?.completed_at)
+
+// The page handles its own POST (stx#1847). The analysis is one model call, so
+// it completes inside this request rather than needing a queue and a poller -
+// see the note in app/Fix/analyze.ts.
+const action = async ({ form, cookies: reqCookies }: { form: Record<string, string | string[]>, cookies: Record<string, string> }) => {
+  const token = reqCookies.loghq_token || ''
+  // Re-authenticated from the request the action was handed. A POST is its own
+  // request and the session can expire between drawing the button and pressing
+  // it.
+  const actor = token ? await Auth.getUserFromToken(token) : null
+  if (!actor)
+    return { redirect: '/login' }
+
+  const target = String(form.log ?? '').slice(0, 255)
+  // Every exit is a redirect back to the GET - see the note on FORM_ERRORS for
+  // why an inline formError cannot work on this page.
+  const back = (code?: string) =>
+    ({ redirect: `/fix?log=${encodeURIComponent(target)}${code ? `&error=${code}` : ''}` })
+
+  if (!target)
+    return { redirect: '/fix?error=missing' }
+
+  // Re-checked here rather than trusted from the render: the button is only
+  // drawn when the server is configured, but a POST can be sent without it.
+  if (!fixEnabled() || !fixConfigured())
+    return back('unconfigured')
+
+  const row = await logEntryFor(actor, target)
+  if (!row)
+    return back('gone')
+
+  // A failed analysis is stored on the run and rendered from there, so there is
+  // no error code for it - the page reports what actually happened rather than
+  // a category.
+  await analyzeEntry(row, Number(actor.id))
+
+  // 303 back to the GET so a refresh re-reads the stored run instead of
+  // re-submitting the analysis.
+  return back()
+}
+</script>
+
+@extends('layouts/default')
+
+@section('content')
+<div class="mx-auto px-5 py-10 max-w-3xl">
+
+  <div class="mb-8">
+    <StxLink to="/dashboard" class="text-sm text-subtle">&larr; Back to stream</StxLink>
+  </div>
+
+  @if (!authed)
+    <div class="px-3 py-3 text-sm rounded-lg err-box">You need to be signed in to analyze a log entry.</div>
+    <p class="mt-6 text-sm text-subtle"><StxLink to="/login" class="font-medium text-accent">Go to sign in</StxLink></p>
+  @elseif (!entry)
+    <h1 class="mb-2 font-semibold text-xl tracking-tight">Log entry not found</h1>
+    <p class="text-sm text-subtle">It may have been removed, or it belongs to an app you cannot access.</p>
+  @else
+
+    <header class="mb-8">
+      <h1 class="mb-2 font-semibold text-xl tracking-tight">Fix with AI</h1>
+      <p class="text-sm text-subtle">Root cause and a suggested fix, read from this entry and the lines around it.</p>
+    </header>
+
+    {{-- The entry under analysis, so the answer is never floating free of what
+        produced it. --}}
+    <section class="overflow-hidden mb-6 app-panel">
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-line">
+        <span class="font-semibold text-subtle text-xs tracking-wider uppercase">Entry</span>
+        <span class="font-mono text-subtle text-xs tnum">{{ stampOf(entry.timestamp) }} UTC</span>
+      </div>
+      <div class="px-5 py-4">
+        <div class="flex flex-wrap gap-x-5 gap-y-1 mb-3 font-mono text-subtle text-xs tnum">
+          <span>level: <span class="text-muted">{{ entry.level }}</span></span>
+          @if (entry.channel)<span>channel: <span class="text-muted">{{ entry.channel }}</span></span>@endif
+          @if (entry.environment)<span>env: <span class="text-muted">{{ entry.environment }}</span></span>@endif
+          @if (entry.framework)<span>via: <span class="text-muted">{{ entry.framework }}</span></span>@endif
+          @if (entry.release)<span>release: <span class="text-muted">{{ entry.release }}</span></span>@endif
+        </div>
+        <div class="break-words font-mono text-ink text-sm whitespace-pre-wrap tnum">{{ entry.message }}</div>
+      </div>
+    </section>
+
+    @if (formError)
+      <div class="mb-6 px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
+    @endif
+
+    @if (!enabled)
+      <div class="mb-6 px-4 py-3 text-muted text-sm app-panel">
+        <span class="font-semibold text-ink">AI analysis is turned off.</span> Set AI_FIX_ENABLED to enable it.
+      </div>
+    @elseif (!configured)
+      <div class="mb-6 px-4 py-3 text-muted text-sm app-panel">
+        <span class="font-semibold text-ink">No model provider is configured.</span>
+        Add an API key for the selected provider and this page will do the rest.
+      </div>
+    @endif
+
+    @if (run && run.status === 'failed')
+      <div class="mb-6 px-3 py-3 text-sm rounded-lg err-box">
+        The last analysis stopped. {{ run.error || 'No further detail was recorded.' }}
+      </div>
+    @endif
+
+    @if (analysis)
+      <section class="overflow-hidden mb-6 app-panel">
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-line">
+          <span class="font-semibold text-subtle text-xs tracking-wider uppercase">Analysis</span>
+          <span class="font-mono text-subtle text-xs tnum">{{ analysis.confidence }} confidence</span>
+        </div>
+
+        <div class="px-5 py-4 border-b border-line">
+          <div class="mb-1.5 font-medium text-base text-ink">{{ analysis.summary }}</div>
+          <p class="leading-relaxed text-muted text-sm">{{ analysis.rootCause }}</p>
+        </div>
+
+        @if (analysis.suspects && analysis.suspects.length)
+          <div class="px-5 py-4 border-b border-line">
+            <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">Where to look</div>
+            @foreach (analysis.suspects as suspect)
+              <div class="mb-2.5 last:mb-0">
+                <div class="font-mono text-ink text-xs tnum">{{ suspect.location }}</div>
+                <div class="mt-0.5 text-muted text-sm">{{ suspect.reason }}</div>
+              </div>
+            @endforeach
+          </div>
+        @endif
+
+        @if (analysis.steps && analysis.steps.length)
+          <div class="px-5 py-4 border-b border-line">
+            <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">Suggested fix</div>
+            <ol>
+              @foreach (analysis.steps as step)
+                <li class="grid grid-cols-[1.5rem_1fr] mb-3 last:mb-0">
+                  <span class="font-mono text-subtle text-xs tnum">{{ loop.iteration }}.</span>
+                  <span>
+                    <span class="block font-medium text-ink text-sm">{{ step.title }}</span>
+                    <span class="block mt-0.5 leading-relaxed text-muted text-sm">{{ step.detail }}</span>
+                  </span>
+                </li>
+              @endforeach
+            </ol>
+          </div>
+        @endif
+
+        @if (analysis.patch)
+          <div class="px-5 py-4 border-b border-line">
+            <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">Change</div>
+            <pre class="overflow-x-auto px-3 py-2.5 break-words font-mono text-muted text-xs whitespace-pre-wrap app-panel tnum">{{ analysis.patch }}</pre>
+          </div>
+        @endif
+
+        @if (analysis.verification && analysis.verification.length)
+          <div class="px-5 py-4 border-b border-line">
+            <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">How to verify</div>
+            <ul>
+              @foreach (analysis.verification as check)
+                <li class="mb-1.5 last:mb-0 text-muted text-sm">{{ check }}</li>
+              @endforeach
+            </ul>
+          </div>
+        @endif
+
+        <div class="px-5 py-3.5 font-mono text-subtle text-xs tnum">
+          {{ run.provider }}{{ run.model ? ` / ${run.model}` : '' }}{{ analyzedAt ? ` - ${analyzedAt} UTC` : '' }}
+          @if (reused)
+            <span class="text-muted"> - carried over from an earlier identical entry</span>
+          @endif
+        </div>
+      </section>
+    @endif
+
+    @if (canAnalyze)
+      <form action="/fix" method="POST">
+        <input type="hidden" name="log" value="{{ entry.id }}">
+        <button type="submit" class="px-4 py-2.5 font-semibold text-sm btn-solid">
+          {{ analysis ? 'Re-analyze' : 'Analyze this entry' }}
+        </button>
+        @if (!analysis)
+          <p class="mt-2.5 text-subtle text-xs">
+            Sends this entry, its context and the lines around it to {{ run?.provider || 'the configured model provider' }}. Takes a few seconds.
+            @if (!worthFixing)
+              This entry is {{ entry.level }}, so there may be nothing wrong to find.
+            @endif
+          </p>
+        @else
+          <p class="mt-2.5 text-subtle text-xs">Runs a fresh analysis and replaces the one above.</p>
+        @endif
+      </form>
+    @endif
+
+  @endif
+
+</div>
+@endsection

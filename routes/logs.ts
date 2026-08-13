@@ -14,6 +14,9 @@ import { response, route } from '@stacksjs/router'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
 import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
+// The owner/member predicate lives in one file so these routes and the pages
+// that render the same data cannot drift on it. See app/Support/access.ts.
+import { ownsLog, ownsProject } from '../app/Support/access'
 
 // Ingest abuse bounds. The public key gate is not enough on its own — a script
 // with the key (readable from any bundle) could flood the ingest. Per-entry
@@ -76,35 +79,6 @@ async function userFromRequest(request: any): Promise<any | null> {
   catch {
     return null
   }
-}
-
-function userEmail(user: any): string {
-  return String(user?.email ?? '').trim().toLowerCase()
-}
-
-/** True when `user` can access the project (owner or invited member). */
-async function ownsProject(user: any, projectId: string): Promise<boolean> {
-  const row = (await db.unsafe(
-    `SELECT 1 FROM projects p
-    WHERE p.id = $1 AND (
-      p.owner_id = $2
-      OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
-    ) LIMIT 1`,
-    [projectId, Number(user.id), userEmail(user)],
-  ))?.[0]
-  return !!row
-}
-
-async function ownsLog(user: any, logId: string): Promise<boolean> {
-  const row = (await db.unsafe(
-    `SELECT 1 FROM log_entries l JOIN projects p ON p.id = l.project_id
-    WHERE l.id = $1 AND (
-      p.owner_id = $2
-      OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id AND lower(m.email) = $3)
-    ) LIMIT 1`,
-    [logId, Number(user.id), userEmail(user)],
-  ))?.[0]
-  return !!row
 }
 
 // ---------------------------------------------------------------------------

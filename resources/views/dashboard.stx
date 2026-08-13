@@ -23,6 +23,10 @@
 // `user = null`, which renders as signed-out rather than as an error.
 import { Auth } from '@stacksjs/auth'
 import { db as __db } from '@stacksjs/database'
+// Config-only, deliberately not app/Fix/analyze: this page renders a hundred
+// rows and calls no model, so it must not pull `@stacksjs/ai` in behind a
+// question it only asks to decide whether to draw a link.
+import { fixableLevel, fixEnabled } from '../../app/Fix/policy'
 
 // __stxServeSearch is a context local, injected onto THIS render's context by
 // the serve path immediately before the block runs — not a global to reach
@@ -329,6 +333,14 @@ function dayOf(iso: string | null | undefined): string {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(5, 10)
 }
+// Whether the expanded row offers "Fix with AI". Both halves of the question
+// live in app/Fix/policy.ts; this wrapper exists only because the template
+// calls it per row, and a local function is how every other row-level helper
+// on this page is reached.
+function canFix(level: LogLevel | null | undefined): boolean {
+  return fixEnabled() && fixableLevel(level)
+}
+
 // Pretty-print stored JSON context for the expanded row (best-effort).
 function prettyContext(raw: unknown): string {
   if (!raw) return ''
@@ -700,6 +712,18 @@ onMount(() => {
             <div class="mb-3 break-words font-mono text-ink text-sm whitespace-pre-wrap tnum">{{ entry.message }}</div>
             @if (entry.context)
               <pre class="overflow-x-auto px-3 py-2.5 break-words font-mono text-muted text-xs whitespace-pre-wrap app-panel tnum">{{ prettyContext(entry.context) }}</pre>
+            @endif
+            {{-- Offered from `warning` up only. Below that the answer is nearly
+                always "nothing is wrong", and a button that usually says so is
+                a button people stop reading. A link, not a submit: nothing is
+                spent until the next page is opened and the analysis asked for
+                explicitly. --}}
+            @if (canFix(entry.level))
+              <div class="mt-3.5">
+                <StxLink to="/fix?log={{ entry.id }}" class="inline-flex gap-1.5 items-center px-3 py-1.5 font-medium text-muted text-xs border border-line pill">
+                  <i class="h-3.5 w-3.5 i-hugeicons-ai-magic"></i> Fix with AI
+                </StxLink>
+              </div>
             @endif
           </div>
         </details>

@@ -1,36 +1,43 @@
 import type { AiConfig } from '@stacksjs/types'
 import { env } from '@stacksjs/env'
 
-interface BugHqAiConfig extends AiConfig {
+interface LogHqAiConfig extends AiConfig {
   default: 'anthropic' | 'openai' | 'ollama'
   drivers: {
     anthropic: { apiKey: string, model: string, maxTokens: number }
     openai: { apiKey: string, model: string, maxTokens: number, baseUrl: string }
     ollama: { host: string, model: string }
   }
-  autofix: {
+  fix: {
     enabled: boolean
-    draftPullRequests: boolean
-    maxFiles: number
-    maxSourceBytes: number
-    branchPrefix: string
+    maxContextBytes: number
+    correlatedEntries: number
+    cacheHours: number
+    timeoutMs: number
   }
 }
 
 /**
  * **AI Configuration**
  *
- * This configuration defines all of your AI options. Because Stacks is fully-typed, you
- * may hover any of the options below and the definitions will be provided. In case you
- * have any questions, feel free to reach out via Discord or GitHub Discussions.
+ * Drives "Fix with AI" (app/Fix/, resources/views/fix.stx): given one log
+ * entry and the lines around it, explain the root cause and propose a fix.
+ *
+ * Nothing here reads the repository or writes to GitHub. The reserved columns
+ * in `log_fix_runs` are for that later phase; until it exists, the only
+ * outbound call this feature makes is to the configured model provider.
  */
 export default {
-  default: String(env.AI_DRIVER || 'openai') as 'anthropic' | 'openai' | 'ollama',
+  // Anthropic by default. The analysis is one structured-output call over
+  // untrusted log text, which is exactly the shape Claude's tool/JSON mode
+  // handles best, and Sonnet is the right rung: the run is per-log-line, so
+  // per-call cost matters more here than peak reasoning.
+  default: String(env.AI_DRIVER || 'anthropic') as 'anthropic' | 'openai' | 'ollama',
 
   drivers: {
     anthropic: {
       apiKey: String(env.ANTHROPIC_API_KEY || ''),
-      model: String(env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'),
+      model: String(env.ANTHROPIC_MODEL || 'claude-sonnet-5'),
       maxTokens: Number(env.ANTHROPIC_MAX_TOKENS || 8192),
     },
     openai: {
@@ -45,29 +52,31 @@ export default {
     },
   },
 
-  autofix: {
-    enabled: String(env.AI_AUTOFIX_ENABLED ?? 'true') !== 'false',
-    draftPullRequests: String(env.AI_AUTOFIX_DRAFT ?? 'true') !== 'false',
-    maxFiles: Math.min(10, Math.max(1, Number(env.AI_AUTOFIX_MAX_FILES || 5))),
-    maxSourceBytes: Math.min(1024 * 1024, Math.max(64 * 1024, Number(env.AI_AUTOFIX_MAX_SOURCE_BYTES || 512 * 1024))),
-    branchPrefix: String(env.AI_AUTOFIX_BRANCH_PREFIX || 'loghq/autofix'),
+  fix: {
+    // The button disappears entirely when this is off, rather than failing on
+    // click.
+    enabled: String(env.AI_FIX_ENABLED ?? 'true') !== 'false',
+    // Ceiling on the log payload sent to the provider. `context` alone is
+    // allowed 96 KiB at ingest, so an unbounded prompt is a real possibility.
+    maxContextBytes: Math.min(256 * 1024, Math.max(8 * 1024, Number(env.AI_FIX_MAX_CONTEXT_BYTES || 48 * 1024))),
+    // How many surrounding entries travel with the one being analyzed. This is
+    // loghq's edge over an error tracker: the lines either side of a failure
+    // usually say more than the failure does.
+    correlatedEntries: Math.min(40, Math.max(0, Number(env.AI_FIX_CORRELATED_ENTRIES || 12))),
+    // How long a completed answer keeps serving repeats of the same error
+    // shape. Long, because the answer only goes stale when the code changes,
+    // and "Re-analyze" is always available.
+    cacheHours: Math.max(1, Number(env.AI_FIX_CACHE_HOURS || 168)),
+    // The analysis runs inside the request that starts it, so this bound is
+    // also the worst case a user waits on the button.
+    timeoutMs: Math.min(180_000, Math.max(10_000, Number(env.AI_FIX_TIMEOUT_MS || 90_000))),
   },
 
   models: [
-    // 'amazon.titan-embed-text-v1',
-    // Supported use cases – Retrieval augmented generation, open-ended text generation, brainstorming, summarizations, code generation, table creation, data formatting, paraphrasing, chain of thought, rewrite, extraction, QnA, and chat
     'amazon.titan-text-express-v1',
-    // Amazon Titan Text Lite is a light weight efficient model, ideal for fine-tuning of English-language tasks, including like summarizations and copy writing, where customers want a smaller, more cost-effective model that is also highly customizable
     'amazon.titan-text-lite-v1',
-    // 'amazon.titan-embed-image-v1',
-    // 'amazon.titan-image-generator-v1',
-    // 'anthropic.claude-v1',
-    // 'anthropic.claude-v2',
-    // 'anthropic.claude-v2:1',
-    // 'anthropic.claude-instant-v1',
-    // 'meta.llama2-13b-chat-v1',
     'meta.llama2-70b-chat-v1',
   ],
 
-  deploy: true, // deploys AI endpoints
-} satisfies BugHqAiConfig
+  deploy: false,
+} satisfies LogHqAiConfig
