@@ -161,12 +161,31 @@ Tests live in `tests/` and use Bun's test runner. The focused unit suite covers 
 | `routes/` | Ingest, log stream, project, auth, and billing endpoints |
 | `resources/views/` | stx marketing pages and authenticated application views |
 | `resources/partials/` | Shared stx partials |
+| `resources/functions/` | Auto-imported composables (must exist; the auto-import scanner throws on a missing directory) |
 | `database/migrations/` | Database schema history |
 | `docs/` | Wire contracts and operational documentation |
 | `config/` | Typed application, database, mail, queue, and cloud configuration |
 | `tests/` | Bun unit and application tests |
 
 loghq is built with [Stacks](https://stacksjs.org), a full-stack TypeScript framework running on Bun. Templates use stx, data access uses the Stacks ORM and query builder, and production data is stored in PostgreSQL.
+
+## Marketing site
+
+The public site is the same app: `resources/views/index.stx` and friends, served
+through stx with `resources/layouts/marketing.stx`.
+
+The home page ends with a launch-updates capture for visitors who find the site
+before they are ready to sign up. It posts to `POST /api/email/subscribe`, the
+framework's `SubscriberEmailAction`, which owns the `Subscriber` model, the
+unique-email constraint, and the token behind the unsubscribe link. Repeat
+submissions answer `Already subscribed` rather than creating a second row.
+
+That route is re-registered in `routes/api.ts`. The framework declares it in
+`storage/framework/defaults/routes/dashboard.ts`, but the declaration does not
+take effect in this app, so the endpoint 404s without the local registration.
+
+The form carries `action` and `method`, so it still posts with scripting off;
+the `<script client>` block upgrades it to an inline reply.
 
 ## Deployment
 
@@ -178,7 +197,9 @@ GitHub Actions provides push-to-deploy with one branch per environment:
 | `stage` | Staging |
 | `dev` | Development |
 
-The workflow installs locked dependencies, provisions the encrypted environment keys, runs `buddy deploy`, updates the current release, and applies additive migrations. Deployment configuration is in [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) and `config/cloud.ts`.
+The workflow installs locked dependencies, provisions the encrypted environment keys, runs `buddy deploy`, updates the current release, and applies additive migrations. Production runs on a dedicated Hetzner server with Porkbun DNS.
+
+**[DEPLOY.md](./DEPLOY.md) is the full deployment reference**: topology, required secrets, what each stage does, the known first-deploy failure, and how to operate the box. Configuration lives in [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) and the `tsCloud` export of `config/cloud.ts`.
 
 ## Contributing
 
