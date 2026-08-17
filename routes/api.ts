@@ -26,43 +26,23 @@ route.get('/', () => response.text('hello world'))
 // distinct cookie + state file) is the separate `./buddy down` /
 // `./buddy up` pair.
 
+
 /**
- * Leave an address to hear when loghq is ready.
+ * Newsletter signup, re-registered here because the framework's own
+ * registration does not take effect in this app.
  *
- * The marketing site is reachable before the product is announced, so someone
- * who finds it early needs somewhere to go that is not "create an account".
+ * `storage/framework/defaults/routes/dashboard.ts:91` declares
+ * `POST /api/email/subscribe -> Actions/SubscriberEmailAction`, but the route
+ * is absent from `./buddy route:list` and answers 404, so the marketing form
+ * had nowhere to post. Same shape as the auth routes above: user route files
+ * load before the framework defaults, so this wins.
  *
- * Answers the same body whether the address is new, already known, or invalid.
- * A distinct "you are already subscribed" is an enumeration oracle over a list
- * of email addresses, which is the same leak `/password/forgot` is careful to
- * avoid; the honest UX cost is that a typo reads as success.
+ * Points at the framework ACTION rather than a hand-rolled handler. That action
+ * owns the `Subscriber` model, its unique-email constraint, and the unsubscribe
+ * token the footer link needs; a second writer to the same table would have
+ * none of that, and my first attempt at one would have dropped the table's
+ * `status` and `unsubscribed_at` columns.
  *
- * `.skipCsrf()` for the same reason the auth routes do: this is posted from a
- * same-origin form and from `fetch()`, and there is no session to ride on.
- * Rate limited, because an open write endpoint is a spam target.
+ * Path is `/email/subscribe`: every route in this file is auto-prefixed `/api`.
  */
-route.post('/api/subscribe', async (request: any) => {
-  const body = request.jsonBody ?? request.body ?? {}
-  const email = String(body.email ?? '').trim().toLowerCase()
-  const source = String(body.source ?? 'marketing').trim().slice(0, 64)
-
-  // Deliberately uniform. See the note above.
-  const uniform = { success: true, message: 'You are on the list. We will be in touch when loghq is ready.' }
-
-  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return response.json(uniform)
-
-  try {
-    const { Subscriber } = await import('@stacksjs/orm')
-    const existing = await Subscriber.where('email', email).first()
-    if (!existing)
-      await Subscriber.create({ email, source })
-  }
-  catch (err) {
-    // A storage failure must not tell the visitor their address is unusable,
-    // and must not 500 a marketing page. Surfaced in the server log only.
-    console.error('[api/subscribe] store failed:', err instanceof Error ? err.message : err)
-  }
-
-  return response.json(uniform)
-}).skipCsrf().rateLimit(5, 'minute')
+route.post('/email/subscribe', 'Actions/SubscriberEmailAction').skipCsrf().rateLimit(5, 'minute')
