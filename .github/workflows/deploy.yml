@@ -85,6 +85,16 @@ jobs:
           # Sanity (no secret printed): confirm the file has the 3 keys.
           echo "created .env.keys with $(grep -c '^DOTENV_PRIVATE_KEY' .env.keys) private keys"
 
+      # TEMPORARY diagnostic. Prints no secret: only the length and a sha256
+      # prefix, so the runner's token can be compared with the local one.
+      - name: Debug HCLOUD_TOKEN fingerprint
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          printf 'len=%s sha256head=%s\n' \
+            "${#HCLOUD_TOKEN}" \
+            "$(printf '%s' "$HCLOUD_TOKEN" | sha256sum | cut -c1-12)"
+
       - name: Deploy (${{ needs.determine-environment.outputs.environment }})
         # Invoke the buddy CLI from node_modules directly rather than via the
         # ./buddy wrapper. The wrapper is built for the vendored/pantry layout
