@@ -85,27 +85,18 @@ jobs:
           # Sanity (no secret printed): confirm the file has the 3 keys.
           echo "created .env.keys with $(grep -c '^DOTENV_PRIVATE_KEY' .env.keys) private keys"
 
-      # TEMPORARY diagnostic: run buddy's own attach resolver here and print
-      # what it sees. No secrets are printed, only server names and the IP.
-      - name: Debug attach resolution
+      # TEMPORARY diagnostic. Prints fingerprints only, never a secret.
+      - name: Debug token provenance
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
         run: |
-          bun -e '
-            const token = process.env.HCLOUD_TOKEN
-            const owner = "uptime-status", environment = "production"
-            const req = async (qs) => {
-              const res = await fetch(`https://api.hetzner.cloud/v1/servers?${qs}`, { headers: { Authorization: `Bearer ${token}` } })
-              console.log("  status", res.status, "ok", res.ok)
-              if (!res.ok) { console.log("  body:", (await res.text()).slice(0, 300)); return [] }
-              return (await res.json()).servers || []
-            }
-            const sel = `ts-cloud/project=${owner},ts-cloud/environment=${environment},ts-cloud/role=app`
-            const byLabel = await req(`label_selector=${encodeURIComponent(sel)}`)
-            console.log("  byLabel:", byLabel.map(s => s.name))
-            const all = await req("")
-            console.log("  all servers:", all.map(s => s.name))
-          '
+          fp() { printf '%s' "$1" | sha256sum | cut -c1-12; }
+          echo "from-secret     len=${#HCLOUD_TOKEN} fp=$(fp "$HCLOUD_TOKEN")"
+          DEC=$(bun node_modules/@stacksjs/buddy/dist/cli.js env:decrypt --file .env.production -o 2>/dev/null \
+                 | grep '^HCLOUD_TOKEN=' | cut -d= -f2- | tr -d '"')
+          echo "from-envfile    len=${#DEC} fp=$(fp "$DEC")"
+          case "$DEC" in encrypted:*) echo "!! DECRYPTION FAILED: value is still ciphertext" ;; esac
 
       - name: Deploy (${{ needs.determine-environment.outputs.environment }})
         # Invoke the buddy CLI from node_modules directly rather than via the
