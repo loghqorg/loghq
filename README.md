@@ -197,7 +197,7 @@ GitHub Actions provides push-to-deploy with one branch per environment:
 | `stage` | Staging |
 | `dev` | Development |
 
-The workflow installs locked dependencies, provisions the encrypted environment keys, runs `buddy deploy`, updates the current release, and applies additive migrations. Production runs on a dedicated Hetzner server with Porkbun DNS.
+The workflow installs locked dependencies, provisions the encrypted environment keys, runs `buddy deploy`, updates the current release, and applies additive migrations. Production is attached to the statushq Hetzner server, sharing its host and Postgres, with Porkbun DNS.
 
 **[DEPLOY.md](./DEPLOY.md) is the full deployment reference**: topology, required secrets, what each stage does, the known first-deploy failure, and how to operate the box. Configuration lives in [.github/workflows/deploy.yml](./.github/workflows/deploy.yml) and the `tsCloud` export of `config/cloud.ts`.
 

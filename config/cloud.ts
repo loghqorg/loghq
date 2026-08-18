@@ -27,13 +27,26 @@ export const tsCloud: TsCloudConfig = {
     region: 'us-east-1', // Default AWS region
   },
 
-  // Provision our OWN dedicated Hetzner box (no `attachTo`): the deploy stands
-  // up a `loghq-<env>-app` server sized by `infrastructure.compute` below and
-  // ships all of loghq's sites onto it. One size smaller than the shared
-  // `stacks` box was requested; we run `small` (cx23, ~4GB) to match it because
-  // the next size down (micro/cpx11, ~2GB) is tight for `bun install` on-box.
+  // Attach to the statushq box rather than provisioning our own.
+  //
+  // `attachTo` takes the OWNER PROJECT'S SLUG, not a server name. ts-cloud
+  // resolves the host through `listServers()` and ts-cloud label matching, so
+  // `statushq-production-app` must carry the labels ts-cloud wrote when it
+  // created it. Nothing below in `infrastructure.compute` provisions a server
+  // in this mode; it is read for sizing metadata only.
+  //
+  // Three consequences, all deliberate:
+  //   - loghq's Postgres role and database are created inside statushq's
+  //     existing cluster by `ensureAttachModeDatabase`, not a new one.
+  //   - the ts-cloud dashboard is skipped here; the owner's dashboard reports
+  //     every attached project, so `cloud.loghq.org` goes unused.
+  //   - the HCLOUD_TOKEN used by this app's CI must live in the same Hetzner
+  //     project as statushq, and Hetzner tokens have no per-resource scoping,
+  //     so it can reach every server in that project. See
+  //     stacksjs/ts-cloud#169.
   cloud: {
     provider: 'hetzner',
+    attachTo: 'statushq',
   },
 
   /**
@@ -720,25 +733,36 @@ export const tsCloud: TsCloudConfig = {
       domain: env.APP_DOMAIN || 'loghq.org',
       // `./buddy serve` resolves the framework CLI from node_modules
       // (@stacksjs/buddy) — no vendored storage/framework/core needed. Port
-      // 3022 is loghq's slot on the shared box (localhost-only; rpx fronts it).
+      // 3042 is loghq's slot on the shared box (localhost-only; rpx fronts it).
+      //
+      // NOT 3022. That is the Stacks cloud template's default, and every app
+      // generated from it claims the same pair: bughq's config/cloud.ts asks
+      // for 3022/3023 too, and statushq very likely does as well since it came
+      // from the same template. Nothing allocates or validates ports across
+      // attached projects (stacksjs/ts-cloud#168), so the collision would only
+      // surface as a service that will not bind.
+      //
+      // Confirm before the first deploy, on the box:  ss -ltnp | grep 30
+      // The reserved layout is statushq 3022/3023, loghq 3042/3043, leaving
+      // 3032/3033 and 3052/3053 free for bughq and stacks if they follow.
       start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
-      port: 3022,
+      port: 3042,
       // Migrations run in the deploy workflow's "Provision .env.keys + migrate"
       // step (after .env.keys is on the box, so it can decrypt) — not here in
       // preStart, which runs before decryption is possible.
       preStart: ['bun install'],
       env: {
         APP_URL: 'https://loghq.org',
-        API_URL: 'http://127.0.0.1:3023',
+        API_URL: 'http://127.0.0.1:3043',
       },
     },
 
-    // Loopback API (bun-router); the :3022 serve proxies /api + non-GET to it.
-    // No domain ⇒ rpx skips it; the firewall keeps :3023 off the public net.
+    // Loopback API (bun-router); the :3042 serve proxies /api + non-GET to it.
+    // No domain ⇒ rpx skips it; the firewall keeps :3043 off the public net.
     'loghq-api': {
       root: '.',
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
-      port: 3023,
+      port: 3043,
       preStart: ['bun install'],
       env: { HOST: '127.0.0.1' },
     },

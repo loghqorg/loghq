@@ -1,8 +1,9 @@
 # Deploying loghq
 
-loghq runs on a **dedicated Hetzner Cloud server**, provisioned and shipped by
-**ts-cloud** (`buddy deploy` → `@stacksjs/ts-cloud`), with DNS at **Porkbun** and
-push-to-deploy from **GitHub Actions**.
+loghq is **attached to the statushq Hetzner server** and shipped by **ts-cloud**
+(`buddy deploy` → `@stacksjs/ts-cloud`), with DNS at **Porkbun** and
+push-to-deploy from **GitHub Actions**. It does not own a server of its own; see
+[Topology](#topology).
 
 There is no AWS in this path. `config/cloud.ts` still carries AWS-shaped keys
 (`region`, `loadBalancer`, `ssl.provider: 'acm'`) because the config type is
@@ -15,22 +16,55 @@ Ignore them.
 
 ## Topology
 
-One Hetzner server per environment, running everything:
+**loghq does not have its own server.** `config/cloud.ts` sets
+`cloud.attachTo: 'statushq'`, so it deploys onto the box that the **statushq**
+project owns, as an additional set of sites.
 
 | Piece | Detail |
 |---|---|
-| Server | `loghq-production-app`, type `cx23`, image `ubuntu-24.04`, location `fsn1` |
-| Firewall | `loghq-production-app-fw`, inbound `80`, `443`, `22` only |
-| Edge | **rpx**, a Bun gateway compiled on the box, holding `:80` and `:443` |
-| TLS | Let's Encrypt via `@stacksjs/tlsx`, issued on demand, renewed by a timer at 03:30 |
-| Database | PostgreSQL installed and supervised by **pantry**, on the same box |
-| App | `bun ... buddy serve` on `127.0.0.1:3022` |
-| API | `bun ... actions/serve/api.js` on `127.0.0.1:3023` |
+| Server | `statushq-production-app` (`167.233.116.134`), owned by statushq, **not** created by this repo |
+| Firewall | statushq's; this deploy does not manage it |
+| Edge | **rpx**, held by the host, fronting every attached site |
+| TLS | Let's Encrypt via `@stacksjs/tlsx`, issued on demand |
+| Database | statushq's PostgreSQL. `ensureAttachModeDatabase` creates loghq's role + database inside that existing cluster |
+| App | `bun ... buddy serve` on `127.0.0.1:3042` |
+| API | `bun ... actions/serve/api.js` on `127.0.0.1:3043` |
 | Layout | Capistrano style, `/var/www/loghq-main/{shared,releases,current}` |
 | Units | systemd templates, `loghq-main@<sha>.service` and `loghq-loghq-api@<sha>.service` |
+| Dashboard | **skipped.** ts-cloud logs "attached to statushq; the server owner's dashboard monitors every attached project", so `cloud.loghq.org` is unused |
 
-Ports 3022 and 3023 are deliberately closed at the firewall. rpx fronts 3022 on
-the public domain, and 3023 is reachable only over loopback from the app.
+`attachTo` takes the **owner project's slug**, not a server name. ts-cloud finds
+the host with `listServers()` and label matching, so `statushq-production-app`
+must carry the ts-cloud labels it was created with.
+
+### Ports, and why not 3022/3023
+
+3022/3023 are the Stacks cloud template's defaults, so **every** app generated
+from it asks for the same pair. bughq's `config/cloud.ts` does, and statushq
+almost certainly does too. Nothing allocates or validates ports across attached
+projects ([stacksjs/ts-cloud#168]), so a collision surfaces only as a service
+that will not bind.
+
+loghq therefore runs on **3042/3043**. Reserved layout, so a third app can join
+without another collision:
+
+| Project | Ports |
+|---|---|
+| statushq | 3022 / 3023 (assumed, template default) |
+| loghq | 3042 / 3043 |
+| bughq | 3052 / 3053 (if it follows) |
+
+**Confirm before the first deploy**, on the box: `ss -ltnp | grep 30`
+
+### What attaching costs
+
+The HCLOUD_TOKEN this repo's CI uses must live in the same Hetzner project as
+statushq, and Hetzner tokens have no per-resource scoping. So loghq's CI can
+reach every server in that project, including bughq, stacks and statushq
+([stacksjs/ts-cloud#169]). That is inherent to attaching, not a misconfiguration.
+
+[stacksjs/ts-cloud#168]: https://github.com/stacksjs/ts-cloud/issues/168
+[stacksjs/ts-cloud#169]: https://github.com/stacksjs/ts-cloud/issues/169
 
 Sites are declared in the `tsCloud` **named export** of `config/cloud.ts`. The
 file's `export default` is a separate, intentionally empty `CloudConfig`, so
@@ -38,8 +72,8 @@ editing the default export changes nothing about a deploy.
 
 | Site key | Domain | Port | Role |
 |---|---|---|---|
-| `main` | `loghq.org` | 3022 | The app, stx views plus ingest |
-| `loghq-api` | none | 3023 | Loopback API, rpx skips it because it has no domain |
+| `main` | `loghq.org` | 3042 | The app, stx views plus ingest |
+| `loghq-api` | none | 3043 | Loopback API, rpx skips it because it has no domain |
 | `www` | `www.loghq.org` | none | Redirect to the apex |
 
 `cloud.loghq.org` serves the ts-cloud management dashboard, set by
@@ -95,20 +129,21 @@ its own `could not resolve server IP` guard, `.env.keys` never lands on the box,
 `buddy migrate` never executes, and the framework auth schema the login flow
 needs is never created. The app deploys and cannot sign anyone in.
 
-### 3. Fix the `config/dns.ts` fallback
+### 3. Confirm the ports are free  <!-- was: fix the config/dns.ts fallback -->
 
-Line 26 is currently:
+The `config/dns.ts` fallback to bughq's IP was removed in `6a5dcfb`; an unset
+`APP_SERVER_IP` now emits no A record rather than someone else's address.
 
-```ts
-const boxIp = String(env.APP_SERVER_IP || '91.98.39.176')
+What replaces it as the pre-flight check is the port assumption. loghq claims
+`3042/3043` on a box it does not own, and nothing validates that across
+projects. Before the first deploy:
+
+```sh
+ssh root@167.233.116.134 'ss -ltnp | grep 30'
 ```
 
-That fallback address is **bughq's live server**, not loghq's. It resolves on
-every run from this tree. Today it is masked, because ts-cloud writes the real
-box IP first and the additive `config/dns.ts` sync then matches on presence
-only, ignoring content, so it plans "keep". It becomes a genuinely wrong write
-whenever the earlier write failed or went unverified, or when a newly added site
-domain has no A record yet. Set `APP_SERVER_IP` and drop the fallback.
+Expect statushq on `3022/3023` and nothing on `3042/3043`. If `3042` or `3043`
+is taken, change them in `config/cloud.ts` before deploying rather than after.
 
 ## What a deploy actually does
 
@@ -138,7 +173,14 @@ Three Hetzner gates follow: `HCLOUD_TOKEN` present, `~/.ssh/id_ed25519.pub`
 present, and a probe that the installed ts-cloud can persist a database across
 deploys.
 
-### Provisioning
+### Provisioning (skipped in attach mode)
+
+**`cloud.attachTo` is set, so none of this runs for loghq.** ts-cloud calls
+`attachToComputeInfrastructure()` and resolves the existing statushq box by
+label instead. The section below describes what happens for the project that
+*owns* a box, and is kept because it is what statushq's own deploy does, and
+what loghq would do again if it were ever detached.
+
 
 Server reuse is checked twice, first against a local state file under
 `storage/cloud/state/` (untracked, so it always misses in CI), then against
@@ -177,7 +219,7 @@ Two things worth internalising:
   its first request still counts as healthy and still gets the symlink.
 
 Cutover is zero downtime because the app binds with `reusePort`, so both
-releases serve on 3022 during the gate window.
+releases serve on 3042 during the gate window.
 
 A scheduler unit is also installed and started, because `app/Scheduler.ts`
 declares a live hourly `Inspire` job.
@@ -211,22 +253,24 @@ deploy does not mean migrations ran**. Read the step output.
 
 ## Known issues
 
-**The first deploy to a brand new box will fail.** `HetznerDriver.waitForSshReady`
-in ts-cloud 0.7.114 builds its ssh command with a broken shell quoter, opening
-each argument with `'` and closing it with `"`. Every invocation dies with
-`unexpected EOF while looking for matching '"'`. The retry loop swallows the
-error, so the run burns its full 300 second budget and throws a misleading
-`Timed out waiting for SSH`. **Re-run the workflow.** The second run succeeds,
-because the server now exists and is adopted by name before that code is
-reached. Do not go debugging SSH keys.
+**Not applicable while attached:** the "first deploy to a brand new box fails on
+`waitForSshReady`" problem needs a server create, and attach mode never does
+one. It is also absent from ts-cloud 0.7.114 on re-reading, so it may simply
+have been fixed since this document was first written. Kept only as a pointer
+for whoever provisions the next box.
 
-**`www.cloud.loghq.org` gets an A record on every deploy**, because the A-record
-upsert crosses every site domain with `['', 'www']`. It has no route and no
-certificate. Harmless, but it will confuse anyone auditing the zone.
+**`www.<site>` A records get created for every site domain**, because the
+A-record upsert crosses each one with `['', 'www']`. They have no route and no
+certificate. Harmless, but confusing when auditing the zone. `cloud.loghq.org`
+is no longer among them: attach mode skips the management dashboard entirely,
+so that site is not deployed and `TS_CLOUD_UI_DOMAIN` in the workflow is inert.
 
-**rpx restarts on every deploy.** Its unit runs `fuser -k` on 80 and 443 in
-`ExecStartPre`, and the gateway is rebuilt and restarted each time. The app
-cutover is genuinely zero downtime; the edge in front of it is not.
+**rpx restarts on every deploy, and it is shared.** Its unit runs `fuser -k` on
+80 and 443 in `ExecStartPre`, and the gateway is rebuilt and restarted each
+time. The app cutover is genuinely zero downtime; the edge in front of it is
+not. On an attached box that edge belongs to **every** site, so a loghq deploy
+briefly interrupts statushq too. Worth knowing before deploying loghq during a
+statushq incident.
 
 **`migrate` currently wants a destructive change to `subscriptions.type`.** The
 workflow answers `n`, so it is declined every run. Resolve it deliberately
@@ -234,8 +278,11 @@ rather than leaving it to accumulate.
 
 ## Operating the box
 
+The box is statushq's and runs its sites alongside loghq's. Scope commands to
+loghq's units and paths; `systemctl status` with no filter shows both projects.
+
 ```sh
-ssh root@$APP_SERVER_IP
+ssh root@167.233.116.134   # = APP_SERVER_IP
 
 systemctl status 'loghq-main@*'          # app
 systemctl status 'loghq-loghq-api@*'     # loopback API
@@ -261,5 +308,6 @@ The dev server serves stx views on `PORT` (3000) and the API on `PORT_API`
 (3008), both from `config/ports.ts`. Trust the URLs `bun run dev` prints over
 this paragraph.
 
-> Provisioning creates billable Hetzner resources and live Porkbun DNS records.
-> Run a deploy only when you mean it.
+> A deploy writes live Porkbun DNS records and restarts the shared rpx edge on a
+> box that also serves statushq. In attach mode it creates no billable Hetzner
+> resources of its own. Run it only when you mean it.
