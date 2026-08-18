@@ -75,6 +75,28 @@ jobs:
       - name: Typecheck
         run: bunx --bun tsc --noEmit
 
+      # `tsc` above never opens a .stx file, so without this nothing checks the
+      # script blocks or the {{ }} expressions that make up most of this app.
+      #
+      # NOT BLOCKING YET, deliberately. Measured baseline on 2026-08-18: 71
+      # errors across 39 files, 0 warnings. 49 of those are TS2304 "cannot find
+      # name", which is the class bughq eliminated by declaring its schema as
+      # ambient types in a single `types/domain.d.ts` and passing it as --lib.
+      # loghq has no such file yet, so the names a script block reads off the
+      # server bridge are simply undeclared.
+      #
+      # This mirrors how bughq got there: warnings-only first, then flipped to
+      # load-bearing once the count reached 0. Write types/domain.d.ts, drive
+      # the count down, then delete `continue-on-error` and add the grep that
+      # fails on anything but "0 error(s), 0 warning(s)".
+      #
+      # When that happens, note that --lib must be a SINGLE file: the checker
+      # does not read ambient types from tsconfig `include`, and repeating the
+      # flag silently drops all but the last (stacksjs/stx#1926).
+      - name: Typecheck .stx (advisory)
+        continue-on-error: true
+        run: bunx --bun stx typecheck 'resources/**/*.stx'
+
   test:
     runs-on: ${{ matrix.os }}
     permissions:
@@ -129,7 +151,17 @@ jobs:
           AWS_DYNAMODB_ENDPOINT: http://localhost:8000
         run: bun run test
 
-  publish-commit:
+  # Was `publish-commit`, which ran ./storage/framework/scripts/publish-commit,
+  # a path inside the gitignored vendored tree. `git ls-files storage/framework`
+  # returns nothing, so that script cannot exist in a checkout and the step could
+  # only ever fail. It never has, purely because it is pull_request-only and this
+  # repo works direct-to-main; the first PR would have hit it.
+  #
+  # Publishing commit-tagged packages is framework scaffolding anyway: loghq is an
+  # application and publishes nothing. The Build step below is the part worth
+  # keeping: it is the only thing that runs `buddy build` on a PR, and a build
+  # break is exactly what a PR should catch.
+  build:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
@@ -153,5 +185,3 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Publish Commit
-        run: ./storage/framework/scripts/publish-commit
