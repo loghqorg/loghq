@@ -85,32 +85,6 @@ jobs:
           # Sanity (no secret printed): confirm the file has the 3 keys.
           echo "created .env.keys with $(grep -c '^DOTENV_PRIVATE_KEY' .env.keys) private keys"
 
-      # TEMPORARY diagnostic: what HCLOUD_TOKEN becomes AFTER buddy's config
-      # layer loads .env. Prints a fingerprint and a shape check, never a value.
-      - name: Debug token after config load
-        env:
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
-        run: |
-          echo "--- .env as the preflight leaves it ---"
-          bun node_modules/@stacksjs/buddy/dist/cli.js deploy --prod --yes >/dev/null 2>&1 || true
-          if [ -f .env ]; then
-            echo ".env exists, $(wc -l < .env) lines"
-            grep -c '^HCLOUD_TOKEN' .env || echo "  no HCLOUD_TOKEN line in .env"
-            grep -oE '^HCLOUD_TOKEN=.{0,10}' .env || true
-          else
-            echo ".env absent"
-          fi
-          echo "--- process.env after importing @stacksjs/config ---"
-          bun -e '
-            const before = process.env.HCLOUD_TOKEN || ""
-            await import("@stacksjs/config").catch(e => console.log("  config import failed:", e.message))
-            const after = process.env.HCLOUD_TOKEN || ""
-            const h = async (v) => v ? [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,12) : "(empty)"
-            console.log("  before: len", before.length, "fp", await h(before), "ciphertext?", before.startsWith("encrypted:"))
-            console.log("  after : len", after.length,  "fp", await h(after),  "ciphertext?", after.startsWith("encrypted:"))
-          '
-
       - name: Deploy (${{ needs.determine-environment.outputs.environment }})
         # Invoke the buddy CLI from node_modules directly rather than via the
         # ./buddy wrapper. The wrapper is built for the vendored/pantry layout
