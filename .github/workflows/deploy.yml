@@ -1,8 +1,10 @@
 name: Deploy
 
-# Push-to-deploy, branch → environment. This app runs on its OWN Hetzner box
-# (config/cloud.ts has no `attachTo`), so the deploy provisions/refreshes the
-# box, ships loghq's sites + the ts-cloud dashboard, and reconciles Porkbun DNS.
+# Push-to-deploy, branch to environment. This app is ATTACHED to the box owned
+# by the `uptime-status` project (config/cloud.ts sets `cloud.attachTo`), so the
+# deploy provisions no server of its own: it resolves that host, ships loghq's
+# sites onto it, and reconciles Porkbun DNS. The ts-cloud dashboard is skipped,
+# because the owner's dashboard covers every attached project.
 #   main  → production   (bare apex domain)
 #   stage → staging      (staging.<domain>)
 #   dev   → development  (dev.<domain>)
