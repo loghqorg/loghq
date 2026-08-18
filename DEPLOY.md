@@ -17,8 +17,14 @@ Ignore them.
 ## Topology
 
 **loghq does not have its own server.** `config/cloud.ts` sets
-`cloud.attachTo: 'statushq'`, so it deploys onto the box that the **statushq**
+`cloud.attachTo: 'uptime-status'`, so it deploys onto the box that the statushq
 project owns, as an additional set of sites.
+
+Note the slug is **`uptime-status`**, not `statushq`. The server is *named*
+`statushq-production-app` but its `ts-cloud/project` label reads
+`uptime-status`, and `attachTo` matches the label. Getting this wrong fails with
+"Attach target ... has no reachable box", which reads like the server is down
+when it is running fine.
 
 | Piece | Detail |
 |---|---|
@@ -34,8 +40,13 @@ project owns, as an additional set of sites.
 | Dashboard | **skipped.** ts-cloud logs "attached to statushq; the server owner's dashboard monitors every attached project", so `cloud.loghq.org` is unused |
 
 `attachTo` takes the **owner project's slug**, not a server name. ts-cloud finds
-the host with `listServers()` and label matching, so `statushq-production-app`
-must carry the ts-cloud labels it was created with.
+the host with `listServers()` and label matching. Confirm the slug rather than
+guessing it from a server name:
+
+```sh
+curl -H "Authorization: Bearer $HCLOUD_TOKEN" \
+  https://api.hetzner.cloud/v1/servers | jq '.servers[] | {name, labels}'
+```
 
 ### Ports, and why not 3022/3023
 

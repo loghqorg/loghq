@@ -29,11 +29,19 @@ export const tsCloud: TsCloudConfig = {
 
   // Attach to the statushq box rather than provisioning our own.
   //
-  // `attachTo` takes the OWNER PROJECT'S SLUG, not a server name. ts-cloud
-  // resolves the host through `listServers()` and ts-cloud label matching, so
-  // `statushq-production-app` must carry the labels ts-cloud wrote when it
-  // created it. Nothing below in `infrastructure.compute` provisions a server
-  // in this mode; it is read for sizing metadata only.
+  // `attachTo` takes the OWNER PROJECT'S SLUG, not a server name, and for this
+  // box those two differ: the server is named `statushq-production-app` but its
+  // `ts-cloud/project` label reads `uptime-status`. ts-cloud matches on the
+  // label, so `attachTo: 'statushq'` finds nothing and fails with "Attach
+  // target 'statushq' has no reachable box for 'production'", which reads like
+  // the server is missing when it is running fine.
+  //
+  // Confirm the slug rather than inferring it from a server name:
+  //   curl -H "Authorization: Bearer $HCLOUD_TOKEN" \
+  //     https://api.hetzner.cloud/v1/servers | jq '.servers[].labels'
+  //
+  // Nothing below in `infrastructure.compute` provisions a server in this mode;
+  // it is read for sizing metadata only.
   //
   // Three consequences, all deliberate:
   //   - loghq's Postgres role and database are created inside statushq's
@@ -46,7 +54,7 @@ export const tsCloud: TsCloudConfig = {
   //     stacksjs/ts-cloud#169.
   cloud: {
     provider: 'hetzner',
-    attachTo: 'statushq',
+    attachTo: 'uptime-status',
   },
 
   /**
