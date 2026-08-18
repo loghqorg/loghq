@@ -23,13 +23,26 @@ import { env } from '@stacksjs/env'
 // String(): env values are typed `string | number | true`, and DnsConfig's
 // `address` is a plain `string`. Coerced explicitly rather than relying on the
 // value happening to be a string at runtime.
-const boxIp = String(env.APP_SERVER_IP || '91.98.39.176')
+//
+// There is deliberately no fallback address. This used to read
+// `env.APP_SERVER_IP || '91.98.39.176'`, and that literal is bughq's live
+// server, not loghq's. It resolved on every run from this tree. Ordering
+// masked it, because the deploy upserts the real box IP first and this sync is
+// additive (create-or-keep, never update), so it planned "keep" and never
+// compared the address. It became a genuinely wrong write the moment that
+// earlier write failed or went unverified, or a new site domain had no A
+// record yet, at which point loghq's zone would point at bughq's box.
+//
+// Unset APP_SERVER_IP now emits no A record at all. The deploy upserts the
+// apex itself, so declaring nothing here is safe; declaring someone else's
+// address is not.
+const boxIp = env.APP_SERVER_IP ? String(env.APP_SERVER_IP) : null
 
 export default {
   // Apex only — the deploy also upserts `@` and `www` to the box IP.
-  a: [
-    { name: '@', address: boxIp, ttl: 600 },
-  ],
+  a: boxIp
+    ? [{ name: '@', address: boxIp, ttl: 600 }]
+    : [],
   aaaa: [],
   cname: [],
 

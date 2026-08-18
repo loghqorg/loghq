@@ -224,7 +224,28 @@ export const tsCloud: TsCloudConfig = {
       // Postgres, and there's no external managed cluster, so it lives on the
       // same server (localhost:5432). The deploy creates the `loghq` database.
       managedServices: { postgres: true },
-      database: { engine: 'postgres', name: 'loghq', username: 'loghq', password: env.DB_PASSWORD || 'loghq_prod_pw' },
+      // `name` and `username` are what ts-cloud actually provisions, so
+      // .env.<environment> must use the same DB_DATABASE / DB_USERNAME or the
+      // app connects to a database nothing created. Only the password is read
+      // from the environment.
+      database: {
+        engine: 'postgres',
+        name: 'loghq',
+        username: 'loghq',
+        // A getter, so the throw happens when a deploy reads this rather than
+        // when anything imports this file. There is deliberately no fallback:
+        // this value is passed straight to CREATE ROLE / ALTER ROLE, so a
+        // default here does not stand in for the production password, it
+        // becomes it. The previous literal was `loghq_prod_pw`, publicly
+        // readable in this repo, on a box with 5432 reachable from the app.
+        get password(): string {
+          const value = env.DB_PASSWORD
+          if (!value)
+            throw new Error('DB_PASSWORD is not set. It must come from the encrypted .env.<environment>; there is no fallback, because whatever is here becomes the real production database password.')
+
+          return String(value)
+        },
+      },
       webServer: 'rpx',
       proxy: {
         engine: 'rpx',
