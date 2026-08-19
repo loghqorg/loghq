@@ -261,29 +261,16 @@ export const tsCloud: TsCloudConfig = {
       // Install PostgreSQL on the box (Pantry) — loghq stores errors/issues in
       // Postgres, and there's no external managed cluster, so it lives on the
       // same server (localhost:5432). The deploy creates the `loghq` database.
-      managedServices: { postgres: true },
-      // `name` and `username` are what ts-cloud actually provisions, so
-      // .env.<environment> must use the same DB_DATABASE / DB_USERNAME or the
-      // app connects to a database nothing created. Only the password is read
-      // from the environment.
-      database: {
-        engine: 'postgres',
-        name: 'loghq',
-        username: 'loghq',
-        // A getter, so the throw happens when a deploy reads this rather than
-        // when anything imports this file. There is deliberately no fallback:
-        // this value is passed straight to CREATE ROLE / ALTER ROLE, so a
-        // default here does not stand in for the production password, it
-        // becomes it. The previous literal was `loghq_prod_pw`, publicly
-        // readable in this repo, on a box with 5432 reachable from the app.
-        get password(): string {
-          const value = env.DB_PASSWORD
-          if (!value)
-            throw new Error('DB_PASSWORD is not set. It must come from the encrypted .env.<environment>; there is no fallback, because whatever is here becomes the real production database password.')
-
-          return String(value)
-        },
-      },
+      // No managed Postgres. This box has none: statushq runs SQLite, there is
+      // no postgres process, no psql, and nothing on 5432. Attach mode skips
+      // provisioning by design, so nothing would install it either.
+      managedServices: { postgres: false },
+      // No `database` block on purpose. ts-cloud builds the CREATE ROLE /
+      // CREATE DATABASE commands when `managedServices.postgres` is set OR
+      // `database.engine === 'postgres'`, so leaving either in place makes the
+      // deploy try to provision Postgres on a box that does not run it.
+      // loghq uses SQLite here; the file is kept across releases by the
+      // `sharedPaths` entries on the sites below.
       webServer: 'rpx',
       proxy: {
         engine: 'rpx',
@@ -776,6 +763,16 @@ export const tsCloud: TsCloudConfig = {
       // step (after .env.keys is on the box, so it can decrypt) — not here in
       // preStart, which runs before decryption is possible.
       preStart: ['bun install'],
+      // A release is a fresh directory, so anything written and kept has to be
+      // listed here or the next deploy silently starts from empty. For a log
+      // store that would mean losing every entry on each deploy.
+      //
+      // An absolute `target` is what lets BOTH sites point at ONE file: a plain
+      // string would give each site a database of its own, since they install
+      // under different bases. `main` seeds it; `api` does not.
+      sharedPaths: [
+        { path: 'database/loghq.sqlite', target: '/var/www/loghq-main/shared/database/loghq.sqlite', seed: true },
+      ],
       env: {
         APP_URL: 'https://loghq.org',
         API_URL: 'http://127.0.0.1:3043',
@@ -795,6 +792,12 @@ export const tsCloud: TsCloudConfig = {
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
       port: 3043,
       preStart: ['bun install'],
+      // Same file as `main`, and deliberately `seed: false`: whichever site
+      // deploys first would otherwise create the target, and the site holding
+      // the data would find it already there and never seed it.
+      sharedPaths: [
+        { path: 'database/loghq.sqlite', target: '/var/www/loghq-main/shared/database/loghq.sqlite', seed: false },
+      ],
       env: { HOST: '127.0.0.1' },
     },
 
