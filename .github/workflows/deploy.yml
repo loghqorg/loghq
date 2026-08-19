@@ -150,5 +150,9 @@ jobs:
           # already-decrypted shared/.env (+ .env.keys) first so the plaintext
           # config is in the shell env before buddy loads.
           # Y = run migrations, n = do NOT apply destructive drops (two_factor_* etc.)
-          $SSH "cd ${APP_DIR}/current && set -a && . ${APP_DIR}/shared/.env && . ${APP_DIR}/shared/.env.keys && set +a && printf 'Y\nn\n' | bun node_modules/@stacksjs/buddy/dist/cli.js migrate" \
-            || echo "::warning::migrate returned non-zero — inspect the output above"
+          # Deliberately NOT `|| echo "::warning::"`. It used to be, and that is
+          # how this app went live serving `no such table: users` under a green
+          # tick: the migration refused the corpus, the step shrugged, and the
+          # deploy reported success. An app that cannot read its own database
+          # has not deployed. See stacksjs/stacks#2347.
+          $SSH "cd ${APP_DIR}/current && set -a && . ${APP_DIR}/shared/.env && . ${APP_DIR}/shared/.env.keys && set +a && printf 'Y\nn\n' | bun node_modules/@stacksjs/buddy/dist/cli.js migrate"
