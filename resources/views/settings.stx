@@ -32,6 +32,7 @@
 import { Auth } from '@stacksjs/auth'
 import { db as __db } from '@stacksjs/database'
 import { appUrl, ingestUrl } from '../../app/Support/urls'
+import { getRepository } from '../../app/Fix/repository'
 // APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
 // (a separate host in local dev). Both are absolute and env-driven, falling
 // back to the local servers. See app/Support/urls.ts.
@@ -156,6 +157,25 @@ if (user) {
 const projects = __projectRows.map(({ ingest_key: _ignored, ...p }) => p)
 const activeProject = __activeRow ? (({ ingest_key: _ignored, ...p }) => p)(__activeRow) : null
 const projectId = activeProject?.id || null
+
+// The connected repository, for the Repository section below. Loaded here
+// rather than fetched on hydrate so the section renders its real state
+// server-side, like every other section on this page.
+//
+// This binding IS bridged into the HTML, which is exactly why getRepository
+// selects `token_hint` and never `token_ciphertext`: the last four characters
+// identify which token is connected, and carry nothing that could be replayed.
+let repository: any = null
+if (projectId) {
+  try {
+    repository = await getRepository(projectId)
+  }
+  catch {
+    // A missing table (migration not yet applied) must not take the whole
+    // settings page down over an optional section.
+    repository = null
+  }
+}
 const ownerEmail = (user && user.email) || ''
 
 function maskWebhook(url: string): string {
@@ -514,6 +534,85 @@ function switchProject(e: Event): void {
 // ---- ingest key ----
 const keyFull = state(initialKeyFull)
 const keyMask = state(initialKeyMask)
+// ---- repository connection ----
+const repo = state<any>(repository || null)
+const repoRef = state('')
+const repoToken = state('')
+const repoBusy = state(false)
+const repoNote = state('')
+const repoNoteOk = state(true)
+
+async function connectRepo(): Promise<void> {
+  const ref = repoRef().trim()
+  const token = repoToken().trim()
+  if (!ref || !token) {
+    note(repoNote, repoNoteOk, 'Enter a repository and a token.', false)
+    return
+  }
+  repoBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/repository`, { method: 'POST', body: JSON.stringify({ repository: ref, token }) })
+    const body = await readJson(res)
+    repoBusy.set(false)
+    if (!res.ok) {
+      note(repoNote, repoNoteOk, body.error || 'Could not connect.', false)
+      return
+    }
+    repo.set(body.repository)
+    // Cleared on success and never re-rendered: the token is write-only here.
+    repoToken.set('')
+    repoRef.set('')
+    note(repoNote, repoNoteOk, 'Repository connected and the token verified.', true)
+  }
+  catch {
+    repoBusy.set(false)
+    note(repoNote, repoNoteOk, 'Network error. Try again.', false)
+  }
+}
+
+async function verifyRepo(): Promise<void> {
+  repoBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/repository/verify`, { method: 'POST' })
+    const body = await readJson(res)
+    repoBusy.set(false)
+    if (!res.ok) {
+      note(repoNote, repoNoteOk, body.error || 'Verification failed.', false)
+      return
+    }
+    repo.set(body.repository)
+    note(repoNote, repoNoteOk, 'Token still works.', true)
+  }
+  catch {
+    repoBusy.set(false)
+    note(repoNote, repoNoteOk, 'Network error. Try again.', false)
+  }
+}
+
+async function disconnectRepo(): Promise<void> {
+  const ask = window.stxConfirm
+    ? window.stxConfirm('The stored token is deleted. Fix with AI can still analyse log entries, but it will not be able to open pull requests until a repository is connected again.', { title: 'Disconnect repository?', confirmText: 'Disconnect', cancelText: 'Cancel', type: 'warning' })
+    : Promise.resolve(true)
+  if (!(await Promise.resolve(ask)))
+    return
+  repoBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/repository`, { method: 'DELETE' })
+    repoBusy.set(false)
+    if (!res.ok) {
+      const body = await readJson(res)
+      note(repoNote, repoNoteOk, body.error || 'Could not disconnect.', false)
+      return
+    }
+    repo.set(null)
+    note(repoNote, repoNoteOk, 'Repository disconnected.', true)
+  }
+  catch {
+    repoBusy.set(false)
+    note(repoNote, repoNoteOk, 'Network error. Try again.', false)
+  }
+}
+
 const keyRevealed = state(false)
 const rotating = state(false)
 const keyNote = state('')
@@ -980,6 +1079,7 @@ onMount(() => {
       <nav class="flex flex-wrap gap-2 items-center mb-8 text-sm">
         <a href="#install" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Install</a>
         <a href="#keys" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Keys</a>
+        <a href="#repository" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Repository</a>
         <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
         <a href="#alerts" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Alerts</a>
         <a href="#danger" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Danger</a>
@@ -1029,6 +1129,53 @@ onMount(() => {
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
           </p>
           <span class="mt-2 text-ok text-xs" :show="!!keyNote()" :class="keyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ keyNote() }}</span>
+        </div>
+      </section>
+
+      {{-- ========================== REPOSITORY ========================== --}}
+      <section id="repository" class="mb-10 scroll-mt-[84px]">
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Repository</div>
+        <div class="px-5 py-5 app-panel">
+          <p class="mb-4 text-sm text-subtle">
+            Connect the repository this project's code lives in, and Fix with AI can read the files it
+            suspects and open a draft pull request with the change. Without it an analysis can still
+            explain the failure, but it is reasoning about code it has never seen.
+          </p>
+
+          {{-- Connected --}}
+          <div :show="!!repo()">
+            <div class="flex flex-wrap gap-2 items-center mb-3.5">
+              <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm truncate bg-canvas border border-line rounded-[10px]" :text="repo()?.full_name">.</code>
+              <button @click="verifyRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Verify</button>
+              <button @click="disconnectRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Disconnect</button>
+            </div>
+            <dl class="grid grid-cols-2 gap-y-1.5 text-xs sm:grid-cols-3">
+              <div><dt class="text-subtle">Default branch</dt><dd class="font-mono text-muted" :text="repo()?.default_branch || 'unknown'">.</dd></div>
+              <div><dt class="text-subtle">Token</dt><dd class="font-mono text-muted" :text="repo()?.token_hint ? ('ending ' + repo().token_hint) : 'stored'">.</dd></div>
+              <div><dt class="text-subtle">Last verified</dt><dd class="font-mono text-muted" :text="repo()?.last_verified_at || 'never'">.</dd></div>
+            </dl>
+          </div>
+
+          {{-- Not connected --}}
+          <div :show="!repo()">
+            <label class="block mb-1.5 font-medium text-muted text-xs" for="repo-ref">Repository</label>
+            <input id="repo-ref" :model="repoRef" type="text" placeholder="owner/name, or paste the GitHub URL" class="mb-3 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none">
+
+            <label class="block mb-1.5 font-medium text-muted text-xs" for="repo-token">GitHub token</label>
+            <input id="repo-token" :model="repoToken" type="password" autocomplete="off" placeholder="github_pat_..." class="mb-3 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none">
+
+            <button @click="connectRepo" :disabled="repoBusy()" class="px-3.5 py-2.5 font-semibold text-sm btn-solid">Connect repository</button>
+
+            <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+              Use a <span class="text-muted">fine-grained</span> personal access token scoped to this one
+              repository, with <span class="font-mono">Contents: read and write</span> and
+              <span class="font-mono">Pull requests: read and write</span>. It is encrypted before it is
+              stored and is never sent back to this page. The token is checked against GitHub before it is
+              saved, so a wrong scope fails here rather than inside a fix run.
+            </p>
+          </div>
+
+          <span class="mt-2 text-xs" :show="!!repoNote()" :class="repoNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ repoNote() }}</span>
         </div>
       </section>
 

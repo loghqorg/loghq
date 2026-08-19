@@ -16,6 +16,15 @@ import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
 import { utcNow } from '../app/Support/time'
+import { GitHubRequestError, verifyAccess } from '../app/Fix/github'
+import {
+  deleteRepository,
+  getRepository,
+  markVerified,
+  parseRepositoryRef,
+  repositoryToken,
+  saveRepository,
+} from '../app/Fix/repository'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -499,5 +508,113 @@ route.post('/api/projects/{projectId}/channels/{channelId}/test', async (request
   const ok = await sendTestAlert(String(row.type) as ChannelType, String(row.webhook_url), String(row.project_name || projectId))
   if (!ok)
     return json({ error: 'The provider rejected the test message. Double-check the webhook URL.' }, 502)
+  return json({ ok: true })
+}).skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Repository connection.
+//
+// Owner-only, not `ownsProject`: this credential can push branches and open
+// pull requests on the owner's source, which is not a thing every invited
+// member should be able to point somewhere else.
+//
+// The token is verified against GitHub BEFORE it is stored. Storing first and
+// discovering later means the first failure appears inside a fix run, minutes
+// after the person who could fix the token stopped paying attention.
+//
+// No endpoint here ever returns the token. `token_hint` (last four) is what the
+// settings page renders.
+route.post('/api/projects/{projectId}/repository', async (request: any) => {
+  const user = await currentUser(request)
+  if (!user)
+    return json({ error: 'unauthorized' }, 401)
+  const projectId = request.params.projectId
+  if (!(await ownsProject(user, projectId)))
+    return json({ error: 'not found' }, 404)
+
+  const body = request.jsonBody ?? {}
+  const ref = parseRepositoryRef(String(body.repository ?? ''))
+  if (!ref)
+    return json({ error: 'Enter a repository as owner/name, or paste its GitHub URL.' }, 422)
+
+  const token = String(body.token ?? '').trim()
+  if (!token)
+    return json({ error: 'A GitHub token is required.' }, 422)
+
+  let access
+  try {
+    access = await verifyAccess(ref.owner, ref.name, token)
+  }
+  catch (error) {
+    const status = error instanceof GitHubRequestError ? error.status : 502
+    const message = error instanceof GitHubRequestError
+      ? error.message
+      : 'Could not reach GitHub. Try again.'
+    // 401/403/404 are the user's problem to fix, so they come back as 422 with
+    // GitHub's own wording. Anything else is ours or GitHub's, and is a 502.
+    return json({ error: message }, status >= 400 && status < 500 ? 422 : 502)
+  }
+
+  // Read access alone cannot open a pull request, and finding that out at
+  // connect time is the entire point of verifying.
+  if (!access.canWrite) {
+    return json({
+      error: `This token can read ${access.fullName} but not push to it. A fine-grained token needs Contents: read and write, plus Pull requests: read and write.`,
+    }, 422)
+  }
+
+  const saved = await saveRepository({
+    projectId,
+    owner: ref.owner,
+    name: ref.name,
+    token,
+    defaultBranch: access.defaultBranch,
+    connectedBy: Number(user.id),
+  })
+  return json({ repository: saved })
+}).skipCsrf()
+
+// Re-prove a stored credential. A token that worked at connect time can be
+// revoked or expire, and this is how the settings page can say so on demand
+// rather than at the moment someone wanted a pull request.
+route.post('/api/projects/{projectId}/repository/verify', async (request: any) => {
+  const user = await currentUser(request)
+  if (!user)
+    return json({ error: 'unauthorized' }, 401)
+  const projectId = request.params.projectId
+  if (!(await ownsProject(user, projectId)))
+    return json({ error: 'not found' }, 404)
+
+  const repo = await getRepository(projectId)
+  if (!repo)
+    return json({ error: 'No repository is connected.' }, 404)
+
+  const token = await repositoryToken(projectId)
+  if (!token) {
+    // Either nothing is stored, or APP_KEY changed and the ciphertext can no
+    // longer be read. Both mean the same thing to the user.
+    return json({ error: 'The stored token could not be read. Reconnect the repository.' }, 422)
+  }
+
+  try {
+    const access = await verifyAccess(repo.owner, repo.name, token)
+    await markVerified(projectId, access.defaultBranch)
+    return json({ ok: true, repository: await getRepository(projectId), canWrite: access.canWrite })
+  }
+  catch (error) {
+    const message = error instanceof GitHubRequestError ? error.message : 'Could not reach GitHub.'
+    return json({ error: message }, 422)
+  }
+}).skipCsrf()
+
+route.delete('/api/projects/{projectId}/repository', async (request: any) => {
+  const user = await currentUser(request)
+  if (!user)
+    return json({ error: 'unauthorized' }, 401)
+  const projectId = request.params.projectId
+  if (!(await ownsProject(user, projectId)))
+    return json({ error: 'not found' }, 404)
+
+  await deleteRepository(projectId)
   return json({ ok: true })
 }).skipCsrf()
