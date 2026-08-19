@@ -15,6 +15,7 @@ import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites
 // Shared with the page action in resources/views/projects/new.stx, so the two
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
+import { utcNow } from '../app/Support/time'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -170,7 +171,7 @@ route.post('/api/projects/{projectId}/rotate-key', async (request: any) => {
     return json({ error: 'not found' }, 404)
 
   const key = newIngestKey()
-  await db.unsafe('UPDATE projects SET ingest_key = $1, updated_at = NOW() WHERE id = $2', [key, projectId])
+  await db.unsafe('UPDATE projects SET ingest_key = $1, updated_at = $3 WHERE id = $2', [key, projectId, utcNow()])
   return json({ ingest_key: key })
 }).skipCsrf()
 
@@ -210,7 +211,7 @@ route.post('/api/projects/{projectId}/archive', async (request: any) => {
     return json({ error: 'not found' }, 404)
 
   const archived = (request.jsonBody ?? {}).archived !== false
-  await db.unsafe('UPDATE projects SET is_active = $1, updated_at = NOW() WHERE id = $2', [!archived, projectId])
+  await db.unsafe('UPDATE projects SET is_active = $1, updated_at = $3 WHERE id = $2', [!archived, projectId, utcNow()])
   return json({ ok: true, is_active: !archived })
 }).skipCsrf()
 
@@ -451,8 +452,8 @@ route.patch('/api/projects/{projectId}/channels/{channelId}', async (request: an
 
   const enabled = !!(request.jsonBody ?? {}).enabled
   const updated = (await db.unsafe(
-    'UPDATE alert_channels SET enabled = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3 RETURNING id',
-    [enabled, channelId, projectId],
+    'UPDATE alert_channels SET enabled = $1, updated_at = $4 WHERE id = $2 AND project_id = $3 RETURNING id',
+    [enabled, channelId, projectId, utcNow()],
   )) ?? []
   if (!updated.length)
     return json({ error: 'not found' }, 404)

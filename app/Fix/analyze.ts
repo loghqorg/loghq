@@ -22,6 +22,7 @@
 import { createAIClient, sanitizePrompt } from '@stacksjs/ai'
 import { db } from '@stacksjs/database'
 import aiConfig from '../../config/ai'
+import { utcHoursAgo, utcNow } from '../Support/time'
 import { fingerprintOf } from './fingerprint'
 // Re-exported so a caller that already imports the analyzer does not need a
 // second import for the questions that gate it. The definitions live in
@@ -161,12 +162,15 @@ export function parseAnalysis(run: FixRunRow | null): FixAnalysis | null {
  * nothing had happened.
  */
 export async function latestRunFor(projectId: string, fingerprint: string): Promise<FixRunRow | null> {
+  // The cache cutoff is computed in JS and bound, rather than expressed as
+  // `NOW() - interval` in SQL. Both halves of that were Postgres-only and this
+  // app runs SQLite in production: see app/Support/time.ts.
   const rows = await db.unsafe(
     `SELECT * FROM log_fix_runs
      WHERE project_id = $1 AND fingerprint = $2
-       AND (status IN ('queued', 'running') OR created_at > (NOW() AT TIME ZONE 'UTC') - ($3 || ' hours')::interval)
+       AND (status IN ('queued', 'running') OR created_at > $3)
      ORDER BY created_at DESC LIMIT 1`,
-    [projectId, fingerprint, String(aiConfig.fix.cacheHours)],
+    [projectId, fingerprint, utcHoursAgo(aiConfig.fix.cacheHours)],
   )
   return (rows?.[0] as FixRunRow | undefined) ?? null
 }
@@ -313,8 +317,8 @@ export async function analyzeEntry(entry: LogEntryRow, userId: number | null): P
   try {
     await db.unsafe(
       `INSERT INTO log_fix_runs (id, project_id, log_entry_id, fingerprint, created_by, status, provider, started_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, 'running', $6, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))`,
-      [id, entry.project_id, entry.id, fingerprint, userId, aiConfig.default],
+       VALUES ($1, $2, $3, $4, $5, 'running', $6, $7, $7)`,
+      [id, entry.project_id, entry.id, fingerprint, userId, aiConfig.default, utcNow()],
     )
   }
   catch (error) {
@@ -350,7 +354,7 @@ export async function analyzeEntry(entry: LogEntryRow, userId: number | null): P
     const rows = await db.unsafe(
       `UPDATE log_fix_runs
        SET status = 'completed', model = $1, summary = $2, root_cause = $3, confidence = $4,
-           analysis = $5, error = NULL, completed_at = (NOW() AT TIME ZONE 'UTC'), updated_at = (NOW() AT TIME ZONE 'UTC')
+           analysis = $5, error = NULL, completed_at = $7, updated_at = $7
        WHERE id = $6 AND status = 'running'
        RETURNING *`,
       [
@@ -360,6 +364,7 @@ export async function analyzeEntry(entry: LogEntryRow, userId: number | null): P
         data.confidence,
         JSON.stringify(data),
         id,
+        utcNow(),
       ],
     )
     const updated = rows?.[0] as FixRunRow | undefined
@@ -368,9 +373,9 @@ export async function analyzeEntry(entry: LogEntryRow, userId: number | null): P
   catch (error) {
     const message = clip(error instanceof Error ? error.message : String(error), 2000)
     await db.unsafe(
-      `UPDATE log_fix_runs SET status = 'failed', error = $1, completed_at = (NOW() AT TIME ZONE 'UTC'), updated_at = (NOW() AT TIME ZONE 'UTC')
+      `UPDATE log_fix_runs SET status = 'failed', error = $1, completed_at = $3, updated_at = $3
        WHERE id = $2 AND status = 'running'`,
-      [message, id],
+      [message, id, utcNow()],
     )
     return (await runById(id))!
   }
