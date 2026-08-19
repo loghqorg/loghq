@@ -39,8 +39,30 @@ jobs:
             *) echo "No environment mapped for ${{ github.ref_name }}"; exit 1 ;;
           esac
 
+  # Nothing reaches production without passing the same checks CI runs. These
+  # duplicate two CI jobs and cost about a minute, which is the right trade: CI
+  # and Deploy both fire on a push to main and run in parallel, so without this
+  # a commit whose tests fail still deploys, and the red CI arrives after the
+  # bad release is already live.
+  #
+  # Deliberately not lint or build: neither changes what the box serves. This
+  # gate is about correctness, and the "does it actually serve" half is asserted
+  # against the live site at the end of the deploy job.
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx --bun tsc --noEmit
+      - name: Test
+        run: bun run test
+
   deploy:
-    needs: determine-environment
+    needs: [determine-environment, gate]
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.determine-environment.outputs.environment }}
@@ -49,7 +71,7 @@ jobs:
       deployments: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -156,3 +178,96 @@ jobs:
           # deploy reported success. An app that cannot read its own database
           # has not deployed. See stacksjs/stacks#2347.
           $SSH "cd ${APP_DIR}/current && set -a && . ${APP_DIR}/shared/.env && . ${APP_DIR}/shared/.env.keys && set +a && printf 'Y\nn\n' | bun node_modules/@stacksjs/buddy/dist/cli.js migrate"
+
+      # A deploy that reports success while the app cannot serve is worse than a
+      # deploy that fails, because nobody looks. This app has shipped that twice:
+      # once serving `no such table: users` under a green tick, and once with a
+      # sign-in that returned a correct 303 and no Set-Cookie, so every login
+      # silently bounced back to /login. Both were green. Both were found by hand.
+      #
+      # So the pipeline asserts the things that actually broke, against the live
+      # site, and fails the deploy if any of them regress.
+      - name: Verify the deploy actually serves
+        env:
+          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
+          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP_DIR=/var/www/loghq-main
+          SHORT="${GITHUB_SHA:0:7}"
+
+          read -r IP URL <<<"$(bun -e '
+            const { autoLoadEnv } = await import("@stacksjs/env");
+            autoLoadEnv({ env: process.env.APP_ENV, keysFile: ".env.keys", overload: true, quiet: true });
+            const ip = process.env.APP_ENV === "staging" ? process.env.STAGING_SERVER_IP : process.env.APP_SERVER_IP;
+            process.stdout.write(`${String(ip || "").trim()} ${String(process.env.APP_URL || "").trim()}`);
+          ')"
+          test -n "$IP"  || { echo "::error::could not resolve server IP for $APP_ENV"; exit 1; }
+          test -n "$URL" || { echo "::error::could not resolve APP_URL for $APP_ENV"; exit 1; }
+          echo "box: $IP   url: $URL   expecting release: $SHORT"
+          SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${IP}"
+
+          # 1. The release that is live is the one this run just shipped. Catches a
+          #    deploy that uploaded fine and never flipped the symlink.
+          LIVE="$(basename "$($SSH "readlink -f ${APP_DIR}/current")")"
+          echo "== live release: $LIVE =="
+          [ "$LIVE" = "$SHORT" ] || { echo "::error::current release is $LIVE, expected $SHORT"; exit 1; }
+
+          # 2. Both sites and the scheduler are actually running that release.
+          for unit in "loghq-main@${LIVE}.service" "loghq-api@${LIVE}.service" "loghq-main-scheduler.service"; do
+            state="$($SSH "systemctl is-active $unit" || true)"
+            echo "   $unit -> $state"
+            [ "$state" = "active" ] || { echo "::error::$unit is $state"; exit 1; }
+          done
+
+          # 3. Public endpoints. Retried: rpx and the units need a moment after a
+          #    release flip, and a cold first request is not a failed deploy.
+          probe() {
+            local path="$1" expect="$2" i code
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${URL}${path}" || echo 000)"
+              [ "$code" = "$expect" ] && { echo "   GET $path -> $code"; return 0; }
+              sleep 6
+            done
+            echo "::error::GET $path returned $code, expected $expect"
+            return 1
+          }
+          probe "/" 200
+          probe "/login" 200
+
+          # 4. Sign-in issues a session cookie. This is the regression that shipped
+          #    green: page actions could not set cookies at all on the stx the app
+          #    resolved, so login 303'd to /dashboard with no Set-Cookie and the
+          #    dashboard bounced straight back. A 303 alone proves nothing.
+          hdrs="$(curl -sS -D - -o /dev/null -X POST "${URL}/login" \
+                    --max-time 20 \
+                    --data-urlencode "email=${SMOKE_EMAIL}" \
+                    --data-urlencode "password=${SMOKE_PASSWORD}")"
+          echo "$hdrs" | grep -qiE '^HTTP/[0-9.]+ 303' \
+            || { echo "::error::POST /login did not 303"; echo "$hdrs" | grep -iE '^HTTP/' ; exit 1; }
+          echo "$hdrs" | grep -qiE '^set-cookie: *loghq_token=' \
+            || { echo "::error::POST /login set no loghq_token cookie"; exit 1; }
+          echo "   POST /login -> 303 + loghq_token cookie"
+
+          # 5. The token the cookie carries is really a session, not just a string.
+          TOKEN="$(echo "$hdrs" | grep -iE '^set-cookie: *loghq_token=' | head -1 | sed -E 's/.*loghq_token=([^;]*).*/\1/' | tr -d '\r')"
+          me="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/api/me" -H "Authorization: Bearer ${TOKEN}")"
+          echo "   GET /api/me -> $me"
+          [ "$me" = "200" ] || { echo "::error::/api/me returned $me for a freshly issued token"; exit 1; }
+
+          # 6. Ingest is mounted and authenticating. A bogus key must be rejected as
+          #    an unknown project, which proves the route exists and looks keys up:
+          #    a 404 from a missing route looks identical from the outside otherwise.
+          ing="$(curl -sS --max-time 20 -X POST "${URL}/logs" \
+                   -H 'X-LogHQ-Key: loghq_0000000000000000000000000000000000000000000000000000000000000000' \
+                   -H 'Content-Type: application/json' \
+                   -d '{"logs":[{"message":"deploy smoke","level":"info"}]}' || true)"
+          echo "   POST /logs (bogus key) -> $ing"
+          echo "$ing" | grep -q 'unknown project' \
+            || { echo "::error::ingest did not reject a bogus key with 'unknown project'"; exit 1; }
+
+          echo "== all deploy verifications passed =="

@@ -71,7 +71,9 @@ export const tsCloud: TsCloudConfig = {
   // @stacksjs/env instead, which is a path that demonstrably yields the working
   // token every time.
   hetzner: {
-    apiToken: env.HCLOUD_TOKEN,
+    // Coerced: `env` types a value as string | number | boolean | undefined,
+    // and this field takes string | undefined.
+    apiToken: env.HCLOUD_TOKEN ? String(env.HCLOUD_TOKEN) : undefined,
   },
 
   /**
