@@ -1,16 +1,22 @@
 name: CI
 
+# Checks only. Deploying is deploy.yml, which triggers on the production branch
+# alone. The comments here used to claim main deployed to prod, PRs deployed to
+# dev and beta tags went to stage; none of that was true, and there is no dev or
+# stage box to deploy to.
 on:
   push:
     branches:
-      - main # deploys to prod
+      - main
 
     tags:
-      - '*-beta.*' # ensures it is deployed to stage in case `main`` is not pushed to
+      - '*-beta.*'
 
   pull_request:
+    # production as well, so a promotion PR is checked before it can deploy.
     branches:
-      - main # deploys to dev
+      - main
+      - production
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}

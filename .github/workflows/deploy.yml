@@ -1,49 +1,38 @@
 name: Deploy
 
-# Push-to-deploy, branch to environment. This app is ATTACHED to the box owned
-# by the `uptime-status` project (config/cloud.ts sets `cloud.attachTo`), so the
-# deploy provisions no server of its own: it resolves that host, ships loghq's
-# sites onto it, and reconciles Porkbun DNS. The ts-cloud dashboard is skipped,
-# because the owner's dashboard covers every attached project.
-#   main  → production   (bare apex domain)
-#   stage → staging      (staging.<domain>)
-#   dev   → development  (dev.<domain>)
+# Push-to-deploy from the `production` branch, and only that branch.
+#
+# main is where work lands; production is what is live. Promoting is a push to
+# production, which makes "what is deployed" a thing you can read off a ref
+# instead of inferring from the last green run on main.
+#
+# There is exactly one environment. The staging and development branches this
+# used to map are gone: no box was ever provisioned for either, and
+# DOTENV_PRIVATE_KEY_STAGING / _DEVELOPMENT are not set, so a push to those
+# branches could only ever fail at env resolution. Re-add the mapping alongside
+# a real box if that changes.
+#
+# This app is ATTACHED to the box owned by the `uptime-status` project
+# (config/cloud.ts sets `cloud.attachTo`), so the deploy provisions no server of
+# its own: it resolves that host, ships loghq's sites onto it, and reconciles
+# Porkbun DNS. The ts-cloud dashboard is skipped, because the owner's dashboard
+# covers every attached project.
 on:
   push:
-    branches: [main, stage, dev]
+    branches: [production]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Environment to deploy
-        type: choice
-        options: [production, staging, development]
-        default: staging
 
 concurrency:
   group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  determine-environment:
-    runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.map.outputs.environment }}
-      flag: ${{ steps.map.outputs.flag }}
-    steps:
-      - id: map
-        run: |
-          case "${{ github.event.inputs.environment || github.ref_name }}" in
-            production|main)  echo "environment=production"  >> "$GITHUB_OUTPUT"; echo "flag=--prod"    >> "$GITHUB_OUTPUT" ;;
-            staging|stage)    echo "environment=staging"     >> "$GITHUB_OUTPUT"; echo "flag=--staging" >> "$GITHUB_OUTPUT" ;;
-            development|dev)  echo "environment=development" >> "$GITHUB_OUTPUT"; echo "flag=--dev"     >> "$GITHUB_OUTPUT" ;;
-            *) echo "No environment mapped for ${{ github.ref_name }}"; exit 1 ;;
-          esac
-
-  # Nothing reaches production without passing the same checks CI runs. These
-  # duplicate two CI jobs and cost about a minute, which is the right trade: CI
-  # and Deploy both fire on a push to main and run in parallel, so without this
-  # a commit whose tests fail still deploys, and the red CI arrives after the
-  # bad release is already live.
+  # Nothing reaches production without passing the same checks CI runs.
+  #
+  # CI runs on main and on pull requests, so a push straight to production is
+  # not covered by it. This gate is what checks the code actually being
+  # promoted, and it costs about a minute. Without it a promotion carrying a
+  # broken commit deploys, and nothing ever says so.
   #
   # Deliberately not lint or build: neither changes what the box serves. This
   # gate is about correctness, and the "does it actually serve" half is asserted
@@ -51,6 +40,12 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
+      # workflow_dispatch runs against whatever ref you pick, so without this a
+      # dispatch from main would quietly deploy main's code as production.
+      - name: Refuse to deploy anything but the production branch
+        run: |
+          test "${{ github.ref_name }}" = "production" \
+            || { echo "::error::Deploy runs from the production branch only, got ${{ github.ref_name }}"; exit 1; }
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
@@ -62,10 +57,10 @@ jobs:
         run: bun run test
 
   deploy:
-    needs: [determine-environment, gate]
+    needs: gate
     runs-on: ubuntu-latest
     environment:
-      name: ${{ needs.determine-environment.outputs.environment }}
+      name: production
     permissions:
       contents: read
       deployments: write
@@ -102,25 +97,21 @@ jobs:
           {
             echo '# Generated in CI from secrets — do not commit.'
             echo "DOTENV_PRIVATE_KEY_PRODUCTION=\"${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}\""
-            echo "DOTENV_PRIVATE_KEY_STAGING=\"${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}\""
-            echo "DOTENV_PRIVATE_KEY_DEVELOPMENT=\"${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}\""
           } > .env.keys
           chmod 600 .env.keys
           # Sanity (no secret printed): confirm the file has the 3 keys.
           echo "created .env.keys with $(grep -c '^DOTENV_PRIVATE_KEY' .env.keys) private keys"
 
-      - name: Deploy (${{ needs.determine-environment.outputs.environment }})
+      - name: Deploy (production)
         # Invoke the buddy CLI from node_modules directly rather than via the
         # ./buddy wrapper. The wrapper is built for the vendored/pantry layout
         # (it resolves a project-local pantry bun + NODE_PATH); a node_modules
         # app has neither. This is the same entrypoint the site `start` commands use.
-        run: bun node_modules/@stacksjs/buddy/dist/cli.js deploy ${{ needs.determine-environment.outputs.flag }} --yes
+        run: bun node_modules/@stacksjs/buddy/dist/cli.js deploy --prod --yes
         env:
-          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          APP_ENV: production
           # Decrypt this app's own .env.<environment>.
           DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
-          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
-          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Provision/refresh loghq's own box + reconcile Porkbun DNS
           # (apex/www A upserted to the box IP + additive config/dns.ts sync).
@@ -142,10 +133,8 @@ jobs:
       # log (unlike preStart, which runs on the box).
       - name: Provision .env.keys on the box + migrate
         env:
-          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          APP_ENV: production
           DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
-          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
-          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
         run: |
           set -euo pipefail
           APP_DIR=/var/www/loghq-main
@@ -154,7 +143,7 @@ jobs:
           IP="$(bun -e '
             const { autoLoadEnv } = await import("@stacksjs/env");
             autoLoadEnv({ env: process.env.APP_ENV, keysFile: ".env.keys", overload: true, quiet: true });
-            const ip = process.env.APP_ENV === "staging" ? process.env.STAGING_SERVER_IP : process.env.APP_SERVER_IP;
+            const ip = process.env.APP_SERVER_IP;
             process.stdout.write(String(ip || "").trim());
           ')"
           test -n "$IP" || { echo "::error::could not resolve server IP for $APP_ENV"; exit 1; }
@@ -162,8 +151,8 @@ jobs:
           SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${IP}"
           # Write .env.keys into shared/ (600) from the secrets on this runner,
           # then symlink it into the live release. Content is piped (never echoed).
-          printf '# Provisioned by CI from secrets — do not edit.\nDOTENV_PRIVATE_KEY_PRODUCTION="%s"\nDOTENV_PRIVATE_KEY_STAGING="%s"\nDOTENV_PRIVATE_KEY_DEVELOPMENT="%s"\n' \
-            "$DOTENV_PRIVATE_KEY_PRODUCTION" "$DOTENV_PRIVATE_KEY_STAGING" "$DOTENV_PRIVATE_KEY_DEVELOPMENT" \
+          printf '# Provisioned by CI from secrets — do not edit.\nDOTENV_PRIVATE_KEY_PRODUCTION="%s"\n' \
+            "$DOTENV_PRIVATE_KEY_PRODUCTION" \
             | $SSH "umask 077; mkdir -p ${APP_DIR}/shared; cat > ${APP_DIR}/shared/.env.keys; chmod 600 ${APP_DIR}/shared/.env.keys; ln -sfn ${APP_DIR}/shared/.env.keys ${APP_DIR}/current/.env.keys"
           echo "== .env.keys installed =="; $SSH "ls -l ${APP_DIR}/current/.env.keys"
           echo "== migrate (additive; auto-declines the destructive drops) =="
@@ -189,10 +178,8 @@ jobs:
       # site, and fails the deploy if any of them regress.
       - name: Verify the deploy actually serves
         env:
-          APP_ENV: ${{ needs.determine-environment.outputs.environment }}
+          APP_ENV: production
           DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
-          DOTENV_PRIVATE_KEY_STAGING: ${{ secrets.DOTENV_PRIVATE_KEY_STAGING }}
-          DOTENV_PRIVATE_KEY_DEVELOPMENT: ${{ secrets.DOTENV_PRIVATE_KEY_DEVELOPMENT }}
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: |
@@ -203,7 +190,7 @@ jobs:
           read -r IP URL <<<"$(bun -e '
             const { autoLoadEnv } = await import("@stacksjs/env");
             autoLoadEnv({ env: process.env.APP_ENV, keysFile: ".env.keys", overload: true, quiet: true });
-            const ip = process.env.APP_ENV === "staging" ? process.env.STAGING_SERVER_IP : process.env.APP_SERVER_IP;
+            const ip = process.env.APP_SERVER_IP;
             process.stdout.write(`${String(ip || "").trim()} ${String(process.env.APP_URL || "").trim()}`);
           ')"
           test -n "$IP"  || { echo "::error::could not resolve server IP for $APP_ENV"; exit 1; }
