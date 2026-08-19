@@ -1,3 +1,5 @@
+-- SQLITE DIALECT, ADJUSTED BY HAND. See stacksjs/stacks#2346; regenerate
+-- and delete this note once the fix ships.
 -- Correlation keys for the log stream.
 --
 -- A log line on its own rarely answers anything. The question is almost
@@ -18,8 +20,8 @@
 -- this file on the statement terminator and re-emits each fragment on its
 -- own line, which strips the leading dashes from any comment tail that
 -- follows one, turning prose into invalid SQL.
-ALTER TABLE "log_entries" ADD COLUMN IF NOT EXISTS "trace_id" varchar(64);
-ALTER TABLE "log_entries" ADD COLUMN IF NOT EXISTS "request_id" varchar(64);
+ALTER TABLE "log_entries" ADD COLUMN "trace_id" varchar(64);
+ALTER TABLE "log_entries" ADD COLUMN "request_id" varchar(64);
 -- "Show me the rest of this trace", always scoped to one project, so the
 -- project column leads. Partial indexes: the vast majority of rows carry no
 -- correlation id, and indexing those nulls would roughly double the index

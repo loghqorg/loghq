@@ -1,3 +1,5 @@
+-- SQLITE DIALECT, ADJUSTED BY HAND. See stacksjs/stacks#2346; regenerate
+-- and delete this note once the fix ships.
 -- "Fix with AI": one row per analysis of a log entry.
 --
 -- Deliberately NOT backed by an app/Models/*.ts, for the same reason
@@ -43,7 +45,7 @@ CREATE TABLE IF NOT EXISTS "log_fix_runs" (
   -- RENDERED, so a server-local default is a visible wrong answer: on a
   -- UTC+8 host an analysis that ran seconds after a 13:53 UTC log line was
   -- labelled 21:53 UTC. Every write in app/Fix/analyze.ts matches this.
-  "created_at" timestamp NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  "created_at" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamp
 );
 

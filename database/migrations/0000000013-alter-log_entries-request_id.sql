@@ -1,1 +1,6 @@
-ALTER TABLE "log_entries" ADD COLUMN IF NOT EXISTS "request_id" varchar(64);
+-- SQLITE DIALECT, ADJUSTED BY HAND. See stacksjs/stacks#2346; regenerate
+-- and delete this note once the fix ships.
+-- Superseded by 0000000010, which adds "request_id" to "log_entries".
+-- On postgres this repeated ADD COLUMN IF NOT EXISTS was a harmless no-op.
+-- sqlite has no such form, and a bare ADD COLUMN would be a duplicate-column
+-- error, so the statement is dropped rather than translated.
