@@ -57,6 +57,23 @@ export const tsCloud: TsCloudConfig = {
     attachTo: 'uptime-status',
   },
 
+  // Resolve the API token through the config rather than leaving it to
+  // `process.env.HCLOUD_TOKEN`.
+  //
+  // `resolveHetznerApiToken` prefers this over the environment, and the two do
+  // not agree on the runner: the token in the GitHub secret is valid (verified
+  // against GET /v1/servers, 200, from the runner itself), yet the deploy gets
+  // HTTP 401 "the token you have provided is invalid" when it reads the same
+  // name out of `process.env`. Something between the step env and buddy's own
+  // process is not handing that value through intact.
+  //
+  // `env.HCLOUD_TOKEN` reads the decrypted `.env.production` through
+  // @stacksjs/env instead, which is a path that demonstrably yields the working
+  // token every time.
+  hetzner: {
+    apiToken: env.HCLOUD_TOKEN,
+  },
+
   /**
    * Deployment Mode
    *
