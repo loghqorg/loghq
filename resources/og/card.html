@@ -1,0 +1,118 @@
+<!doctype html>
+<!--
+  Source of truth for public/og.png (1200x630), the image every share of
+  loghq.org renders.
+
+  It is authored rather than generated because ts-images cannot compose a card:
+  its `generateSocialImages` resizes an EXISTING image into per-platform sizes
+  (og-facebook, og-twitter, ...) and has no text or layout primitives. So the
+  master is designed here, in the site's own fonts and tokens, and ts-images is
+  what derives the variants from it.
+
+  Regenerate after editing (playwright-core lives in the harness project):
+
+    bun -e '
+      const { chromium } = require(process.env.HOME + "/Documents/Stacks/harness/node_modules/playwright-core");
+      const b = await chromium.launch();
+      const p = await b.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
+      await p.goto("file://" + process.cwd() + "/resources/og/card.html");
+      await p.waitForTimeout(1200);
+      await p.screenshot({ path: "public/og.png" });
+      await b.close();
+    '
+
+  Colours are the dark-theme tokens from public/tokens.css. If --accent moves
+  again, this file and public/og.png move with it.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #090b11;
+    --text: #f3f5f9;
+    --text-3: #79839a;
+    --accent: #34d399;
+    --accent-deep: #047857;
+    --accent-ink: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: var(--bg);
+    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    color: var(--text);
+    position: relative;
+    overflow: hidden;
+  }
+  /* The one flourish: a soft emerald bloom off the top-right corner, so the
+     card is not a flat rectangle at thumbnail size. */
+  .bloom {
+    position: absolute;
+    top: -320px; right: -260px;
+    width: 900px; height: 900px;
+    background: radial-gradient(circle, rgba(52, 211, 153, 0.16) 0%, rgba(52, 211, 153, 0.05) 42%, transparent 68%);
+  }
+  .frame {
+    position: relative;
+    height: 100%;
+    padding: 72px;
+    display: flex;
+    flex-direction: column;
+  }
+  .brand { display: flex; align-items: center; gap: 20px; }
+  .mark {
+    /* JetBrains Mono, not Space Grotesk. Space Grotesk draws lowercase "l" as a
+       bare vertical stroke, so the mark read as a capital "I". The mono "l" has
+       a tail, which is unambiguous and suits a logs product. */
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    width: 60px; height: 60px; border-radius: 14px;
+    background: var(--accent-deep);
+    color: var(--accent-ink);
+    display: grid; place-items: center;
+    font-size: 40px; font-weight: 700; letter-spacing: -2px;
+    line-height: 1;
+  }
+  .wordmark { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+  .headline {
+    margin-top: auto;
+    font-size: 78px;
+    font-weight: 700;
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+  }
+  .headline .accent { color: var(--accent); }
+  .footer {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 19px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+  .domain { color: var(--accent); font-weight: 500; }
+  .sep { color: var(--text-3); }
+  .tag { color: var(--text-3); }
+</style>
+</head>
+<body>
+  <div class="bloom"></div>
+  <div class="frame">
+    <div class="brand">
+      <div class="mark">l</div>
+      <div class="wordmark">loghq</div>
+    </div>
+
+    <h1 class="headline">Logs for<br><span class="accent">people who ship.</span></h1>
+
+    <div class="footer">
+      <span class="dot"></span>
+      <span class="domain">loghq.org</span>
+      <span class="sep">·</span>
+      <span class="tag">stream, search, and filter your logs</span>
+    </div>
+  </div>
+</body>
+</html>

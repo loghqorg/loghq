@@ -384,7 +384,7 @@ defineClientPayload({
 
 useSeoMeta({
   title: 'Logs - loghq',
-  description: 'Your live application log stream — filter by level, search messages, and inspect structured context.',
+  description: 'Your live application log stream: filter by level, search messages, and inspect structured context.',
   robots: 'noindex, nofollow',
 })
 </script>

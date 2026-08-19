@@ -1,6 +1,6 @@
 /* loghq marketing surface — shared design tokens + components.
   Every marketing page (landing, feature pages, use-cases) links this so the
-  whole surface stays visually identical. Light + dark, Space Grotesk, rose accent. */
+  whole surface stays visually identical. Light + dark, Space Grotesk, emerald accent. */
 
 :root {
   --bg: #fbfbfd;
@@ -11,8 +11,8 @@
   --text: #0b0f19;
   --text-2: #4b5565;
   --text-3: #6b7280;
-  --accent: #e11d48;
-  --accent-line: rgba(225, 29, 72, 0.34);
+  --accent: #047857;
+  --accent-line: rgba(4, 120, 87, 0.34);
   --code-bg: #0b0f19;
   --code-ink: #d6deeb;
   /* Caption ink for the code surface. Not --text-3: the code block is dark
@@ -31,8 +31,8 @@
     --bg: #090b11; --surface: #10131c; --surface-2: #161a24;
     --border: rgba(148, 163, 184, 0.12); --border-strong: rgba(148, 163, 184, 0.2);
     --text: #f3f5f9; --text-2: #b3bccb; --text-3: #79839a;
-    --accent: #fb7185;
-    --accent-line: rgba(251, 113, 133, 0.32);
+    --accent: #34d399;
+    --accent-line: rgba(52, 211, 153, 0.32);
     --code-bg: #05070c;
   }
 }
@@ -40,16 +40,16 @@
   --bg: #090b11; --surface: #10131c; --surface-2: #161a24;
   --border: rgba(148, 163, 184, 0.12); --border-strong: rgba(148, 163, 184, 0.2);
   --text: #f3f5f9; --text-2: #b3bccb; --text-3: #79839a;
-  --accent: #fb7185;
-  --accent-line: rgba(251, 113, 133, 0.32);
+  --accent: #34d399;
+  --accent-line: rgba(52, 211, 153, 0.32);
   --code-bg: #05070c;
 }
 :root[data-theme="light"] {
   --bg: #fbfbfd; --surface: #ffffff; --surface-2: #f4f5f8;
   --border: rgba(15, 23, 42, 0.09); --border-strong: rgba(15, 23, 42, 0.16);
   --text: #0b0f19; --text-2: #4b5565; --text-3: #6b7280;
-  --accent: #e11d48;
-  --accent-line: rgba(225, 29, 72, 0.34);
+  --accent: #047857;
+  --accent-line: rgba(4, 120, 87, 0.34);
   --code-bg: #0b0f19;
 }
 
@@ -77,6 +77,9 @@ a { color: inherit; text-decoration: none; }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; min-height: 68px; }
 .brand { display: inline-flex; align-items: center; gap: 0.6rem; }
 .brand-mark {
+  /* Mono for the glyph: Space Grotesk draws lowercase "l" as a bare vertical
+     stroke, which reads as a capital "I" at 30px. */
+  font-family: var(--mono);
   display: grid; place-items: center; width: 30px; height: 30px;
   border: 1px solid var(--accent-line); border-radius: var(--r-sm);
   color: var(--accent); font-weight: 700; font-size: 1rem; line-height: 1;

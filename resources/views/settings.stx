@@ -528,7 +528,7 @@ function note(msgSig: StxSignal<string>, okSig: StxSignal<boolean>, msg: string,
 
 async function rotateKey(): Promise<void> {
   const ask = window.stxConfirm
-    ? window.stxConfirm('The current key stops working immediately — anything still sending it will get 401 until you update it. Continue?', { title: 'Rotate ingest key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
+    ? window.stxConfirm('The current key stops working immediately, and anything still sending it will get 401 until you update it. Continue?', { title: 'Rotate ingest key?', confirmText: 'Rotate key', cancelText: 'Cancel', type: 'warning' })
     // No window.confirm fallback. stxConfirm ships with the runtime, so the
     // branch only fired if the runtime had not loaded — in which case the
     // button that calls this is not bound either and nothing can reach here.

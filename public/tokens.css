@@ -65,16 +65,32 @@
    * 4.88:1 and 5.18:1. Both are the smallest step that clears AA on the worse
    * of the two surfaces, so "subtle" still reads as subtle. */
   --text-3: #6b7280;
-  --accent: #e11d48;
-  --accent-soft: rgba(225, 29, 72, 0.08);
+  /* Emerald, not the rose this shipped with.
+   *
+   * The old --accent was #e11d48, which is byte-for-byte --sev-error below. In
+   * a product whose whole surface is log severity, the brand colour WAS the
+   * error colour: every button, link and focus ring carried the one hue the
+   * severity scale reserves for something being wrong.
+   *
+   * Green collides with --ok instead, which is the milder trade. --ok is a UI
+   * success state, not a severity: nothing in the sev-* scale is green, so the
+   * severity reading stays unambiguous. Brand-as-healthy misleads nobody;
+   * brand-as-error did.
+   *
+   * #047857 rather than the more obvious #059669: emerald-600 measures 3.65:1
+   * on --bg, under the 4.5 floor this file holds everything else to. This one
+   * measures 5.31:1 on --bg and 5.48:1 on --panel, which is also an improvement
+   * on the rose it replaces (4.54:1, passing by 0.04). */
+  --accent: #047857;
+  --accent-soft: rgba(4, 120, 87, 0.08);
   /* Ink for text sitting ON a saturated fill — the accent, --warn, and the
    * Slack/Discord brand colours.
    *
    * It cannot be a hardcoded #fff, which is what the app markup and
    * app-chrome.css assumed. In dark mode the fills get LIGHTER, not darker:
-   * --accent is #fb7185 and the dashboard's indigo is #818cf8, where white
-   * measures 2.69:1 and 2.98:1. The dark value here measures 7.30:1 and 6.58:1
-   * on those same fills, and 7.10:1 on the dark --warn.
+   * --accent is #34d399 and the dashboard's indigo is #818cf8, where white
+   * measures 1.92:1 and 2.98:1. The dark value here measures 9.83:1 and 6.34:1
+   * on those same fills, and 6.83:1 on the dark --warn.
    *
    * marketing.css has had this token, correctly themed, since the marketing
    * pages were built; it just never reached the app surface, because that
@@ -112,9 +128,9 @@
     --text: #f3f5f9;
     --text-2: #b3bccb;
     --text-3: #79839a;
-    --accent: #fb7185;
-    --accent-soft: rgba(251, 113, 133, 0.1);
-    --accent-ink: #1a0509;
+    --accent: #34d399;
+    --accent-soft: rgba(52, 211, 153, 0.1);
+    --accent-ink: #04140d;
     --ok: #4ade80;
     --warn: #f87171;
   --sev-critical: #f43f5e;
@@ -134,9 +150,9 @@
   --text: #f3f5f9;
   --text-2: #b3bccb;
   --text-3: #79839a;
-  --accent: #fb7185;
-  --accent-soft: rgba(251, 113, 133, 0.1);
-  --accent-ink: #1a0509;
+  --accent: #34d399;
+  --accent-soft: rgba(52, 211, 153, 0.1);
+  --accent-ink: #04140d;
   --ok: #4ade80;
   --warn: #f87171;
   --sev-critical: #f43f5e;
@@ -155,8 +171,8 @@
   --text: #0b0f19;
   --text-2: #4b5565;
   --text-3: #6b7280;
-  --accent: #e11d48;
-  --accent-soft: rgba(225, 29, 72, 0.08);
+  --accent: #047857;
+  --accent-soft: rgba(4, 120, 87, 0.08);
   --accent-ink: #ffffff;
   --ok: #16a34a;
   --warn: #b91c1c;
