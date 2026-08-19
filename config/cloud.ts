@@ -269,8 +269,10 @@ export const tsCloud: TsCloudConfig = {
       // CREATE DATABASE commands when `managedServices.postgres` is set OR
       // `database.engine === 'postgres'`, so leaving either in place makes the
       // deploy try to provision Postgres on a box that does not run it.
-      // loghq uses SQLite here; the file is kept across releases by the
-      // `sharedPaths` entries on the sites below.
+      // loghq uses SQLite here. The file lives at
+      // /var/www/loghq-shared/database/stacks.sqlite and the platform symlinks
+      // `database/stacks.sqlite` in each release to it, so it survives a deploy
+      // without a `sharedPaths` entry of its own.
       webServer: 'rpx',
       proxy: {
         engine: 'rpx',
@@ -767,11 +769,23 @@ export const tsCloud: TsCloudConfig = {
       // listed here or the next deploy silently starts from empty. For a log
       // store that would mean losing every entry on each deploy.
       //
-      // An absolute `target` is what lets BOTH sites point at ONE file: a plain
-      // string would give each site a database of its own, since they install
-      // under different bases. `main` seeds it; `api` does not.
+      // The database is NOT listed here. config/database.ts resolves sqlite to
+      // `database/stacks.sqlite` (DB_DATABASE_PATH is unset, and DB_DATABASE
+      // only names a database for mysql/postgres), and that path is already
+      // symlinked to /var/www/loghq-shared/database/stacks.sqlite. This used to
+      // list `database/loghq.sqlite`, which nothing ever opened: it sat at
+      // 0 bytes next to the real 400 KB file.
+      //
+      // What does have to survive a release is the migration generator's
+      // baseline, storage/framework/database/model-snapshot.sqlite.json.
+      // `buddy migrate` diffs the models against that snapshot. The directory
+      // does not exist in a fresh release, so every deploy started with no
+      // baseline, re-derived the same "rebuild table projects (type/constraint
+      // change)" - a rebuild whose CREATE TABLE is byte-for-byte the live one -
+      // and then failed the migrate step on the destructive guard. Applying it
+      // by hand only ever fixed the release that ran it.
       sharedPaths: [
-        { path: 'database/loghq.sqlite', target: '/var/www/loghq-main/shared/database/loghq.sqlite', seed: true },
+        { path: 'storage/framework/database', target: '/var/www/loghq-main/shared/storage/framework/database', seed: false },
       ],
       env: {
         APP_URL: 'https://loghq.org',
@@ -792,12 +806,9 @@ export const tsCloud: TsCloudConfig = {
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
       port: 3043,
       preStart: ['bun install'],
-      // Same file as `main`, and deliberately `seed: false`: whichever site
-      // deploys first would otherwise create the target, and the site holding
-      // the data would find it already there and never seed it.
-      sharedPaths: [
-        { path: 'database/loghq.sqlite', target: '/var/www/loghq-main/shared/database/loghq.sqlite', seed: false },
-      ],
+      // Nothing to share. The database is symlinked by the platform, and the
+      // migration snapshot belongs to `main`, which is the only site the deploy
+      // runs migrations from.
       env: { HOST: '127.0.0.1' },
     },
 
