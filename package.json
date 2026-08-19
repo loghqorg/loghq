@@ -71,6 +71,7 @@
     "sqlite": "^3.47.2"
   },
   "dependencies": {
+    "@stacksjs/stx": "^0.2.198",
     "bun-plugin-auto-imports": "^0.4.1",
     "bun-query-builder": "^0.2.26",
     "pickier": "^0.1.56",
