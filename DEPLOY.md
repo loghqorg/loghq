@@ -36,7 +36,7 @@ when it is running fine.
 | App | `bun ... buddy serve` on `127.0.0.1:3042` |
 | API | `bun ... actions/serve/api.js` on `127.0.0.1:3043` |
 | Layout | Capistrano style, `/var/www/loghq-main/{shared,releases,current}` |
-| Units | systemd templates, `loghq-main@<sha>.service` and `loghq-loghq-api@<sha>.service` |
+| Units | systemd templates, `loghq-main@<sha>.service` and `loghq-api@<sha>.service` |
 | Dashboard | **skipped.** ts-cloud logs "attached to statushq; the server owner's dashboard monitors every attached project", so `cloud.loghq.org` is unused |
 
 `attachTo` takes the **owner project's slug**, not a server name. ts-cloud finds
@@ -84,7 +84,7 @@ editing the default export changes nothing about a deploy.
 | Site key | Domain | Port | Role |
 |---|---|---|---|
 | `main` | `loghq.org` | 3042 | The app, stx views plus ingest |
-| `loghq-api` | none | 3043 | Loopback API, rpx skips it because it has no domain |
+| `api` | none | 3043 | Loopback API, rpx skips it because it has no domain |
 | `www` | `www.loghq.org` | none | Redirect to the apex |
 
 `cloud.loghq.org` serves the ts-cloud management dashboard, set by
@@ -296,7 +296,7 @@ loghq's units and paths; `systemctl status` with no filter shows both projects.
 ssh root@167.233.116.134   # = APP_SERVER_IP
 
 systemctl status 'loghq-main@*'          # app
-systemctl status 'loghq-loghq-api@*'     # loopback API
+systemctl status 'loghq-api@*'           # loopback API
 journalctl -u 'loghq-main@*' -f          # live logs
 ls -la /var/www/loghq-main/releases       # the 4 kept releases
 readlink /var/www/loghq-main/current      # what is live now

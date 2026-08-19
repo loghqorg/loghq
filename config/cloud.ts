@@ -784,7 +784,13 @@ export const tsCloud: TsCloudConfig = {
 
     // Loopback API (bun-router); the :3042 serve proxies /api + non-GET to it.
     // No domain ⇒ rpx skips it; the firewall keeps :3043 off the public net.
-    'loghq-api': {
+    //
+    // The key MUST be `api`. buddy's pre-deploy check treats a site as serving
+    // the API only when it is named `api` or its `start` matches `serve:api`.
+    // This one starts `serve/api.js`, a slash not a colon, so under the old key
+    // `loghq-api` it was classified as a page site with no API configured, and
+    // the deploy refused: "declares API routes and no site serves them".
+    api: {
       root: '.',
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
       port: 3043,
