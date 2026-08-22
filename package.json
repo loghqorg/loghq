@@ -71,15 +71,15 @@
     "sqlite": "^3.47.2"
   },
   "dependencies": {
-    "@stacksjs/stx": "^0.2.198",
+    "@stacksjs/stx": "^0.2.217",
     "bun-plugin-auto-imports": "^0.4.1",
-    "bun-query-builder": "^0.2.26",
-    "pickier": "^0.1.56",
-    "stacks": "^0.72.34"
+    "bun-query-builder": "^0.2.60",
+    "pickier": "^0.1.62",
+    "stacks": "^0.72.50"
   },
   "devDependencies": {
-    "@iconify-json/lucide": "^1.2.121",
-    "better-dx": "^0.2.15"
+    "@iconify-json/lucide": "^1.2.125",
+    "better-dx": "^0.2.25"
   },
   "git-hooks": {
     "pre-commit": {
