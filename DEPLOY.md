@@ -48,22 +48,32 @@ curl -H "Authorization: Bearer $HCLOUD_TOKEN" \
   https://api.hetzner.cloud/v1/servers | jq '.servers[] | {name, labels}'
 ```
 
-### Ports, and why not 3022/3023
+### Ports
 
-3022/3023 are the Stacks cloud template's defaults, so **every** app generated
-from it asks for the same pair. bughq's `config/cloud.ts` does, and statushq
-almost certainly does too. Nothing allocates or validates ports across attached
-projects ([stacksjs/ts-cloud#168]), so a collision surfaces only as a service
-that will not bind.
+Nothing allocates or validates ports across attached projects
+([stacksjs/ts-cloud#168]), so a collision surfaces only as a service that will
+not bind. Who holds what on this box, read from each project's `config/cloud.ts`
+rather than assumed from the template:
 
-loghq therefore runs on **3042/3043**. Reserved layout, so a third app can join
-without another collision:
+| Project | app / api | Source |
+|---|---|---|
+| statushq (owner) | **3000 / 3008** | `port: 3000`; `const API_PORT = 3008` |
+| loghq | 3042 / 3043 | this repo |
+| analyticshq | 3024 / 3025 | if it attaches; currently on the `stacks` box |
 
-| Project | Ports |
-|---|---|
-| statushq | 3022 / 3023 (assumed, template default) |
-| loghq | 3042 / 3043 |
-| bughq | 3052 / 3053 (if it follows) |
+statushq also names 3000-3010 by role in its `config/ports.ts` (frontend 3000
+through database 3010). Only 3000 and 3008 bind, but treat the whole band as
+spoken for rather than filling a gap inside it.
+
+**bughq is not on this box** and never was — it owns a dedicated server
+(`91.98.39.176`), and its `config/cloud.ts` says that isolation is deliberate.
+It uses 3022/3023 *there*, which constrains nothing here.
+
+> Earlier revisions of this file recorded statushq as `3022/3023` — the Stacks
+> template default, inferred rather than checked. It is not: statushq contains
+> no occurrence of `302x` at all. loghq's own 3042/3043 was never at risk, but
+> the table was the thing a later attacher would consult, so it is corrected
+> here rather than left as a plausible-looking guess.
 
 **Confirm before the first deploy**, on the box: `ss -ltnp | grep 30`
 
@@ -153,7 +163,7 @@ projects. Before the first deploy:
 ssh root@167.233.116.134 'ss -ltnp | grep 30'
 ```
 
-Expect statushq on `3022/3023` and nothing on `3042/3043`. If `3042` or `3043`
+Expect statushq on `3000/3008` and nothing on `3042/3043`. If `3042` or `3043`
 is taken, change them in `config/cloud.ts` before deploying rather than after.
 
 ## What a deploy actually does

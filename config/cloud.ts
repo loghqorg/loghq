@@ -751,16 +751,23 @@ export const tsCloud: TsCloudConfig = {
       // (@stacksjs/buddy) — no vendored storage/framework/core needed. Port
       // 3042 is loghq's slot on the shared box (localhost-only; rpx fronts it).
       //
-      // NOT 3022. That is the Stacks cloud template's default, and every app
-      // generated from it claims the same pair: bughq's config/cloud.ts asks
-      // for 3022/3023 too, and statushq very likely does as well since it came
-      // from the same template. Nothing allocates or validates ports across
-      // attached projects (stacksjs/ts-cloud#168), so the collision would only
-      // surface as a service that will not bind.
+      // Nothing allocates or validates ports across attached projects
+      // (stacksjs/ts-cloud#168), so a collision surfaces only as a service that
+      // will not bind. The occupancy of this box, read from each project's
+      // config rather than assumed from the template:
       //
-      // Confirm before the first deploy, on the box:  ss -ltnp | grep 30
-      // The reserved layout is statushq 3022/3023, loghq 3042/3043, leaving
-      // 3032/3033 and 3052/3053 free for bughq and stacks if they follow.
+      //   statushq (owner)  3000 / 3008   config/cloud.ts `port: 3000`, `API_PORT = 3008`
+      //   loghq             3042 / 3043   here
+      //   analyticshq       3024 / 3025   if it attaches
+      //
+      // statushq also names 3000-3010 in its config/ports.ts (frontend 3000
+      // through database 3010). Only 3000 and 3008 bind on the box, but treat
+      // the whole band as spoken for rather than filling a gap in it.
+      //
+      // bughq is NOT on this box and never was: it owns a dedicated server, so
+      // its 3022/3023 constrains nothing here.
+      //
+      // Confirm on the box before a first deploy:  ss -ltnp | grep 30
       start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
       port: 3042,
       // Migrations run in the deploy workflow's "Provision .env.keys + migrate"
