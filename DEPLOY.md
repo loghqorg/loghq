@@ -272,6 +272,61 @@ its own. It cannot go in `preStart`, which runs before decryption is possible.
 The step is non-fatal. It emits a workflow warning on failure, so **a green
 deploy does not mean migrations ran**. Read the step output.
 
+### duckdb
+
+The log archive shells out to a `duckdb` binary to write and read Parquet on
+object storage (see `app/Archive/duckdb.ts`). Pantry declares it in
+`config/deps.ts`, which covers local development, but **pantry does not run on
+this box**: the deploy ships the node_modules layout, and `./buddy`
+short-circuits to the plain `bun` on PATH in that case. So a workflow step
+installs it after the migrate step.
+
+That step is idempotent and does nothing once the binary exists, which is the
+normal case. It fetches the official `duckdb_cli-linux-amd64` release into
+`/usr/local/bin` rather than building from source: the pantry recipe compiles
+httpfs in, but reproducing that on the box would mean cmake, OpenSSL headers,
+and several minutes added to a deploy that otherwise takes seconds. The released
+CLI installs httpfs as an extension instead, which the step caches once into
+`/usr/local/share/duckdb-extensions`, so nothing reaches for the network at
+query time.
+
+That directory is shared rather than the per-user `~/.duckdb` default because
+the step runs as root and the scheduler unit does not necessarily. It has to
+match `ARCHIVE_DUCKDB_EXTENSION_DIR` in `.env.production`.
+
+The step is `continue-on-error`, unlike migrate. A box without duckdb serves
+every page correctly; the only thing that stops is the nightly archive job,
+which logs why and skips. Failing the deploy over it would take the site down
+for a feature that degrades quietly.
+
+### Archive environment
+
+The archive is off unless `.env.production` says otherwise. The full set lives
+in `.env.example`; the ones with no safe default are:
+
+```
+ARCHIVE_ENABLED=true
+ARCHIVE_S3_ENDPOINT=fsn1.your-objectstorage.com   # host[:port], no scheme
+ARCHIVE_S3_BUCKET=...
+ARCHIVE_S3_ACCESS_KEY_ID=...
+ARCHIVE_S3_SECRET_ACCESS_KEY=...
+ARCHIVE_DUCKDB_PATH=/usr/local/bin/duckdb          # systemd PATH is not yours
+ARCHIVE_DUCKDB_EXTENSION_DIR=/usr/local/share/duckdb-extensions
+```
+
+Any S3-compatible bucket works (Hetzner Object Storage, R2, MinIO, AWS); only
+the values differ. Turn it on with `ARCHIVE_DELETE_AFTER_VERIFY=false` for the
+first night, confirm the Parquet and the `archive_partitions` rows look right,
+then enable deletion.
+
+Note that a misconfigured bucket stops free-plan **pruning** too, even though
+that path never touches object storage. That is deliberate: the alternative is
+that a mistyped bucket name deletes free-plan data on the first run while
+nothing is being archived, which is the one failure here that cannot be undone.
+
+`buddy archive:run --dry-run` on the box prints exactly what a run would touch
+and changes nothing.
+
 ## Known issues
 
 **Not applicable while attached:** the "first deploy to a brand new box fails on

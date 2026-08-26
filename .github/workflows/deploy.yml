@@ -168,6 +168,72 @@ jobs:
           # has not deployed. See stacksjs/stacks#2347.
           $SSH "cd ${APP_DIR}/current && set -a && . ${APP_DIR}/shared/.env && . ${APP_DIR}/shared/.env.keys && set +a && printf 'Y\nn\n' | bun node_modules/@stacksjs/buddy/dist/cli.js migrate"
 
+      # The log archive shells out to a `duckdb` binary to write and read Parquet
+      # (see app/Archive/duckdb.ts). Pantry declares it in config/deps.ts, which
+      # covers local development, but pantry does not run on this box: the deploy
+      # ships the node_modules layout and ./buddy short-circuits to the plain bun
+      # on PATH. So the binary is installed here or it does not exist.
+      #
+      # Idempotent by design. This runs on every deploy and does nothing at all
+      # once the binary is present, which is the normal case.
+      #
+      # The official release tarball rather than a source build: the pantry
+      # recipe compiles httpfs in, but building duckdb from source on the box
+      # would add cmake, OpenSSL headers and several minutes to a deploy that
+      # otherwise takes seconds. The released CLI has httpfs available as an
+      # installable extension instead, which the next line caches once into
+      # ~/.duckdb so later runs need no egress. Same capability, reached the
+      # other way.
+      #
+      # Non-fatal on purpose, unlike the migrate above. A box without duckdb
+      # serves every page correctly; the only thing that stops is the nightly
+      # archive job, which logs why and skips. Failing the deploy over it would
+      # take the whole site down for a feature that degrades quietly.
+      - name: Provision duckdb on the box
+        env:
+          APP_ENV: production
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          IP="$(bun -e '
+            const { autoLoadEnv } = await import("@stacksjs/env");
+            autoLoadEnv({ env: process.env.APP_ENV, keysFile: ".env.keys", overload: true, quiet: true });
+            const ip = process.env.APP_SERVER_IP;
+            process.stdout.write(String(ip || "").trim());
+          ')"
+          test -n "$IP" || { echo "::warning::could not resolve server IP; skipping duckdb provisioning"; exit 0; }
+          SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${IP}"
+          DUCKDB_VERSION=v1.5.1
+          # Must match ARCHIVE_DUCKDB_EXTENSION_DIR in .env.production. A shared
+          # path rather than the per-user ~/.duckdb default, because this step
+          # runs as root and the scheduler unit does not necessarily.
+          EXT_DIR=/usr/local/share/duckdb-extensions
+          $SSH "set -e
+            if command -v duckdb >/dev/null 2>&1; then
+              echo \"duckdb already installed: \$(duckdb --version)\"
+            else
+              echo 'installing duckdb ${DUCKDB_VERSION}'
+              tmp=\$(mktemp -d)
+              curl -fsSL -o \"\$tmp/duckdb.zip\" \
+                https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip
+              unzip -q -o \"\$tmp/duckdb.zip\" -d /usr/local/bin
+              chmod +x /usr/local/bin/duckdb
+              rm -rf \"\$tmp\"
+              echo \"installed: \$(duckdb --version)\"
+            fi
+            # Cache httpfs so the archive never reaches for the network at query
+            # time. Already-installed is a no-op, and a failure here is not fatal:
+            # the job reports it far more usefully than a deploy step can.
+            mkdir -p ${EXT_DIR}
+            if duckdb -c \"SET extension_directory='${EXT_DIR}'; INSTALL httpfs; LOAD httpfs; SELECT 1\" >/dev/null 2>&1; then
+              chmod -R a+rX ${EXT_DIR}
+              echo 'httpfs ready in ${EXT_DIR}'
+            else
+              echo 'WARNING: could not prepare httpfs; the archive job will report it'
+            fi
+          "
+
       # A deploy that reports success while the app cannot serve is worse than a
       # deploy that fails, because nobody looks. This app has shipped that twice:
       # once serving `no such table: users` under a green tick, and once with a

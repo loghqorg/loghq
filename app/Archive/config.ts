@@ -34,6 +34,8 @@ export interface ArchiveConfig {
   freePruneGraceDays: number
   /** Absolute path to the duckdb binary; empty resolves from PATH. */
   duckdbPath: string
+  /** Where duckdb looks for installed extensions; empty leaves its default. */
+  duckdbExtensionDir: string
   exportTimeoutMs: number
   queryTimeoutMs: number
   maxFilesPerQuery: number
@@ -60,6 +62,7 @@ export function archiveConfig(): ArchiveConfig {
     deleteAfterVerify: env.ARCHIVE_DELETE_AFTER_VERIFY !== false,
     freePruneGraceDays: num(env.ARCHIVE_FREE_PRUNE_GRACE_DAYS, 7),
     duckdbPath: String(env.ARCHIVE_DUCKDB_PATH ?? ''),
+    duckdbExtensionDir: String(env.ARCHIVE_DUCKDB_EXTENSION_DIR ?? ''),
     exportTimeoutMs: num(env.ARCHIVE_EXPORT_TIMEOUT_MS, 300000),
     queryTimeoutMs: num(env.ARCHIVE_QUERY_TIMEOUT_MS, 15000),
     maxFilesPerQuery: num(env.ARCHIVE_MAX_FILES_PER_QUERY, 62),

@@ -49,12 +49,22 @@ export function duckdbBinary(cfg?: Pick<ArchiveConfig, 'duckdbPath'>): string {
  * route is a compatibility shim that covers those knobs inconsistently. And a
  * script on stdin never appears in `ps` output, where an argv would.
  *
- * `LOAD httpfs` has no matching `INSTALL`: the pantry recipe compiles httpfs
- * into the binary, so the extension is present with no network access at
- * runtime. An INSTALL here would turn every query into a download attempt.
+ * `LOAD httpfs` never has a matching `INSTALL`, on either of the two ways this
+ * binary reaches a box. The pantry recipe used in development compiles httpfs
+ * straight into the binary. Production installs the official release CLI and
+ * caches the extension once at deploy time, into the directory named by
+ * ARCHIVE_DUCKDB_EXTENSION_DIR. Both leave `LOAD` able to succeed offline, and
+ * an INSTALL here would turn every query into a download attempt from a host
+ * that may have no egress at all.
+ *
+ * The extension directory is set explicitly rather than left to default,
+ * because the default is per-user (`~/.duckdb`) and the deploy step that
+ * populates it does not necessarily run as the user the scheduler runs as. A
+ * shared path makes that irrelevant.
  */
 export function s3Preamble(cfg: ArchiveConfig): string {
   return [
+    ...(cfg.duckdbExtensionDir ? [`SET extension_directory=${sqlQuote(cfg.duckdbExtensionDir)};`] : []),
     'LOAD httpfs;',
     'CREATE OR REPLACE SECRET loghq_archive (',
     '  TYPE s3,',

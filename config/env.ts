@@ -375,6 +375,19 @@ export default {
     default: '',
   },
 
+  /**
+   * Where duckdb looks for installed extensions.
+   *
+   * Set this in production. The default is per-user (`~/.duckdb`), and the
+   * deploy step that caches httpfs does not necessarily run as the user the
+   * scheduler runs as. Empty leaves duckdb's own default, which is right in
+   * development, where the pantry build has httpfs compiled in.
+   */
+  ARCHIVE_DUCKDB_EXTENSION_DIR: {
+    validation: schema.string(),
+    default: '',
+  },
+
   ARCHIVE_EXPORT_TIMEOUT_MS: {
     validation: schema.number(),
     default: 300000,

@@ -26,6 +26,7 @@ function cfg(overrides: Partial<ArchiveConfig> = {}): ArchiveConfig {
     deleteAfterVerify: true,
     freePruneGraceDays: 7,
     duckdbPath: '',
+    duckdbExtensionDir: '',
     exportTimeoutMs: 300000,
     queryTimeoutMs: 15000,
     maxFilesPerQuery: 62,
@@ -60,6 +61,24 @@ describe('s3Preamble', () => {
 
   test('replaces the secret on each run rather than erroring on the second', () => {
     expect(s3Preamble(cfg())).toContain('CREATE OR REPLACE SECRET')
+  })
+
+  test('leaves the extension directory alone when unset, as in development', () => {
+    // The pantry build has httpfs compiled in, so there is nothing to point at.
+    expect(s3Preamble(cfg())).not.toContain('extension_directory')
+  })
+
+  test('pins the extension directory when set, as in production', () => {
+    // The default is per-user, and the deploy step that caches httpfs does not
+    // necessarily run as the user the scheduler runs as.
+    const sql = s3Preamble(cfg({ duckdbExtensionDir: '/usr/local/share/duckdb-extensions' }))
+    expect(sql).toContain('SET extension_directory=\'/usr/local/share/duckdb-extensions\';')
+    // Ordering matters: LOAD consults the directory that is already set.
+    expect(sql.indexOf('extension_directory')).toBeLessThan(sql.indexOf('LOAD httpfs'))
+  })
+
+  test('never emits INSTALL, which would need egress at query time', () => {
+    expect(s3Preamble(cfg({ duckdbExtensionDir: '/tmp/ext' }))).not.toContain('INSTALL')
   })
 })
 
