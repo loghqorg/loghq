@@ -369,6 +369,18 @@ export default {
     default: 7,
   },
 
+  /**
+   * PEM bundle duckdb should trust for the endpoint's TLS certificate.
+   *
+   * Empty uses the system trust store, which is right for Hetzner, R2, and AWS.
+   * Set it only for self-hosted object storage behind an internal CA: without
+   * it duckdb refuses the connection outright, which is the correct default.
+   */
+  ARCHIVE_S3_CA_CERT_FILE: {
+    validation: schema.string(),
+    default: '',
+  },
+
   /** Absolute path to the duckdb binary. Empty resolves `duckdb` from PATH. */
   ARCHIVE_DUCKDB_PATH: {
     validation: schema.string(),

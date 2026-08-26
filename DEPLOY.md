@@ -310,8 +310,13 @@ ARCHIVE_S3_ENDPOINT=fsn1.your-objectstorage.com   # host[:port], no scheme
 ARCHIVE_S3_BUCKET=...
 ARCHIVE_S3_ACCESS_KEY_ID=...
 ARCHIVE_S3_SECRET_ACCESS_KEY=...
+ARCHIVE_S3_REGION=fsn1                             # matches the endpoint
+ARCHIVE_S3_USE_SSL=true                            # verified against a TLS endpoint
+ARCHIVE_S3_URL_STYLE=path                          # Hetzner serves path style
 ARCHIVE_DUCKDB_PATH=/usr/local/bin/duckdb          # systemd PATH is not yours
 ARCHIVE_DUCKDB_EXTENSION_DIR=/usr/local/share/duckdb-extensions
+# ARCHIVE_S3_CA_CERT_FILE is only for self-hosted storage behind an internal CA.
+# Hetzner, R2 and AWS chain to public roots, so leave it unset.
 ```
 
 Any S3-compatible bucket works (Hetzner Object Storage, R2, MinIO, AWS); only

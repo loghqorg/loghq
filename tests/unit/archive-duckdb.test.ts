@@ -25,6 +25,7 @@ function cfg(overrides: Partial<ArchiveConfig> = {}): ArchiveConfig {
     hotWindowDays: 30,
     deleteAfterVerify: true,
     freePruneGraceDays: 7,
+    caCertFile: '',
     duckdbPath: '',
     duckdbExtensionDir: '',
     exportTimeoutMs: 300000,
@@ -75,6 +76,21 @@ describe('s3Preamble', () => {
     expect(sql).toContain('SET extension_directory=\'/usr/local/share/duckdb-extensions\';')
     // Ordering matters: LOAD consults the directory that is already set.
     expect(sql.indexOf('extension_directory')).toBeLessThan(sql.indexOf('LOAD httpfs'))
+  })
+
+  test('omits ca_cert_file by default, so the system trust store is used', () => {
+    // Hetzner, R2 and AWS all present publicly trusted certificates.
+    expect(s3Preamble(cfg())).not.toContain('ca_cert_file')
+  })
+
+  test('sets ca_cert_file when a bundle is configured', () => {
+    // Only needed for self-hosted storage behind an internal CA. Verified
+    // against a TLS MinIO: without it duckdb refuses the connection, which is
+    // the behaviour we want, and with it the round trip works.
+    const sql = s3Preamble(cfg({ caCertFile: '/etc/ssl/internal-ca.pem' }))
+    expect(sql).toContain("SET ca_cert_file='/etc/ssl/internal-ca.pem';")
+    // Must precede the secret, which is what triggers the connection.
+    expect(sql.indexOf('ca_cert_file')).toBeLessThan(sql.indexOf('CREATE OR REPLACE SECRET'))
   })
 
   test('never emits INSTALL, which would need egress at query time', () => {

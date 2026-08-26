@@ -32,6 +32,8 @@ export interface ArchiveConfig {
   deleteAfterVerify: boolean
   /** Extra days a free project's aged logs survive before pruning. */
   freePruneGraceDays: number
+  /** PEM bundle to trust for the endpoint's TLS cert; empty uses the system store. */
+  caCertFile: string
   /** Absolute path to the duckdb binary; empty resolves from PATH. */
   duckdbPath: string
   /** Where duckdb looks for installed extensions; empty leaves its default. */
@@ -61,6 +63,7 @@ export function archiveConfig(): ArchiveConfig {
     hotWindowDays: num(env.ARCHIVE_HOT_WINDOW_DAYS, 30),
     deleteAfterVerify: env.ARCHIVE_DELETE_AFTER_VERIFY !== false,
     freePruneGraceDays: num(env.ARCHIVE_FREE_PRUNE_GRACE_DAYS, 7),
+    caCertFile: String(env.ARCHIVE_S3_CA_CERT_FILE ?? ''),
     duckdbPath: String(env.ARCHIVE_DUCKDB_PATH ?? ''),
     duckdbExtensionDir: String(env.ARCHIVE_DUCKDB_EXTENSION_DIR ?? ''),
     exportTimeoutMs: num(env.ARCHIVE_EXPORT_TIMEOUT_MS, 300000),

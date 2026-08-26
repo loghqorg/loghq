@@ -71,6 +71,11 @@ export function s3Preamble(cfg: ArchiveConfig): string {
     ...(cfg.duckdbExtensionDir ? [`SET extension_directory=${sqlQuote(cfg.duckdbExtensionDir)};`] : []),
     'LOAD httpfs;',
     'LOAD json;',
+    // Only for self-hosted storage behind an internal CA. Left unset, duckdb
+    // uses the system trust store, which is what Hetzner, R2, and AWS need.
+    // Setting it does not weaken verification: an untrusted certificate is
+    // still refused, this just says which roots to believe.
+    ...(cfg.caCertFile ? [`SET ca_cert_file=${sqlQuote(cfg.caCertFile)};`] : []),
     'CREATE OR REPLACE SECRET loghq_archive (',
     '  TYPE s3,',
     `  KEY_ID ${sqlQuote(cfg.accessKeyId)},`,

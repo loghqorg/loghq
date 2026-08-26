@@ -158,11 +158,49 @@ without a claim row. They are exported, `markPartition` is an UPDATE, and
 without that guard a caller skipping `claimPartition` would delete hot rows and
 record nothing, leaving entries that exist only in a bucket nothing points at.
 
-### What is still untested
+### TLS and both URL styles, verified against MinIO over HTTPS
 
-Only the real providers. Hetzner Object Storage, R2, and AWS differ from MinIO
-in TLS and in whether they want path or vhost URL style, both of which are env
-values rather than code paths. Step 4 of the rollout is where that gets proven.
+Plain-HTTP MinIO leaves two things untested that every real provider uses: TLS,
+and virtual-hosted URL style. Both now run, against a MinIO served over HTTPS
+with a self-signed cert (`--certs-dir`, `MINIO_DOMAIN=localhost` so it answers
+bucket-as-subdomain requests):
+
+- `USE_SSL true` with `URL_STYLE 'path'` - what Hetzner Object Storage uses.
+  Full export and read-back.
+- `USE_SSL true` with `URL_STYLE 'vhost'` - what classic AWS uses. Same.
+- An untrusted certificate is **refused** (`SSL peer certificate ... was not
+  OK`), so TLS is really being verified rather than waved through.
+- `USE_SSL false` against a TLS-only endpoint fails rather than hanging.
+
+That leaves nothing provider-specific in the code untested. What differs between
+MinIO and Hetzner from here is the endpoint hostname, the credentials, and
+whether the certificate chains to a public root, all of which are env values.
+
+**`ARCHIVE_S3_CA_CERT_FILE` was added** while doing this. Hetzner, R2 and AWS
+present publicly trusted certificates and need no value, but self-hosted storage
+behind an internal CA is otherwise unusable: duckdb refuses the connection, and
+correctly so. Leaving it empty uses the system trust store; setting it does not
+weaken verification, it only says which roots to believe.
+
+### Not tested: Hetzner itself
+
+No Hetzner Object Storage credentials exist on this machine. `HCLOUD_TOKEN` is
+in `.env.production` but that is the Cloud API for servers, not Object Storage,
+its value is encrypted and `.env.keys` is not here, and Hetzner's S3 keys are
+issued per project from their console. Creating a bucket and keys is an account
+action with a running cost, so it belongs to whoever owns the account.
+
+When that happens, the values are:
+
+```
+ARCHIVE_S3_ENDPOINT=fsn1.your-objectstorage.com   # or nbg1./hel1.
+ARCHIVE_S3_REGION=fsn1
+ARCHIVE_S3_USE_SSL=true
+ARCHIVE_S3_URL_STYLE=path
+ARCHIVE_S3_CA_CERT_FILE=                          # leave empty
+```
+
+and `buddy archive:run --dry-run` on the box is the first thing to run.
 
 ## Rollout
 
