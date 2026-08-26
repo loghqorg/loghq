@@ -291,6 +291,10 @@ select.app-panel {
 [data-level='info'] { --sev: var(--sev-info); }
 .log-rail { background: var(--sev); min-height: 20px; }
 .log-level { color: var(--sev); background: color-mix(in srgb, var(--sev) 14%, transparent); }
+/* One segment of the level-mix bars on /analytics. Reads the same --sev the
+ * rail and the chip do, so a colour still means the same severity across the
+ * whole app and the analytics page names no palette of its own. */
+.level-seg { background: var(--sev); }
 
 /* Stat cards. `data-tone` is set only when the count is non-zero, so an empty
  * warnings/errors card stays neutral — which is what `s.on` expressed inline. */
