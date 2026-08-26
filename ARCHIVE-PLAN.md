@@ -219,18 +219,16 @@ hand-written migrations.
 project used to remove its hot rows and leave every archived Parquet in the
 bucket forever, along with orphaned ledger rows: logs outliving the project, and
 the consent to hold them. Fixed, but implemented on Bun's built-in S3 client
-rather than the framework, because the S3 adapter has two defects that only
-showed up against a live MinIO:
+rather than the framework, because of one defect that only showed up against a
+live MinIO: `resolveS3ClientOptions` stripped the scheme from the endpoint, so a
+disk configured as `http://127.0.0.1:9100` reached ts-cloud as a bare host and
+was addressed over https. Plain-http endpoints were unreachable, ruling out
+MinIO and any local verification. The existing test asserted that stripping, so
+the bug was written down as intended behaviour.
 
-1. `S3DiskConfig.credentials` is publicly typed `{ key, secret }`, while
-   `S3StorageAdapter` reads `credentials.accessKeyId` / `.secretAccessKey`.
-   Configuring a disk the way the exported type documents leaves the adapter
-   with no credentials, silently falling back to `AWS_*` env vars.
-2. `resolveS3ClientOptions` strips the scheme from the endpoint, on the stated
-   grounds that "ts-cloud wants a scheme-less host". ts-cloud's own
-   `S3ClientOptions.endpoint` documents an "HTTP(S) endpoint origin or host", so
-   the strip is what makes a plain-http endpoint unreachable, ruling out MinIO
-   and any local verification.
+Fixed upstream in stacks (`18e68c77f3`): `http://` is preserved because it is
+the only marker of a plaintext endpoint, `https://` is still stripped because a
+bare host is served over TLS anyway. Verified against a live MinIO both ways.
 
 `app/Archive/storage.ts` is the single seam to swap once a release carries the
 fixes. Worth abstracting upstream separately: the DuckDB CLI runner and

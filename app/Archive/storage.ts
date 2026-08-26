@@ -8,24 +8,20 @@
  * an object but not remove one.
  *
  * `@stacksjs/storage` is the natural home for that and is deliberately NOT used
- * yet, for two defects in its S3 adapter that both had to be found the hard
- * way against a live MinIO:
+ * yet, for one defect in its S3 adapter that only showed up against a live
+ * MinIO: `resolveS3ClientOptions` stripped the scheme from the endpoint, so a
+ * disk configured as `http://127.0.0.1:9100` reached ts-cloud as a bare host,
+ * which it then addressed over https. Plain-http endpoints were unreachable,
+ * which rules out MinIO and with it any local or CI verification.
  *
- *   1. `S3DiskConfig.credentials` is publicly typed `{ key, secret }`, while
- *      `S3StorageAdapter` reads `credentials.accessKeyId` /
- *      `.secretAccessKey`. Configure a disk the way the exported type tells you
- *      to and the adapter sees no credentials at all, then silently falls back
- *      to `AWS_*` environment variables.
- *   2. `resolveS3ClientOptions` strips the scheme from the endpoint, on the
- *      stated grounds that "ts-cloud wants a scheme-less host". ts-cloud's own
- *      `S3ClientOptions.endpoint` documents an "HTTP(S) endpoint origin or
- *      host", so the strip is what makes a plain-http endpoint unreachable.
- *      That rules out MinIO, and with it any local or CI verification.
+ * Fixed upstream (stacks, storage adapter: http:// is now preserved, https://
+ * is still stripped since a bare host is served over TLS). Switch this module
+ * to `Storage.configure` + `disk.deleteFile` once a release carries it; that is
+ * the only change needed, and it is why the seam exists.
  *
- * Both are filed and fixed upstream; this module is the single seam to swap
- * once a release carries them. Bun's own S3 client is the stand-in: it is
- * built into the runtime, needs no dependency, and handles http and https and
- * both URL styles, all of which are verified against MinIO.
+ * Bun's own S3 client is the stand-in until then: built into the runtime, no
+ * dependency, and it handles http and https and both URL styles, all verified
+ * against MinIO.
  */
 import type { ArchiveConfig } from './config'
 import { log } from '@stacksjs/logging'
