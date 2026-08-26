@@ -33,6 +33,9 @@ import { Auth } from '@stacksjs/auth'
 import { db as __db } from '@stacksjs/database'
 import { appUrl, ingestUrl } from '../../app/Support/urls'
 import { getRepository } from '../../app/Fix/repository'
+import { archiveConfig } from '../../app/Archive/config'
+import { projectPlan } from '../../app/Archive/plan'
+import { archiveSummary } from '../../app/Archive/query'
 // APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
 // (a separate host in local dev). Both are absolute and env-driven, falling
 // back to the local servers. See app/Support/urls.ts.
@@ -176,6 +179,49 @@ if (projectId) {
     repository = null
   }
 }
+// Retention, for the section of the same name below. Rendered server-side like
+// everything else on this page, and behind its own try/catch for the same
+// reason the repository lookup is: archive_partitions arrived in a later
+// migration, and a box that has not run it must still be able to open settings.
+const __archiveCfg = archiveConfig()
+const retention = {
+  plan: 'free',
+  hotWindowDays: __archiveCfg.hotWindowDays,
+  graceDays: __archiveCfg.freePruneGraceDays,
+  enabled: __archiveCfg.enabled,
+  partitions: 0,
+  archivedRows: 0,
+  archivedBytes: 0,
+  prunedRows: 0,
+  oldestDay: null as string | null,
+  available: false,
+}
+if (projectId) {
+  try {
+    const [plan, summary] = await Promise.all([projectPlan(projectId), archiveSummary(projectId)])
+    retention.plan = plan
+    retention.partitions = summary.partitions
+    retention.archivedRows = summary.archivedRows
+    retention.archivedBytes = summary.archivedBytes
+    retention.prunedRows = summary.prunedRows
+    retention.oldestDay = summary.oldestDay
+    retention.available = true
+  }
+  catch {
+    retention.available = false
+  }
+}
+
+function formatBytes(n: number): string {
+  if (!n)
+    return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)))
+  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+const retentionBytesLabel = formatBytes(retention.archivedBytes)
+
 const ownerEmail = (user && user.email) || ''
 
 function maskWebhook(url: string): string {
@@ -1082,6 +1128,7 @@ onMount(() => {
         <a href="#repository" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Repository</a>
         <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
         <a href="#alerts" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Alerts</a>
+        <a href="#retention" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Retention</a>
         <a href="#danger" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Danger</a>
       </nav>
 
@@ -1292,6 +1339,70 @@ onMount(() => {
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
             In Slack: <span class="text-muted">Apps → Incoming Webhooks → Add to a channel</span>, then paste the <span class="font-mono">hooks.slack.com/services/…</span> URL.
           </p>
+        </div>
+      </section>
+
+      {{-- =========================== RETENTION =========================== --}}
+      {{-- What happens to entries once they pass the hot window, stated plainly
+          for both plans. The free copy says removed, not archived, because that
+          is what happens: free projects are pruned rather than exported, and a
+          settings page that implied otherwise would be the one place a customer
+          checks before finding out the hard way. --}}
+      <section id="retention" class="mb-10 scroll-mt-[84px]">
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Retention</div>
+        <div class="px-5 py-5 app-panel">
+          <div class="flex flex-wrap gap-3 items-start justify-between mb-4">
+            <div>
+              <p class="mb-1 text-sm">
+                Entries stay searchable in the live stream for
+                <span class="font-semibold">{{ retention.hotWindowDays }} days</span>.
+              </p>
+              @if (retention.plan === 'pro')
+                <p class="leading-relaxed text-subtle text-xs">
+                  After that they move to long-term storage and stay searchable from the
+                  <StxLink to="/dashboard?range=archive" class="text-accent">Archive</StxLink> tab. Nothing is deleted.
+                </p>
+              @else
+                <p class="leading-relaxed text-subtle text-xs">
+                  After that they are removed. Pro keeps them in long-term storage instead, searchable for good.
+                </p>
+              @endif
+            </div>
+            <span class="shrink-0 px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">{{ retention.plan === 'pro' ? 'Pro' : 'Free' }}</span>
+          </div>
+
+          @if (retention.available && (retention.partitions > 0 || retention.prunedRows > 0))
+            <div class="grid gap-y-2 grid-cols-2 sm:grid-cols-4 pt-4 text-xs border-line border-t">
+              <div>
+                <div class="text-subtle">Archived days</div>
+                <div class="font-mono tnum">{{ retention.partitions.toLocaleString() }}</div>
+              </div>
+              <div>
+                <div class="text-subtle">Archived entries</div>
+                <div class="font-mono tnum">{{ retention.archivedRows.toLocaleString() }}</div>
+              </div>
+              <div>
+                <div class="text-subtle">Stored</div>
+                <div class="font-mono tnum">{{ retentionBytesLabel }}</div>
+              </div>
+              <div>
+                <div class="text-subtle">Removed</div>
+                <div class="font-mono tnum">{{ retention.prunedRows.toLocaleString() }}</div>
+              </div>
+            </div>
+          @endif
+
+          @if (retention.plan !== 'pro')
+            <p class="mt-4 pt-4 leading-relaxed text-subtle text-xs border-line border-t">
+              Entries are kept for {{ retention.hotWindowDays + retention.graceDays }} days before removal, so upgrading within
+              {{ retention.graceDays }} days of a day ageing out still saves it.
+              <StxLink to="/pricing" class="text-accent">See plans</StxLink>
+            </p>
+          @else
+            <p class="mt-4 pt-4 leading-relaxed text-subtle text-xs border-line border-t">
+              <StxLink to="/analytics" class="text-accent">View analytics</StxLink> for volume over time and what the archive holds.
+            </p>
+          @endif
         </div>
       </section>
 

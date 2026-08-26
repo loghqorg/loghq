@@ -25,12 +25,14 @@ export default new Job({
 
   async handle() {
     const started = Date.now()
-    const summary = await runArchiveIfEnabled()
+    const outcome = await runArchiveIfEnabled()
 
-    // Null means switched off or misconfigured. runArchiveIfEnabled has already
-    // said which, so there is nothing to add.
-    if (!summary)
+    // Switched off or misconfigured. runArchiveIfEnabled has already logged
+    // which, so there is nothing to add.
+    if (!outcome.ran)
       return
+
+    const { summary } = outcome
 
     if (!summary.partitions) {
       log.info('[archive] nothing has aged out of the hot window')

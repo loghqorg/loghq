@@ -49,13 +49,17 @@ export default defineCommand({
       process.exit(ExitCode.Success)
     }
 
-    const summary = await runArchiveIfEnabled({ cfg, projectId: options.project, day: options.day })
+    const outcome = await runArchiveIfEnabled({ cfg, projectId: options.project, day: options.day })
 
-    if (!summary) {
-      // runArchiveIfEnabled logs the reason (switched off, or missing config).
+    if (!outcome.ran) {
+      // Printed, not just logged: the run's own logger goes to the application
+      // log, and an operator who typed this command and got silence back has no
+      // way to tell "nothing to do" from "refused to start".
+      console.log(`Nothing ran: ${outcome.reason}`)
       process.exit(ExitCode.FatalError)
     }
 
+    const { summary } = outcome
     console.log(
       `${summary.partitions} partitions: ${summary.exported} exported, ${summary.pruned} pruned, `
       + `${summary.failed} failed, ${summary.skipped} skipped (${summary.rows} rows)`,

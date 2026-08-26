@@ -498,26 +498,42 @@ export async function runArchive(opts: RunOptions = {}): Promise<RunSummary> {
   return summary
 }
 
+/** Either the run happened, or it was skipped for a reason worth printing. */
+export type RunOutcome =
+  | { ran: true, summary: RunSummary }
+  | { ran: false, reason: string }
+
 /**
  * The entry point the nightly job and the CLI both call.
  *
- * Returns null when the archive is switched off or misconfigured, having said
- * why. A missing bucket is an operator problem, not a reason to throw inside the
- * scheduler process.
+ * Skips rather than throws when the archive is switched off or misconfigured,
+ * and hands the reason back rather than only logging it: the scheduler wants a
+ * log line, the CLI wants to print to the operator's terminal, and a function
+ * that only logs leaves the second caller with nothing to say.
+ *
+ * A missing bucket is an operator problem, not a reason to take the scheduler
+ * process down.
+ *
+ * Note that a misconfigured bucket stops the free-plan pruning too, even though
+ * that path never touches object storage. That is deliberate. The alternative
+ * is that someone who enables the archive and mistypes the bucket name gets
+ * free-plan data deleted on the first nightly run while nothing is being
+ * archived, which is the one failure here that cannot be undone.
  */
-export async function runArchiveIfEnabled(opts: RunOptions = {}): Promise<RunSummary | null> {
+export async function runArchiveIfEnabled(opts: RunOptions = {}): Promise<RunOutcome> {
   const cfg = opts.cfg ?? archiveConfig()
 
   if (!cfg.enabled) {
-    log.info('[archive] disabled, skipping run (set ARCHIVE_ENABLED=true to turn it on)')
-    return null
+    const reason = 'archive is disabled (set ARCHIVE_ENABLED=true to turn it on)'
+    log.info(`[archive] ${reason}`)
+    return { ran: false, reason }
   }
 
   const problem = archiveReady(cfg)
   if (problem) {
     log.warn(`[archive] ${problem}`)
-    return null
+    return { ran: false, reason: problem }
   }
 
-  return runArchive({ ...opts, cfg })
+  return { ran: true, summary: await runArchive({ ...opts, cfg }) }
 }
