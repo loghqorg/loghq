@@ -58,7 +58,7 @@ export function duckdbBinary(cfg?: Pick<ArchiveConfig, 'duckdbPath'>): string {
  *
  * Neither `LOAD` has a matching `INSTALL`. The extensions are cached once, into
  * the directory named by ARCHIVE_DUCKDB_EXTENSION_DIR: on the box by the deploy
- * step, in development by the setup in ARCHIVE-PLAN.md. An INSTALL here would
+ * step, in development by the setup in ARCHIVE.md. An INSTALL here would
  * turn every query into a download attempt from a host that may have no egress,
  * and would fail closed on a slow or blocked network rather than working.
  *

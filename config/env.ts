@@ -303,7 +303,7 @@ const envSchema = defineEnv({
   // Log archive (cold tier)
   //
   // Aged log partitions are exported to Parquet on S3-compatible storage and
-  // queried back with DuckDB. See app/Archive/ and ARCHIVE-PLAN.md.
+  // queried back with DuckDB. See app/Archive/ and ARCHIVE.md.
   //
   // These deliberately do not reuse the AWS_* namespace: config/filesystems.ts
   // reads AWS_S3_BUCKET while .env.example declares AWS_BUCKET, and neither is

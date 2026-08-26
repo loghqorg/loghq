@@ -22,7 +22,7 @@
  * and Postgres. See app/Support/time.ts for the history behind that rule.
  */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { db } from '@stacksjs/database'
@@ -200,53 +200,73 @@ async function markPartition(projectId: string, day: Day, fields: Record<string,
  * row-value comparisons are not portable across the two engines this app runs
  * on, and a staging loop is the wrong place to discover that.
  *
+ * Each page is streamed straight to disk rather than collected. Paging bounds
+ * what the database hands over, but collecting the lines and joining them at
+ * the end would put the entire day in memory twice over, once as an array and
+ * once as the joined string. A single message can be 16KB and a context blob
+ * 96KB (see app/Logs/normalize.ts), so a busy day is measured in gigabytes, and
+ * the projects with days that big are exactly the ones that need archiving.
+ * Streaming keeps the peak at one page whatever the day holds.
+ *
  * JSON.stringify escapes embedded newlines, so one row is exactly one line by
  * construction, which is what read_json's newline_delimited format needs.
  */
 async function stageDay(projectId: string, day: Day, filePath: string): Promise<number> {
   const { from, to } = dayBounds(day)
-  const lines: string[] = []
+  const sink = Bun.file(filePath).writer()
+  let written = 0
   let cursorTs: string | null = null
   let cursorId: string | null = null
 
-  for (;;) {
-    const where = ['project_id = $1', 'timestamp >= $2', 'timestamp < $3']
-    const params: any[] = [projectId, from, to]
+  try {
+    for (;;) {
+      const where = ['project_id = $1', 'timestamp >= $2', 'timestamp < $3']
+      const params: any[] = [projectId, from, to]
 
-    if (cursorTs != null) {
-      params.push(cursorTs, cursorId)
-      where.push(`(timestamp > $${params.length - 1} OR (timestamp = $${params.length - 1} AND id > $${params.length}))`)
+      if (cursorTs != null) {
+        params.push(cursorTs, cursorId)
+        where.push(`(timestamp > $${params.length - 1} OR (timestamp = $${params.length - 1} AND id > $${params.length}))`)
+      }
+
+      const rows = await db.unsafe(
+        `SELECT ${SELECT_COLS} FROM log_entries WHERE ${where.join(' AND ')}
+         ORDER BY timestamp, id LIMIT ${PAGE_SIZE}`,
+        params,
+      )
+
+      const page = rows ?? []
+      if (!page.length)
+        break
+
+      for (const row of page) {
+        // Normalize to the archive's own column list so a schema drift in the
+        // hot table cannot silently change what a Parquet file contains.
+        const record: Record<string, any> = {}
+        for (const c of ARCHIVE_COLUMNS)
+          record[c] = row[c] == null ? null : String(row[c])
+        sink.write(`${JSON.stringify(record)}\n`)
+        written++
+      }
+
+      // Flush each page so the sink's own buffer cannot become the thing that
+      // holds the day in memory.
+      await sink.flush()
+
+      const last = page[page.length - 1]
+      cursorTs = String(last.timestamp)
+      cursorId = String(last.id)
+
+      if (page.length < PAGE_SIZE)
+        break
     }
-
-    const rows = await db.unsafe(
-      `SELECT ${SELECT_COLS} FROM log_entries WHERE ${where.join(' AND ')}
-       ORDER BY timestamp, id LIMIT ${PAGE_SIZE}`,
-      params,
-    )
-
-    const page = rows ?? []
-    if (!page.length)
-      break
-
-    for (const row of page) {
-      // Normalize to the archive's own column list so a schema drift in the hot
-      // table cannot silently change what a Parquet file contains.
-      const record: Record<string, any> = {}
-      for (const c of ARCHIVE_COLUMNS)
-        record[c] = row[c] == null ? null : String(row[c])
-      lines.push(JSON.stringify(record))
-    }
-
-    const last = page[page.length - 1]
-    cursorTs = String(last.timestamp)
-    cursorId = String(last.id)
-
-    if (page.length < PAGE_SIZE)
-      break
+  }
+  finally {
+    // Closes the file even when a page throws, so the temp directory cleanup in
+    // exportPartition is not left removing a file still held open.
+    await sink.end()
   }
 
-  await writeFile(filePath, lines.length ? `${lines.join('\n')}\n` : '', 'utf8')
-  return lines.length
+  return written
 }
 
 /**
@@ -256,37 +276,63 @@ async function stageDay(projectId: string, day: Day, filePath: string): Promise<
  * batch is expressed as a subselect instead, which both engines accept.
  * Batching at all is about lock duration: a single DELETE covering a busy day
  * would hold SQLite's write lock long enough for ingest to notice.
+ *
+ * Counted once up front rather than before every batch. The count is the
+ * expensive part, since it has to scan the whole remaining range, and running
+ * it per batch made the deletion quadratic in the number of batches: a million
+ * row day would have spent five hundred full range scans deciding whether to
+ * continue. The loop instead stops on a `SELECT 1 ... LIMIT 1`, which the
+ * (project_id, timestamp) index answers from the first matching row.
+ *
+ * The initial count is also the honest answer for how many rows went, which
+ * matters because prunePartition records it as the partition's row_count. The
+ * day is already outside the hot window, and ingest only ever writes current
+ * timestamps, so nothing new arrives in the range while this runs.
  */
 async function deleteDay(projectId: string, day: Day): Promise<number> {
   const { from, to } = dayBounds(day)
-  let removed = 0
+  const range = [projectId, from, to]
 
-  for (;;) {
-    const before = (await db.unsafe(
-      'SELECT COUNT(*) AS n FROM log_entries WHERE project_id = $1 AND timestamp >= $2 AND timestamp < $3',
-      [projectId, from, to],
-    ))?.[0]
+  const counted = (await db.unsafe(
+    'SELECT COUNT(*) AS n FROM log_entries WHERE project_id = $1 AND timestamp >= $2 AND timestamp < $3',
+    range,
+  ))?.[0]
 
-    const remaining = Number(before?.n ?? 0)
-    if (remaining === 0)
-      break
+  const total = Number(counted?.n ?? 0)
+  if (total === 0)
+    return 0
 
+  // Bounded by the count so a delete that silently matches nothing cannot spin
+  // forever. One extra iteration covers the final empty check.
+  const maxBatches = Math.ceil(total / DELETE_BATCH) + 1
+
+  for (let batch = 0; batch < maxBatches; batch++) {
     await db.unsafe(
       `DELETE FROM log_entries WHERE id IN (
          SELECT id FROM log_entries
          WHERE project_id = $1 AND timestamp >= $2 AND timestamp < $3
          LIMIT ${DELETE_BATCH}
        )`,
-      [projectId, from, to],
+      range,
     )
 
-    removed += Math.min(remaining, DELETE_BATCH)
+    const more = (await db.unsafe(
+      'SELECT 1 AS more FROM log_entries WHERE project_id = $1 AND timestamp >= $2 AND timestamp < $3 LIMIT 1',
+      range,
+    ))?.[0]
 
-    if (remaining <= DELETE_BATCH)
-      break
+    if (!more)
+      return total
   }
 
-  return removed
+  // Fell through the bound: rows are still there after as many batches as there
+  // were rows to remove. Reported rather than looped on, because the caller
+  // marking the partition deleted while entries remain is the worse outcome.
+  const left = (await db.unsafe(
+    'SELECT COUNT(*) AS n FROM log_entries WHERE project_id = $1 AND timestamp >= $2 AND timestamp < $3',
+    range,
+  ))?.[0]
+  throw new Error(`deleted fewer rows than expected for ${projectId} ${day}: ${Number(left?.n ?? 0)} still present`)
 }
 
 // ---------------------------------------------------------------------------
