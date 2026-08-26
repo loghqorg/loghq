@@ -28,4 +28,5 @@ export type CommandRegistry = Record<string, string | CommandConfig>
  */
 export default {
   'inspire': 'Inspire',
+  'archive:run': 'ArchiveRun',
 } satisfies CommandRegistry

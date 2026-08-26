@@ -292,4 +292,102 @@ export default {
     validation: schema.string(),
     default: '',
   },
+
+  // ---------------------------------------------------------------------------
+  // Log archive (cold tier)
+  //
+  // Aged log partitions are exported to Parquet on S3-compatible storage and
+  // queried back with DuckDB. See app/Archive/ and ARCHIVE-PLAN.md.
+  //
+  // These deliberately do not reuse the AWS_* namespace: config/filesystems.ts
+  // reads AWS_S3_BUCKET while .env.example declares AWS_BUCKET, and neither is
+  // wired to anything, so that namespace cannot be trusted to mean one thing.
+  // ---------------------------------------------------------------------------
+
+  ARCHIVE_ENABLED: {
+    validation: schema.boolean(),
+    default: false,
+  },
+
+  /** Host[:port] with no scheme, e.g. `fsn1.your-objectstorage.com`. */
+  ARCHIVE_S3_ENDPOINT: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ARCHIVE_S3_REGION: {
+    validation: schema.string(),
+    default: 'auto',
+  },
+
+  ARCHIVE_S3_BUCKET: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ARCHIVE_S3_ACCESS_KEY_ID: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ARCHIVE_S3_SECRET_ACCESS_KEY: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ARCHIVE_S3_USE_SSL: {
+    validation: schema.boolean(),
+    default: true,
+  },
+
+  /** `path` suits Hetzner Object Storage, MinIO, and R2; `vhost` suits classic AWS. */
+  ARCHIVE_S3_URL_STYLE: {
+    validation: schema.enum(['path', 'vhost']),
+    default: 'path',
+  },
+
+  ARCHIVE_S3_PREFIX: {
+    validation: schema.string(),
+    default: 'logs',
+  },
+
+  /** Days of logs kept in the primary database. Older days age out to the archive. */
+  ARCHIVE_HOT_WINDOW_DAYS: {
+    validation: schema.number(),
+    default: 30,
+  },
+
+  /** Trim exported rows from the hot database once the Parquet row count checks out. */
+  ARCHIVE_DELETE_AFTER_VERIFY: {
+    validation: schema.boolean(),
+    default: true,
+  },
+
+  /** Extra days a free project's aged logs survive before pruning, so an upgrade still saves them. */
+  ARCHIVE_FREE_PRUNE_GRACE_DAYS: {
+    validation: schema.number(),
+    default: 7,
+  },
+
+  /** Absolute path to the duckdb binary. Empty resolves `duckdb` from PATH. */
+  ARCHIVE_DUCKDB_PATH: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ARCHIVE_EXPORT_TIMEOUT_MS: {
+    validation: schema.number(),
+    default: 300000,
+  },
+
+  ARCHIVE_QUERY_TIMEOUT_MS: {
+    validation: schema.number(),
+    default: 15000,
+  },
+
+  /** Parquet files one query may open. 62 is roughly two months of daily partitions. */
+  ARCHIVE_MAX_FILES_PER_QUERY: {
+    validation: schema.number(),
+    default: 62,
+  },
 } satisfies EnvConfig

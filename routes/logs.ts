@@ -8,7 +8,6 @@
  * bun-query-builder's `db`.
  */
 
-import { Auth } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { response, route } from '@stacksjs/router'
 import { authorizeIngest } from '../app/Errors/ingest'
@@ -17,6 +16,7 @@ import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } fr
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
 import { ownsLog, ownsProject } from '../app/Support/access'
+import { userFromRequest } from '../app/Support/request-auth'
 
 // Ingest abuse bounds. The public key gate is not enough on its own — a script
 // with the key (readable from any bundle) could flood the ingest. Per-entry
@@ -60,25 +60,6 @@ const CORS = {
 
 function json(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders } })
-}
-
-async function userFromRequest(request: any): Promise<any | null> {
-  const authHeader = request.headers?.get?.('authorization') ?? ''
-  let token = request.bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
-  if (!token) {
-    const cookie = request.headers?.get?.('cookie') ?? ''
-    const m = cookie.match(/(?:^|;)\s*loghq_token=([^;]+)/)
-    if (m)
-      token = decodeURIComponent(m[1])
-  }
-  if (!token)
-    return null
-  try {
-    return await Auth.getUserFromToken(token)
-  }
-  catch {
-    return null
-  }
 }
 
 // ---------------------------------------------------------------------------

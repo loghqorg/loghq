@@ -33,3 +33,20 @@ export function utcNow(): string {
 export function utcHoursAgo(hours: number): string {
   return toSqlUtc(new Date(Date.now() - hours * 60 * 60 * 1000))
 }
+
+/**
+ * A point `hours` in the past as a full ISO-8601 string, for comparisons against
+ * `log_entries.timestamp`.
+ *
+ * That column is a varchar holding whatever ISO-8601 instant the SDK reported,
+ * so it carries the `T` and the trailing `Z` that `utcHoursAgo` deliberately
+ * strips. The two are not interchangeable: comparing an ISO value against a
+ * `created_at`-shaped bound (or the reverse) compares two different string
+ * shapes and quietly matches the wrong rows, because `'2026-08-26T12:00:00Z'`
+ * and `'2026-08-26 12:00:00'` diverge at the eleventh character.
+ *
+ * Use this one for `timestamp`, `utcHoursAgo` for `created_at`/`updated_at`.
+ */
+export function utcIsoHoursAgo(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+}
