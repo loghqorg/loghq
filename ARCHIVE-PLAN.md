@@ -1,4 +1,4 @@
-# Log archive: what shipped, and what is still unproven
+# Log archive: what shipped, and how it was proven
 
 The tiered-storage plan is implemented and on `main`. This file is what remains
 of it: the state of the feature, the places the built thing differs from the
@@ -110,22 +110,59 @@ extension. The preamble now loads both, the deploy step caches both, and
 `tests/unit/archive-duckdb.test.ts` asserts both, since the builders emit an
 identical string either way and only a real binary could otherwise catch it.
 
-### What is still untested
+### The s3:// round trip, verified against MinIO
 
-No S3-compatible endpoint was available, so `s3://` itself has never been
-written to or read from: the URL construction and the secret are exercised, the
-network round trip is not. That is what step 4 of the rollout is for.
-
-### Reproducing the check
+MinIO is in pantry's catalog, so the whole path runs locally with no cloud
+account:
 
 ```bash
-mkdir -p /tmp/pt && cd /tmp/pt && pantry install duckdb.org
-BIN=/tmp/pt/pantry/.bin/duckdb
-$BIN -c "SET extension_directory='/tmp/ext'; INSTALL httpfs; INSTALL json; LOAD httpfs; LOAD json; SELECT 1"
+mkdir -p /tmp/pt && cd /tmp/pt
+pantry install min.io duckdb.org
+MINIO_ROOT_USER=loghqtest MINIO_ROOT_PASSWORD=loghqtest123 \
+  ./pantry/.bin/minio server /tmp/miniodata --address 127.0.0.1:9100 &
+mkdir -p /tmp/miniodata/loghq-archive
+./pantry/.bin/duckdb -c "SET extension_directory='/tmp/ext'; \
+  INSTALL httpfs; INSTALL json; LOAD httpfs; LOAD json; SELECT 1"
 ```
 
-Then drive the real builders, pointing the export at a file path instead of
-`s3://`, and confirm the Parquet reads back at the right count.
+Point `ARCHIVE_S3_ENDPOINT` at `127.0.0.1:9100` with `ARCHIVE_S3_USE_SSL=false`
+and `ARCHIVE_S3_URL_STYLE=path`. Driving the real `exportPartition` against that
+confirmed, end to end:
+
+- A day staged, written to `s3://`, verified, and the hot rows deleted only
+  after the count matched. The object is really in the bucket, checked with an
+  independent S3 client.
+- `parquet_metadata` reporting a real compressed size (923 bytes for 5 rows).
+- The ledger reaching `deleted`, recording the object path, releasing the claim.
+- Reading back through `s3://` with the real query builders: all rows, an
+  escaped quote (`it's a quote`), an embedded newline, and unicode
+  (`日本語 ✓`) all intact, plus the volume aggregation.
+- Re-running an emptied day being a no-op.
+- Wrong credentials failing loudly rather than returning an empty result.
+
+### A second bug, found only by doing it
+
+`CREATE SECRET` prints its own result set (`[{"Success":true}]`). Since the
+preamble runs in the same invocation as the query, stdout was two concatenated
+JSON arrays, which `JSON.parse` rejects. **Every archive query failed**, and the
+export marked partitions failed while their Parquet had been written correctly
+and completely. The local-file check in the previous round missed it because
+that harness only inspected exit codes.
+
+`parseResultSets` now scans bracket depth (tracking string literals, since log
+messages contain brackets) and the runner takes the last set, which is the
+caller's. Six unit tests cover it.
+
+Also hardened while here: `exportPartition` and `prunePartition` refuse to run
+without a claim row. They are exported, `markPartition` is an UPDATE, and
+without that guard a caller skipping `claimPartition` would delete hot rows and
+record nothing, leaving entries that exist only in a bucket nothing points at.
+
+### What is still untested
+
+Only the real providers. Hetzner Object Storage, R2, and AWS differ from MinIO
+in TLS and in whether they want path or vhost URL style, both of which are env
+values rather than code paths. Step 4 of the rollout is where that gets proven.
 
 ## Rollout
 

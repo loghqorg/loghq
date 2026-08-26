@@ -10,10 +10,12 @@
  *
  * Two conventions the rest of app/Archive/ relies on:
  *
- *   1. One result-producing statement per invocation. `-json` prints an array
- *      per result set, and concatenated arrays are not valid JSON, so anything
- *      that needs two result sets makes two calls (or, as in buildVerifySql,
- *      folds both into one row).
+ *   1. The caller's query is the LAST result-producing statement. `-json` prints
+ *      one array per result set, and the preamble already produces one of its
+ *      own (`CREATE SECRET` reports `[{"Success":true}]`), so stdout is
+ *      routinely several arrays concatenated, which is not valid JSON. See
+ *      parseResultSets. Anything needing two results of its own still makes two
+ *      calls, or folds both into one row as buildVerifySql does.
  *
  *   2. Credentials arrive in the script, never in argv or the child's
  *      environment. See s3Preamble.
@@ -97,6 +99,71 @@ export function redactScript(script: string): string {
 }
 
 /**
+ * Split duckdb's stdout into its separate result sets.
+ *
+ * `-json` prints one complete array per result set, one after another, so a
+ * script with more than one of them emits `[...]\n[...]`, which `JSON.parse`
+ * rejects outright. That is not an edge case here: every archive script carries
+ * the s3Preamble, and `CREATE SECRET` answers with `[{"Success":true}]` before
+ * the caller's query has run. Parsing the whole buffer therefore failed on
+ * every single query, and the export marked partitions failed while their
+ * Parquet had in fact been written correctly.
+ *
+ * Scanning bracket depth rather than splitting on a delimiter, because log
+ * messages legitimately contain `]` and `[`; string literals and their escapes
+ * are tracked so a bracket inside a message cannot close a result set early.
+ */
+export function parseResultSets(text: string): any[][] {
+  const sets: any[][] = []
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+
+    if (inString) {
+      if (escaped)
+        escaped = false
+      else if (ch === '\\')
+        escaped = true
+      else if (ch === '"')
+        inString = false
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+
+    if (ch === '[') {
+      if (depth === 0)
+        start = i
+      depth++
+    }
+    else if (ch === ']') {
+      depth--
+      if (depth === 0 && start >= 0) {
+        try {
+          const parsed = JSON.parse(text.slice(start, i + 1))
+          if (Array.isArray(parsed))
+            sets.push(parsed)
+        }
+        catch {
+          // A malformed set is skipped rather than failing the whole read: the
+          // caller's own result is the last one, and that is what matters.
+        }
+        start = -1
+      }
+    }
+  }
+
+  return sets
+}
+
+/**
  * Run a script and return its rows.
  *
  * Never throws for a query failure: the caller decides whether an unreadable
@@ -147,15 +214,14 @@ export async function runDuckDb(script: string, opts: { timeoutMs: number, cfg?:
     if (!text)
       return { ok: true, rows: [], stderr: stderr.trim(), code: 0 }
 
-    try {
-      const parsed = JSON.parse(text)
-      return { ok: true, rows: Array.isArray(parsed) ? parsed : [parsed], stderr: stderr.trim(), code: 0 }
-    }
-    catch {
-      // Valid exit, unreadable output. Almost always the one-result-set
-      // convention having been broken by a caller.
+    const sets = parseResultSets(text)
+    if (!sets.length) {
       return { ok: false, rows: [], stderr: `unparseable duckdb output: ${text.slice(0, 200)}`, code: 0 }
     }
+
+    // The caller's query is the last statement in the script, so its result is
+    // the last set. Everything before it is preamble chatter.
+    return { ok: true, rows: sets[sets.length - 1], stderr: stderr.trim(), code: 0 }
   }
   finally {
     clearTimeout(timer)

@@ -155,6 +155,24 @@ export async function claimPartition(projectId: string, day: Day, token: string)
   return row?.claim_token === token && row?.status === 'exporting'
 }
 
+/**
+ * Confirm the ledger row this run is about to write to actually exists.
+ *
+ * `markPartition` is an UPDATE, so without a claim it silently matches nothing.
+ * That is the one genuinely dangerous shape in this file: the export would write
+ * its Parquet, delete the hot rows, and record none of it, leaving entries that
+ * exist only in a bucket nothing points at. runArchive always claims first, so
+ * this cannot happen through the normal path, but exportPartition and
+ * prunePartition are exported and a future caller will not know that.
+ */
+async function assertClaimed(projectId: string, day: Day): Promise<boolean> {
+  const row = (await db.unsafe(
+    'SELECT 1 AS ok FROM archive_partitions WHERE project_id = $1 AND day = $2 LIMIT 1',
+    [projectId, day],
+  ))?.[0]
+  return !!row
+}
+
 async function markPartition(projectId: string, day: Day, fields: Record<string, any>): Promise<void> {
   const keys = Object.keys(fields)
   const sets = keys.map((k, i) => `"${k}" = $${i + 1}`)
@@ -289,6 +307,12 @@ export async function exportPartition(cfg: ArchiveConfig, projectId: string, day
   const key = objectKeyFor(cfg.prefix, projectId, day)
   let dir: string | null = null
 
+  if (!(await assertClaimed(projectId, day))) {
+    const error = 'no archive_partitions row: claimPartition must run before exportPartition'
+    log.warn(`[archive] refusing to export ${projectId} ${day}: ${error}`)
+    return { projectId, day, status: 'failed', rows: 0, bytes: null, error }
+  }
+
   try {
     dir = await mkdtemp(join(tmpdir(), 'loghq-archive-'))
     const ndjsonPath = join(dir, 'part.ndjson')
@@ -371,6 +395,12 @@ export async function exportPartition(cfg: ArchiveConfig, projectId: string, day
  * their logs went deserves an answer more precise than "retention".
  */
 export async function prunePartition(projectId: string, day: Day): Promise<ExportOutcome> {
+  if (!(await assertClaimed(projectId, day))) {
+    const error = 'no archive_partitions row: claimPartition must run before prunePartition'
+    log.warn(`[archive] refusing to prune ${projectId} ${day}: ${error}`)
+    return { projectId, day, status: 'failed', rows: 0, bytes: null, error }
+  }
+
   try {
     const removed = await deleteDay(projectId, day)
     await markPartition(projectId, day, { status: 'pruned', row_count: removed, object_path: null, error: null, claim_token: null })

@@ -9,7 +9,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { type ArchiveConfig, archiveReady } from '../../app/Archive/config'
-import { duckdbBinary, redactScript, s3Preamble } from '../../app/Archive/duckdb'
+import { duckdbBinary, parseResultSets, redactScript, s3Preamble } from '../../app/Archive/duckdb'
 
 function cfg(overrides: Partial<ArchiveConfig> = {}): ArchiveConfig {
   return {
@@ -161,5 +161,47 @@ describe('archiveReady', () => {
 
   test('does not leak the secret it is complaining about', () => {
     expect(archiveReady(cfg({ endpoint: '' }))).not.toContain('sup3r-s3cret-value')
+  })
+})
+
+describe('parseResultSets', () => {
+  // Regression, found by running the export against a real MinIO. Every script
+  // carries the s3Preamble, and CREATE SECRET answers with its own result set,
+  // so stdout is two arrays back to back. JSON.parse rejected the pair, so every
+  // query "failed" while the Parquet it had just written was perfectly fine.
+  test('reads the query result when the preamble printed one first', () => {
+    const stdout = '[{"Success":true}]\n[{"n":5,"bytes":"923"}]'
+    const sets = parseResultSets(stdout)
+    expect(sets).toHaveLength(2)
+    // The caller's query is last; that is the one that matters.
+    expect(sets[sets.length - 1]).toEqual([{ n: 5, bytes: '923' }])
+  })
+
+  test('a single result set still works', () => {
+    expect(parseResultSets('[{"a":1}]')).toEqual([[{ a: 1 }]])
+  })
+
+  test('an empty result set is preserved, not dropped', () => {
+    const sets = parseResultSets('[{"Success":true}]\n[]')
+    expect(sets[sets.length - 1]).toEqual([])
+  })
+
+  // Log messages are arbitrary text and routinely contain brackets and quotes.
+  // A delimiter split would tear the set apart here; depth scanning does not.
+  test('brackets inside a message do not end a result set early', () => {
+    const stdout = '[{"Success":true}]\n[{"message":"array [0] failed ] oops","id":"a1"}]'
+    const last = parseResultSets(stdout).at(-1)!
+    expect(last).toHaveLength(1)
+    expect((last[0] as any).message).toBe('array [0] failed ] oops')
+  })
+
+  test('an escaped quote before a bracket does not confuse the scanner', () => {
+    const stdout = String.raw`[{"message":"he said \"] done\" then [","id":"a2"}]`
+    const last = parseResultSets(stdout).at(-1)!
+    expect((last[0] as any).message).toBe('he said "] done" then [')
+  })
+
+  test('returns nothing for output that holds no array', () => {
+    expect(parseResultSets('some error text')).toEqual([])
   })
 })
