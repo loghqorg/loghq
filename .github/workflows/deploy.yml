@@ -177,13 +177,11 @@ jobs:
       # Idempotent by design. This runs on every deploy and does nothing at all
       # once the binary is present, which is the normal case.
       #
-      # The official release tarball rather than a source build: the pantry
-      # recipe compiles httpfs in, but building duckdb from source on the box
-      # would add cmake, OpenSSL headers and several minutes to a deploy that
-      # otherwise takes seconds. The released CLI has httpfs available as an
-      # installable extension instead, which the next line caches once into
-      # ~/.duckdb so later runs need no egress. Same capability, reached the
-      # other way.
+      # The official release tarball rather than a source build: building duckdb
+      # from source on the box would add cmake, OpenSSL headers and several
+      # minutes to a deploy that otherwise takes seconds. The released CLI has
+      # both extensions the archive needs available for install, which the step
+      # below caches once so later runs need no egress.
       #
       # Non-fatal on purpose, unlike the migrate above. A box without duckdb
       # serves every page correctly; the only thing that stops is the nightly
@@ -222,15 +220,20 @@ jobs:
               rm -rf \"\$tmp\"
               echo \"installed: \$(duckdb --version)\"
             fi
-            # Cache httpfs so the archive never reaches for the network at query
-            # time. Already-installed is a no-op, and a failure here is not fatal:
-            # the job reports it far more usefully than a deploy step can.
+            # Cache both extensions so the archive never reaches for the network
+            # at query time. httpfs reaches s3://; json provides read_json, which
+            # the export stages its NDJSON through. Missing json is not a
+            # degraded mode, it is every export failing with \"Table Function
+            # with name read_json is not in the catalog\".
+            #
+            # Already-installed is a no-op, and a failure here is not fatal: the
+            # job reports it far more usefully than a deploy step can.
             mkdir -p ${EXT_DIR}
-            if duckdb -c \"SET extension_directory='${EXT_DIR}'; INSTALL httpfs; LOAD httpfs; SELECT 1\" >/dev/null 2>&1; then
+            if duckdb -c \"SET extension_directory='${EXT_DIR}'; INSTALL httpfs; INSTALL json; LOAD httpfs; LOAD json; SELECT 1\" >/dev/null 2>&1; then
               chmod -R a+rX ${EXT_DIR}
-              echo 'httpfs ready in ${EXT_DIR}'
+              echo 'httpfs and json ready in ${EXT_DIR}'
             else
-              echo 'WARNING: could not prepare httpfs; the archive job will report it'
+              echo 'WARNING: could not prepare duckdb extensions; the archive job will report it'
             fi
           "
 

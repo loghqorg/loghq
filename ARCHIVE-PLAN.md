@@ -2,7 +2,7 @@
 
 The tiered-storage plan is implemented and on `main`. This file is what remains
 of it: the state of the feature, the places the built thing differs from the
-plan, and the one path that has never run against a real DuckDB binary.
+plan, and what remains unproven.
 
 For how the feature works, read the code. `app/Archive/` carries the reasoning
 in its docblocks, and `DEPLOY.md` covers provisioning and environment.
@@ -38,6 +38,20 @@ Off by default. `ARCHIVE_ENABLED=false` makes the job log and return.
 - **`runArchiveIfEnabled` returns a reason, not null.** The original only
   logged, so `buddy archive:run` printed nothing and exited non-zero when the
   archive was off. Found by running it.
+- **`pantry install` was misread as broken.** An earlier note here claimed the
+  CLI reported success while writing no binary. It does write one: `pantry
+  install duckdb.org`installs *project-locally*, into`./pantry/.bin/duckdb`
+  and `./pantry/duckdb.org/<version>/bin/duckdb`, and the original check only
+  looked in global locations. There is no pantry bug.
+- **The pantry binary is a prebuilt, and cannot carry compiled-in extensions.**
+  `duckdb.org` is not in pantry's `CUSTOM_BUILD_DOMAINS`, so its publish
+  pipeline mirrors pkgx's official prebuilt rather than running the recipe's
+  build script: every version logs `Mirrored duckdb.org@x from pkgx - no source
+  build`. An attempt to add `-DBUILD_HTTPFS_EXTENSION=1` to the recipe was
+  therefore reverted upstream, along with a runtime openssl dependency the
+  mirrored binary does not link. Development and production both use the same
+  cached-extension approach instead: `INSTALL httpfs; INSTALL json` once into
+  an `extension_directory`, which is what the deploy step does.
 - **Two pre-existing production bugs fixed in passing.** `dashboard.stx`
   filtered with `timestamp::timestamptz >= NOW() - INTERVAL '...'` and searched
   with `ILIKE`. Against SQLite those do not degrade, they throw
@@ -63,50 +77,55 @@ Against a running dev server and real SQLite:
   reclaimed with `attempts` incremented and `error` cleared.
 - 185 unit tests, including 41 on the SQL builder's escaping and whitelisting.
 
-## Not verified: the Pro export path
+## The Pro export path, verified
 
-**No DuckDB binary was ever available on the development machine**, so nothing
-that actually invokes `duckdb` has run. `pantry install duckdb.org` reports
-success and `pantry list` shows the package, but no binary is written to disk
-anywhere (a pantry CLI bug, tracked separately). There is no Homebrew on the
-machine either.
+The DuckDB SQL has now been executed against a real binary (DuckDB 1.5.5 on
+macOS arm64), with the `s3://` target swapped for a local path so no bucket was
+needed. Everything the builders emit is accepted:
 
-What that leaves unproven is the DuckDB SQL *dialect*, not its construction. The
-builders are unit-tested for escaping, whitelisting, shape, and the dialect-token
-ban; what has not happened is DuckDB accepting them. Specifically:
-
-- `CREATE SECRET (TYPE s3, ...)` syntax and the `URL_STYLE`/`USE_SSL` keys.
-- `read_json(path, format='newline_delimited', columns={...})` with every column
-  pinned to `'VARCHAR'`.
-- `COPY (...) TO 's3://...' (FORMAT parquet, COMPRESSION zstd)`.
-- `parquet_metadata(...)` and `total_compressed_size` as the size source.
+- `CREATE SECRET (TYPE s3, ...)` including the `URL_STYLE` and `USE_SSL` keys.
+- `read_json(path, format='newline_delimited', columns={...'VARCHAR'})`, and the
+  pinning works: a message of `12345` reads back as VARCHAR, not a number.
+- `COPY (...) TO '...' (FORMAT parquet, COMPRESSION zstd)`.
+- `parquet_metadata(...).total_compressed_size` as the size source, in the same
+  single-row result as the count.
 - The row-value cursor `("timestamp", "id") < (ts, id)`.
+- `substr(timestamp, 1, 10)` and `(…, 1, 13)` bucketing, `coalesce("release", …)`,
+  `ILIKE`, quote escaping (`it's` round-trips), and an embedded newline staying
+  one row.
 - `-batch -json` framing for one result set per invocation.
 
-Everything above is standard DuckDB and taken from its documented surface, but
-none of it has been executed.
+### One real bug, found by doing it
 
-### How to close it
+The preamble loaded `httpfs` and nothing else, so every export would have failed
+on:
 
-On any machine with the binary (or on the box after a deploy):
-
-```bash
-duckdb -c "LOAD httpfs; SELECT 1"
+```
+Catalog Error: Table Function with name "read_json" is not in the catalog,
+but it exists in the json extension.
 ```
 
-Then a local round trip that exercises the real builders without needing a
-bucket, by pointing the export at a file path instead of `s3://`:
+`buildExportSql` stages through `read_json`, which lives in the **json**
+extension. The preamble now loads both, the deploy step caches both, and
+`tests/unit/archive-duckdb.test.ts` asserts both, since the builders emit an
+identical string either way and only a real binary could otherwise catch it.
+
+### What is still untested
+
+No S3-compatible endpoint was available, so `s3://` itself has never been
+written to or read from: the URL construction and the secret are exercised, the
+network round trip is not. That is what step 4 of the rollout is for.
+
+### Reproducing the check
 
 ```bash
-bun -e "
-const { buildExportSql, buildVerifySql } = await import('./app/Archive/sql.ts')
-console.log(buildExportSql('bucket', 'k.parquet', '/tmp/part.ndjson'))
-"
+mkdir -p /tmp/pt && cd /tmp/pt && pantry install duckdb.org
+BIN=/tmp/pt/pantry/.bin/duckdb
+$BIN -c "SET extension_directory='/tmp/ext'; INSTALL httpfs; INSTALL json; LOAD httpfs; LOAD json; SELECT 1"
 ```
 
-Run that SQL against a staged NDJSON file with the `s3://` target swapped for a
-local path and confirm the file is written and reads back at the right count.
-After that, the real sequence is the rollout below.
+Then drive the real builders, pointing the export at a file path instead of
+`s3://`, and confirm the Parquet reads back at the right count.
 
 ## Rollout
 
@@ -121,10 +140,3 @@ After that, the real sequence is the rollout below.
    the first night. Inspect the written Parquet and the `archive_partitions`
    rows.
 5. Enable deletion.
-
-## Left alone deliberately
-
-`routes/logs.ts:201` still uses `ILIKE` in the stream API, which is not SQLite.
-It is the same class of bug as the dashboard one fixed here, but it sits on a
-path this change does not touch, and it deserves its own fix and its own test
-rather than being folded into a feature commit.

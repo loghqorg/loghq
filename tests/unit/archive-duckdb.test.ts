@@ -80,6 +80,25 @@ describe('s3Preamble', () => {
   test('never emits INSTALL, which would need egress at query time', () => {
     expect(s3Preamble(cfg({ duckdbExtensionDir: '/tmp/ext' }))).not.toContain('INSTALL')
   })
+
+  // Regression. The preamble originally loaded only httpfs, and every export
+  // died on `Table Function with name "read_json" is not in the catalog`,
+  // because buildExportSql stages through read_json. It was invisible to the
+  // rest of the suite: the builders produce the same string either way, so
+  // nothing but a real duckdb could catch it. These two assertions are what
+  // stands in for that binary in CI.
+  test('loads both extensions the archive actually uses', () => {
+    const sql = s3Preamble(cfg())
+    // httpfs reaches s3:// URLs.
+    expect(sql).toContain('LOAD httpfs;')
+    // json provides read_json, which the export reads its staged NDJSON with.
+    expect(sql).toContain('LOAD json;')
+  })
+
+  test('loads json before any statement that could use read_json', () => {
+    const script = `${s3Preamble(cfg())}\nCOPY (SELECT * FROM read_json('/tmp/x.ndjson')) TO 's3://b/k.parquet';`
+    expect(script.indexOf('LOAD json')).toBeLessThan(script.indexOf('read_json('))
+  })
 })
 
 describe('redactScript', () => {

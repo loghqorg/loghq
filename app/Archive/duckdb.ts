@@ -49,23 +49,26 @@ export function duckdbBinary(cfg?: Pick<ArchiveConfig, 'duckdbPath'>): string {
  * route is a compatibility shim that covers those knobs inconsistently. And a
  * script on stdin never appears in `ps` output, where an argv would.
  *
- * `LOAD httpfs` never has a matching `INSTALL`, on either of the two ways this
- * binary reaches a box. The pantry recipe used in development compiles httpfs
- * straight into the binary. Production installs the official release CLI and
- * caches the extension once at deploy time, into the directory named by
- * ARCHIVE_DUCKDB_EXTENSION_DIR. Both leave `LOAD` able to succeed offline, and
- * an INSTALL here would turn every query into a download attempt from a host
- * that may have no egress at all.
+ * Two extensions are loaded, and both are needed. httpfs reaches s3:// URLs.
+ * json provides `read_json`, which the export reads its staged NDJSON with:
+ * without it every export dies on `Table Function with name "read_json" is not
+ * in the catalog`, which is exactly how this was found.
  *
- * The extension directory is set explicitly rather than left to default,
- * because the default is per-user (`~/.duckdb`) and the deploy step that
- * populates it does not necessarily run as the user the scheduler runs as. A
- * shared path makes that irrelevant.
+ * Neither `LOAD` has a matching `INSTALL`. The extensions are cached once, into
+ * the directory named by ARCHIVE_DUCKDB_EXTENSION_DIR: on the box by the deploy
+ * step, in development by the setup in ARCHIVE-PLAN.md. An INSTALL here would
+ * turn every query into a download attempt from a host that may have no egress,
+ * and would fail closed on a slow or blocked network rather than working.
+ *
+ * The directory is set explicitly rather than left to default, because the
+ * default is per-user (`~/.duckdb`) and the deploy step that populates it does
+ * not run as the user the scheduler runs as.
  */
 export function s3Preamble(cfg: ArchiveConfig): string {
   return [
     ...(cfg.duckdbExtensionDir ? [`SET extension_directory=${sqlQuote(cfg.duckdbExtensionDir)};`] : []),
     'LOAD httpfs;',
+    'LOAD json;',
     'CREATE OR REPLACE SECRET loghq_archive (',
     '  TYPE s3,',
     `  KEY_ID ${sqlQuote(cfg.accessKeyId)},`,
