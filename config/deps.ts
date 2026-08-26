@@ -34,6 +34,9 @@ export const config: PantryConfig = {
   dependencies: {
     "bun.com": "^1.3.0",
     "sqlite.org": "^3.47.2",
+    // Reads the Parquet log archive (see app/Archive/). Built with the httpfs
+    // extension via the pantry recipe so s3:// URLs work without INSTALL.
+    "duckdb.org": "^1.5",
     craft: "^0.0.1",
     // Uncomment as needed:
     // 'redis.io': '^7.4.1',
