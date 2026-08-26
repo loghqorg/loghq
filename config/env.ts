@@ -1,4 +1,5 @@
-import type { EnvConfig } from '@stacksjs/env'
+import type { InferEnv } from '@stacksjs/env'
+import { defineEnv } from '@stacksjs/env'
 import { schema } from '@stacksjs/validation'
 
 /**
@@ -7,8 +8,13 @@ import { schema } from '@stacksjs/validation'
  * This configuration defines all of your Env validations. Because Stacks is fully-typed, you
  * may hover any of the options below and the definitions will be provided. In case you
  * have any questions, feel free to reach out via Discord or GitHub Discussions.
+ *
+ * This file is also where `env` gets its types. Declare a variable here and
+ * `env.YOUR_VARIABLE` is typed everywhere, from its validator. Nothing is
+ * generated, so a variable that only ever exists in the deploy secrets is
+ * typed exactly like one in the local `.env`.
  */
-export default {
+const envSchema = defineEnv({
   APP_NAME: {
     validation: schema.string(),
     default: 'Stacks',
@@ -415,4 +421,68 @@ export default {
     validation: schema.number(),
     default: 62,
   },
-} satisfies EnvConfig
+
+  /**
+   * Variables the app reads but only ever sets in deploy secrets.
+   *
+   * Declared here so they are typed. Nothing generates these: the generator
+   * only ever saw the variables present in a local `.env`, which none of these
+   * are, so they were untyped everywhere they were read.
+   */
+  LOGHQ_INGEST_URL: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  AUTH_PASSWORD_RESET_URL: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  APP_SERVER_IP: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  STRIPE_WEBHOOK_SECRET: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  AI_FIX_ENABLED: {
+    validation: schema.boolean(),
+    default: true,
+  },
+
+  AI_FIX_MAX_CONTEXT_BYTES: {
+    validation: schema.number(),
+    default: 48 * 1024,
+  },
+
+  AI_FIX_CORRELATED_ENTRIES: {
+    validation: schema.number(),
+    default: 12,
+  },
+
+  AI_FIX_CACHE_HOURS: {
+    validation: schema.number(),
+    default: 168,
+  },
+
+  AI_FIX_TIMEOUT_MS: {
+    validation: schema.number(),
+    default: 90_000,
+  },
+})
+
+/**
+ * Teach `env` about the variables declared above.
+ *
+ * Interface declaration merging: this adds the schema's keys to `StacksEnv`,
+ * which is the type of the `env` that every `config/` file and action reads.
+ */
+declare module '@stacksjs/env' {
+  interface StacksEnv extends InferEnv<typeof envSchema> {}
+}
+
+export default envSchema
