@@ -43,6 +43,7 @@ import {
 } from './partitions'
 import { plansFor } from './plan'
 import { ARCHIVE_COLUMNS, buildExportSql, buildVerifySql } from './sql'
+import { purgeProjectArchive } from './storage'
 
 /** Rows read from the hot database per page while staging. */
 const PAGE_SIZE = 5000
@@ -566,4 +567,58 @@ export async function runArchiveIfEnabled(opts: RunOptions = {}): Promise<RunOut
   }
 
   return { ran: true, summary: await runArchive({ ...opts, cfg }) }
+}
+
+/**
+ * Remove every trace of a project from the archive: the Parquet objects and the
+ * ledger rows that point at them.
+ *
+ * Called from project deletion. The ledger is read first and cleared last, so a
+ * failure part way through leaves rows behind that still name the objects,
+ * which is the recoverable order. Clearing the ledger first would strand any
+ * object whose delete had not happened yet with nothing left pointing at it.
+ *
+ * Never throws. A project deletion that half-succeeds because an object store
+ * was unreachable is worse than one that completes and logs what it could not
+ * reach: the database rows are the thing the user is waiting on.
+ */
+export async function purgeProject(projectId: string, opts: { cfg?: ArchiveConfig } = {}): Promise<{ objects: number, failed: number, rows: number }> {
+  let objects = 0
+  let failed = 0
+
+  const rows = await db.unsafe(
+    'SELECT object_path FROM archive_partitions WHERE project_id = $1 AND object_path IS NOT NULL',
+    [projectId],
+  )
+  const keys = (rows ?? []).map((r: any) => String(r.object_path)).filter(Boolean)
+
+  if (keys.length) {
+    const cfg = opts.cfg ?? archiveConfig()
+    // Only reach for the bucket when it is actually configured. A project
+    // deleted on an install that never turned the archive on has ledger rows
+    // only if it was turned on once, and pointing a purge at empty credentials
+    // would just log noise.
+    const notConfigured = archiveReady(cfg)
+    if (notConfigured == null) {
+      try {
+        const result = await purgeProjectArchive(cfg, projectId, keys)
+        objects = result.deleted
+        failed = result.failed
+      }
+      catch (error) {
+        failed = keys.length
+        log.warn(`[archive] purge failed for project ${projectId}: ${error}`)
+      }
+    }
+    else {
+      failed = keys.length
+      log.warn(`[archive] project ${projectId} has ${keys.length} archived objects but ${notConfigured}, so they were left in place`)
+    }
+  }
+
+  const ledger = await db.unsafe('SELECT COUNT(*) AS n FROM archive_partitions WHERE project_id = $1', [projectId])
+  const rowCount = Number(ledger?.[0]?.n ?? 0)
+  await db.unsafe('DELETE FROM archive_partitions WHERE project_id = $1', [projectId])
+
+  return { objects, failed, rows: rowCount }
 }

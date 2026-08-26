@@ -12,6 +12,8 @@ import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
 import { type ChannelType, sendTestAlert, validateWebhook } from '../app/Errors/channels'
 import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites'
+import { purgeProject } from '../app/Archive/exporter'
+import { log } from '@stacksjs/logging'
 // Shared with the page action in resources/views/projects/new.stx, so the two
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
@@ -198,6 +200,15 @@ route.delete('/api/projects/{projectId}', async (request: any) => {
   const projectId = request.params.projectId
   if (!(await ownsProject(user, projectId)))
     return json({ error: 'not found' }, 404)
+
+  // The archive first, while its ledger still names the objects. Deleting the
+  // rows below would otherwise strand every exported Parquet in the bucket with
+  // nothing left pointing at it: the logs would outlive the project, and the
+  // consent to hold them. Never throws, so an unreachable bucket cannot block
+  // the deletion the user asked for; it logs what it could not remove.
+  const purged = await purgeProject(projectId)
+  if (purged.failed)
+    log.warn(`[projects] deleted ${projectId} but ${purged.failed} archived objects could not be removed`)
 
   await db.unsafe('DELETE FROM log_entries WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM alert_channels WHERE project_id = $1', [projectId])

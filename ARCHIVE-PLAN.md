@@ -202,6 +202,41 @@ ARCHIVE_S3_CA_CERT_FILE=                          # leave empty
 
 and `buddy archive:run --dry-run` on the box is the first thing to run.
 
+## Native Stacks usage, and two framework bugs
+
+Audited after the fact for whether this leans on the framework where it should.
+
+Using native Stacks: `defineCommand` (auto-discovered from `app/Commands/`, no
+registry entry needed), `Job` + `schedule.job().daily().at()`, the route
+registry, `schema` in `config/env.ts`, `db.unsafe` with bound parameters as the
+rest of the app does, and `ownsProject` for authorization.
+
+Deliberately not using a model for `archive_partitions`: the repo's own
+migrations document that adding one makes the framework renumber and wipe
+hand-written migrations.
+
+**`@stacksjs/storage` should own object deletion, and does not yet.** Deleting a
+project used to remove its hot rows and leave every archived Parquet in the
+bucket forever, along with orphaned ledger rows: logs outliving the project, and
+the consent to hold them. Fixed, but implemented on Bun's built-in S3 client
+rather than the framework, because the S3 adapter has two defects that only
+showed up against a live MinIO:
+
+1. `S3DiskConfig.credentials` is publicly typed `{ key, secret }`, while
+   `S3StorageAdapter` reads `credentials.accessKeyId` / `.secretAccessKey`.
+   Configuring a disk the way the exported type documents leaves the adapter
+   with no credentials, silently falling back to `AWS_*` env vars.
+2. `resolveS3ClientOptions` strips the scheme from the endpoint, on the stated
+   grounds that "ts-cloud wants a scheme-less host". ts-cloud's own
+   `S3ClientOptions.endpoint` documents an "HTTP(S) endpoint origin or host", so
+   the strip is what makes a plain-http endpoint unreachable, ruling out MinIO
+   and any local verification.
+
+`app/Archive/storage.ts` is the single seam to swap once a release carries the
+fixes. Worth abstracting upstream separately: the DuckDB CLI runner and
+`parseResultSets` are entirely app-agnostic and would suit a `@stacksjs/duckdb`
+package.
+
 ## Rollout
 
 1. Provision a bucket (Hetzner Object Storage, R2, MinIO, or AWS: only the env
