@@ -94,8 +94,42 @@ describe('timestamps are written in a dialect SQLite accepts', () => {
   })
 })
 
+describe('the Postgres-only forms really do fail on SQLite', () => {
+  test('ILIKE is a parse error, not a slower LIKE', () => {
+    // This is why the scan below covers it. ILIKE reads as a harmless dialect
+    // preference, so it survived the first sweep, and every text search in the
+    // stream API and the dashboard threw for as long as it was there.
+    const db = new Database(':memory:')
+    db.run('CREATE TABLE t (message text)')
+    expect(() => db.query('SELECT 1 FROM t WHERE message ILIKE ?').all('%x%')).toThrow(/ILIKE/i)
+  })
+
+  test('lower(...) LIKE lower(...) is the portable spelling, and matches either case', () => {
+    const db = new Database(':memory:')
+    db.run('CREATE TABLE t (message text)')
+    db.run('INSERT INTO t (message) VALUES (?)', ['Checkout FAILED for user'])
+    const hit = db.query('SELECT message FROM t WHERE lower(message) LIKE ?').all('%failed%')
+    expect(hit).toHaveLength(1)
+    // And a bare LIKE would have been case-sensitive on Postgres, which is the
+    // reason both sides are folded rather than just the column.
+    expect(db.query('SELECT message FROM t WHERE lower(message) LIKE ?').all('%CHECKOUT%'.toLowerCase())).toHaveLength(1)
+  })
+})
+
 describe('no statement reintroduces the Postgres-only forms', () => {
-  test('app/ and routes/ issue no NOW() or AT TIME ZONE in SQL', () => {
+  // Files whose SQL is executed by DuckDB rather than by the application
+  // database. DuckDB is a different engine with a different dialect: it has
+  // ILIKE, and app/Archive/sql.ts uses it deliberately. Excluding the file
+  // wholesale would also stop watching it for NOW() and friends, so the scan
+  // narrows the pattern for these paths instead of skipping them.
+  const DUCKDB_SOURCES = new Set(['app/Archive/sql.ts'])
+
+  // Postgres-only spellings that SQLite rejects outright. Each one has actually
+  // shipped to production in this app.
+  const HOT_DB_ONLY = /NOW\(\)|AT TIME ZONE|::interval|\bILIKE\b/
+  const DUCKDB_OK = /NOW\(\)|AT TIME ZONE|::interval/
+
+  test('app/ and routes/ issue no Postgres-only SQL against the app database', () => {
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -106,18 +140,53 @@ describe('no statement reintroduces the Postgres-only forms', () => {
         }
         if (!entry.name.endsWith('.ts'))
           continue
+        const rel = path.replace(`${ROOT}/`, '')
+        const pattern = DUCKDB_SOURCES.has(rel) ? DUCKDB_OK : HOT_DB_ONLY
         readFileSync(path, 'utf8').split('\n').forEach((line, i) => {
           // Comments describe the bug on purpose; only executable SQL counts.
           const code = line.trim()
           if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*'))
             return
-          if (/NOW\(\)|AT TIME ZONE|::interval/.test(line))
-            offenders.push(`${path.replace(`${ROOT}/`, '')}:${i + 1}`)
+          if (pattern.test(line))
+            offenders.push(`${rel}:${i + 1}`)
         })
       }
     }
     walk(join(ROOT, 'app'))
     walk(join(ROOT, 'routes'))
     expect(offenders).toEqual([])
+  })
+
+  // The first sweep missed the dashboard entirely because it only walked .ts,
+  // and .stx server blocks are where half this app's SQL lives. Both of the
+  // bugs fixed alongside the log archive were in a .stx file.
+  test('stx server blocks issue no Postgres-only SQL either', () => {
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          walk(path)
+          continue
+        }
+        if (!entry.name.endsWith('.stx'))
+          continue
+        readFileSync(path, 'utf8').split('\n').forEach((line, i) => {
+          const code = line.trim()
+          if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*') || code.startsWith('{{--'))
+            return
+          if (HOT_DB_ONLY.test(line))
+            offenders.push(`${path.replace(`${ROOT}/`, '')}:${i + 1}`)
+        })
+      }
+    }
+    walk(join(ROOT, 'resources', 'views'))
+    expect(offenders).toEqual([])
+  })
+
+  test('the DuckDB exemption is real, so it cannot rot into a blanket skip', () => {
+    // If app/Archive/sql.ts stops using ILIKE, the exemption should go too.
+    const sql = readFileSync(join(ROOT, 'app', 'Archive', 'sql.ts'), 'utf8')
+    expect(sql).toContain('ILIKE')
   })
 })

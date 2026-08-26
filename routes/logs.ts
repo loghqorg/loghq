@@ -177,9 +177,15 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
     where.push(`request_id = $${params.length}`)
   }
   // Full-text-ish search over the message.
+  //
+  // lower(...) LIKE lower(...), not ILIKE. ILIKE is Postgres-only and this app
+  // runs SQLite, where it is a parse error rather than a slow path: every
+  // search request through this endpoint threw. A bare LIKE would fix SQLite
+  // and quietly become case-sensitive the day this moves to Postgres, so both
+  // sides are folded instead. Same shape as the dashboard's own search.
   if (q.q) {
-    params.push(`%${String(q.q).slice(0, 200)}%`)
-    where.push(`message ILIKE $${params.length}`)
+    params.push(`%${String(q.q).slice(0, 200).toLowerCase()}%`)
+    where.push(`lower(message) LIKE $${params.length}`)
   }
   // Keyset pagination: fetch older than this timestamp cursor.
   if (q.before) {
