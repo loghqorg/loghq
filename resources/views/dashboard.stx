@@ -27,6 +27,12 @@ import { db as __db } from '@stacksjs/database'
 // rows and calls no model, so it must not pull `@stacksjs/ai` in behind a
 // question it only asks to decide whether to draw a link.
 import { fixableLevel, fixEnabled } from '../../app/Fix/policy'
+// The archive scope reads Parquet rather than log_entries. Same functions the
+// API routes call, so the page and the API cannot answer differently.
+import { archiveSummary, searchArchive } from '../../app/Archive/query'
+import { archiveConfig } from '../../app/Archive/config'
+import { projectPlan } from '../../app/Archive/plan'
+import { utcIsoHoursAgo } from '../../app/Support/time'
 
 // __stxServeSearch is a context local, injected onto THIS render's context by
 // the serve path immediately before the block runs — not a global to reach
@@ -62,24 +68,41 @@ const levelSet = (levelFilter === 'all' || levelFilter === 'debug')
 // Free-text search over the message (bounded, passed as a bound param).
 const search = (query.get('q') || '').slice(0, 200)
 
-// Date ranges are a whitelist: the key comes from the URL, but only the mapped
-// interval string (never the raw param) is ever interpolated into SQL.
+// Date ranges are a whitelist: the key comes from the URL, and nothing derived
+// from it is interpolated into SQL at all. `hours` drives the query as a bound
+// cutoff, `interval` is the phrase the empty state prints.
+//
+// `hours` exists because the SQL here used to read
+// `timestamp::timestamptz >= NOW() - INTERVAL '24 hours'`, which is Postgres and
+// this app runs SQLite. Both halves throw there, so every range except All time
+// failed, was swallowed by the catch below, and rendered the degraded `live =
+// false` state in production. See app/Support/time.ts for the same fault
+// costing log_fix_runs every row it ever tried to write.
 interface LogRange {
   key: string
   label: string
+  /** Hours back from now, or null for no bound. */
+  hours: number | null
+  /** How the window reads in prose, for the empty state. */
   interval: string | null
+  /** Reads the Parquet archive rather than the hot database. */
+  archive?: boolean
 }
 
 // Named, and placed in the list rather than duplicated beside it, so the
 // fallback below cannot drift from the tab the UI renders as selected.
-const DEFAULT_RANGE: LogRange = { key: '24h', label: '24h', interval: '24 hours' }
+const DEFAULT_RANGE: LogRange = { key: '24h', label: '24h', hours: 24, interval: '24 hours' }
 
 const RANGES: LogRange[] = [
-  { key: '1h', label: '1h', interval: '1 hour' },
+  { key: '1h', label: '1h', hours: 1, interval: '1 hour' },
   DEFAULT_RANGE,
-  { key: '7d', label: '7d', interval: '7 days' },
-  { key: '30d', label: '30d', interval: '30 days' },
-  { key: 'all', label: 'All time', interval: null },
+  { key: '7d', label: '7d', hours: 24 * 7, interval: '7 days' },
+  { key: '30d', label: '30d', hours: 24 * 30, interval: '30 days' },
+  { key: 'all', label: 'All time', hours: null, interval: null },
+  // Everything that has aged out of the hot window and been written to Parquet.
+  // A separate scope rather than a longer range: these rows are not in
+  // log_entries any more, so they answer to a different query path entirely.
+  { key: 'archive', label: 'Archive', hours: null, interval: null, archive: true },
 ]
 
 // `activeRange` is the lookup, and `rangeFilter` is derived from it — the
@@ -207,12 +230,26 @@ let counts = { total: 0, warnings: 0, errors: 0 }
 let live = false
 let pager = { from: 0, to: 0, total: 0, page: 1, pages: 1, hasPrev: false, hasNext: false, prevHref: '', nextHref: '' }
 
+// Archive scope state. Only populated when the Archive tab is active.
+let archivePlan = 'free'
+let archiveNextCursor: string | null = null
+let archiveSummaryRow = { partitions: 0, archivedRows: 0, archivedBytes: 0, prunedRows: 0, oldestDay: null as string | null, newestDay: null as string | null }
+const isArchive = activeRange.archive === true
+const hotWindowDays = archiveConfig().hotWindowDays
+
 async function loadData(): Promise<void> {
   if (!projectId)
     return
-  // WHERE for the stream: project + level threshold + range + search. The
-  // interval string is from the RANGES whitelist; levels come from the
-  // LEVEL_ORDER whitelist; the search term is a bound param.
+
+  // The archive scope reads Parquet through DuckDB instead of the hot table, so
+  // it takes its own path and returns before any of the SQL below.
+  if (activeRange.archive) {
+    await loadArchive()
+    return
+  }
+
+  // WHERE for the stream: project + level threshold + range + search. Levels
+  // come from the LEVEL_ORDER whitelist; every other value is a bound param.
   const conds = ['project_id = $1']
   const params = [projectId]
   if (levelSet) {
@@ -222,13 +259,19 @@ async function loadData(): Promise<void> {
     levelSet.forEach(l => params.push(l))
     conds.push(`level IN (${placeholders})`)
   }
-  // timestamp is stored as an ISO-8601 varchar (the ingest writes toISOString()),
-  // so cast before comparing against a real timestamp.
-  if (activeRange.interval)
-    conds.push(`timestamp::timestamptz >= NOW() - INTERVAL '${activeRange.interval}'`)
+  // timestamp is an ISO-8601 varchar, so the cutoff is bound in the same shape
+  // and compared as a string. utcIsoHoursAgo, not utcHoursAgo: the latter is
+  // shaped for created_at and the two formats diverge at the eleventh character.
+  if (activeRange.hours != null) {
+    params.push(utcIsoHoursAgo(activeRange.hours))
+    conds.push(`timestamp >= $${params.length}`)
+  }
   if (search) {
-    params.push(`%${search}%`)
-    conds.push(`message ILIKE $${params.length}`)
+    // lower(...) LIKE lower(...) rather than ILIKE, which SQLite does not have.
+    // Spelling it this way is case-insensitive on both engines, where a bare
+    // LIKE would quietly become case-sensitive the day this moves to Postgres.
+    params.push(`%${search.toLowerCase()}%`)
+    conds.push(`lower(message) LIKE $${params.length}`)
   }
   const where = conds.join(' AND ')
 
@@ -258,16 +301,77 @@ async function loadData(): Promise<void> {
   // Stats respect the date range but not the level tabs (which only slice the
   // list). Warnings = warning; errors = error and worse.
   const cconds = ['project_id = $1']
-  if (activeRange.interval)
-    cconds.push(`timestamp::timestamptz >= NOW() - INTERVAL '${activeRange.interval}'`)
+  const cparams: any[] = [projectId]
+  if (activeRange.hours != null) {
+    cparams.push(utcIsoHoursAgo(activeRange.hours))
+    cconds.push(`timestamp >= $${cparams.length}`)
+  }
   const c = (await __db.unsafe(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE level = 'warning') AS warnings,
             COUNT(*) FILTER (WHERE level IN ('error','critical','alert','emergency')) AS errors
     FROM log_entries WHERE ${cconds.join(' AND ')}`,
-    [projectId],
+    cparams,
   ))?.[0]
   counts = { total: Number(c?.total ?? 0), warnings: Number(c?.warnings ?? 0), errors: Number(c?.errors ?? 0) }
+  live = true
+}
+
+/**
+ * The Archive scope: entries that have left the hot database for Parquet.
+ *
+ * Paged by keyset rather than by offset, because that is the only cursor
+ * read_parquet can be asked for cheaply, so the pager below renders prev/next
+ * links carrying a cursor instead of page numbers.
+ */
+async function loadArchive(): Promise<void> {
+  if (!projectId)
+    return
+
+  archivePlan = await projectPlan(projectId)
+
+  if (archivePlan !== 'pro') {
+    // Nothing to show, and nothing to apologise for: a free project's aged logs
+    // were pruned rather than archived, which is what the plan says happens.
+    archiveSummaryRow = await archiveSummary(projectId)
+    logs = []
+    live = true
+    return
+  }
+
+  const [cursorTs, cursorId] = (query.get('cursor') || '').split('~')
+  const { logs: rows, nextCursor } = await searchArchive(projectId, {
+    levels: levelSet ?? undefined,
+    q: search || undefined,
+    beforeTs: cursorTs || undefined,
+    beforeId: cursorId || undefined,
+    limit: PAGE_SIZE,
+  })
+
+  logs = rows as LogRow[]
+  archiveNextCursor = nextCursor ? `${nextCursor.ts}~${nextCursor.id}` : null
+  archiveSummaryRow = await archiveSummary(projectId)
+
+  // Totals come from the ledger rather than from scanning the files: the row
+  // counts were recorded when each partition was verified.
+  counts = {
+    total: archiveSummaryRow.archivedRows,
+    warnings: 0,
+    errors: 0,
+  }
+
+  pager = {
+    from: rows.length ? 1 : 0,
+    to: rows.length,
+    total: archiveSummaryRow.archivedRows,
+    page: 1,
+    pages: 1,
+    hasPrev: !!cursorTs,
+    hasNext: !!archiveNextCursor,
+    prevHref: pageUrl({ range: 'archive' }),
+    nextHref: archiveNextCursor ? `${pageUrl({ range: 'archive' })}${pageUrl({ range: 'archive' }).includes('?') ? '&' : '?'}cursor=${encodeURIComponent(archiveNextCursor)}` : '',
+  }
+
   live = true
 }
 
@@ -728,13 +832,48 @@ onMount(() => {
           </div>
         </details>
       @empty
-        <div class="px-5 py-16 text-center">
-          <div class="mb-1 font-medium text-base">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
-          <div class="text-sm text-subtle">Point an SDK at this project and its logs stream in here live.</div>
-        </div>
+        @if (isArchive && archivePlan !== 'pro')
+          <div class="px-5 py-16 text-center">
+            <div class="mb-1 font-medium text-base">Archived logs are a Pro feature</div>
+            <div class="mb-4 mx-auto max-w-md text-sm text-subtle">
+              On the free plan, entries older than your {{ hotWindowDays }} day window are removed rather than archived.
+              @if (archiveSummaryRow.prunedRows > 0)
+                So far {{ archiveSummaryRow.prunedRows.toLocaleString() }} entries have aged out this way.
+              @endif
+              Upgrade to keep them searchable for good.
+            </div>
+            <StxLink to="/settings#retention" class="inline-block px-4 py-2 font-semibold text-accent-ink text-sm bg-accent rounded-[10px]">See retention settings</StxLink>
+          </div>
+        @elseif (isArchive)
+          <div class="px-5 py-16 text-center">
+            <div class="mb-1 font-medium text-base">Nothing archived yet{{ search ? ` matching "${search}"` : '' }}</div>
+            <div class="text-sm text-subtle">Entries move here once they pass the {{ hotWindowDays }} day hot window.</div>
+          </div>
+        @else
+          <div class="px-5 py-16 text-center">
+            <div class="mb-1 font-medium text-base">No log entries{{ search ? ` matching "${search}"` : '' }}{{ activeRange.interval ? ` in the last ${activeRange.interval}` : '' }}</div>
+            <div class="text-sm text-subtle">Point an SDK at this project and its logs stream in here live.</div>
+          </div>
+        @endif
       @endforelse
 
-      @if (pager.pages > 1)
+      @if (isArchive && (pager.hasPrev || pager.hasNext))
+        <div class="flex items-center justify-between px-5 py-3.5">
+          <span class="font-mono text-subtle text-xs tnum">{{ pager.to }} shown{{ archiveSummaryRow.archivedRows ? ` of ${archiveSummaryRow.archivedRows.toLocaleString()} archived` : '' }}</span>
+          <div class="flex gap-2 items-center">
+            @if (pager.hasPrev)
+              <StxLink to="{{ pager.prevHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">&larr; Newest</StxLink>
+            @else
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line opacity-45 pill">&larr; Newest</span>
+            @endif
+            @if (pager.hasNext)
+              <StxLink to="{{ pager.nextHref }}" class="px-3 py-1.5 font-medium text-muted text-xs border border-line pill">Older &rarr;</StxLink>
+            @else
+              <span class="px-3 py-1.5 font-medium text-subtle text-xs border border-line opacity-45 pill">Older &rarr;</span>
+            @endif
+          </div>
+        </div>
+      @elseif (pager.pages > 1)
         <div class="flex items-center justify-between px-5 py-3.5">
           <span class="font-mono text-subtle text-xs tnum">{{ pager.from }}-{{ pager.to }} of {{ pager.total.toLocaleString() }}</span>
           <div class="flex gap-2 items-center">

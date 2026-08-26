@@ -17,4 +17,5 @@ export default {
   v1: { path: 'v1', prefix: 'v1' },
   logs: { path: 'logs', prefix: '' },
   auth: { path: 'auth', prefix: '' },
+  analytics: { path: 'analytics', prefix: '' },
 } satisfies RouteRegistry
