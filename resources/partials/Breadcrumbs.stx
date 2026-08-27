@@ -14,7 +14,14 @@
 
     Ordered list, not a row of anchors: this is a sequence, the position is
     meaningful, and assistive tech should say so. The separators are decorative
-    and hidden from it; the current page is marked aria-current. --}}
+    and hidden from it; the current page is marked aria-current.
+
+    StxLink rather than a bare anchor. It compiles to `<a href data-stx-link>`,
+    and the SPA router only intercepts elements carrying that attribute — a
+    plain `<a href="/projects">` does a native full page reload instead. This
+    was the last internal link in the app still doing that. Where a full load
+    IS wanted (the OAuth redirects in login/register), the anchor stays plain
+    and says so with data-no-router. --}}
 <nav class="shell subnav" aria-label="Breadcrumb">
   <ol>
     @foreach (crumbs as c)
@@ -22,7 +29,7 @@
         @if ($loop.last)
           <span aria-current="page">{{ c.label }}</span>
         @else
-          <a href="{{ c.href }}">{{ c.label }}</a><span class="sep" aria-hidden="true">/</span>
+          <StxLink to="{{ c.href }}">{{ c.label }}</StxLink><span class="sep" aria-hidden="true">/</span>
         @endif
       </li>
     @endforeach
