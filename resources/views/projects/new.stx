@@ -102,6 +102,7 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
           <option value="react">React</option>
           <option value="vue">Vue</option>
           <option value="nuxt">Nuxt</option>
+          <option value="stacks">Stacks</option>
           <option value="laravel">Laravel</option>
           <option value="php">PHP</option>
           <option value="other">Other</option>

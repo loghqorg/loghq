@@ -256,17 +256,29 @@ const keyMask = maskKey(keyFull)
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
 //
-// Every snippet below is plain HTTP against POST /logs, because that is the only
-// integration path that exists today. Native SDKs are in progress and NOT
-// published: do not put `bun add @loghq/*` or `composer require loghq/*` back
-// here until the package is actually installable, and do not reference a
-// `/sdk.js` loader until a route serves it. Handing someone an install command
-// that 404s is worse than handing them ten lines of fetch.
+// Most snippets below are plain HTTP against POST /logs, because for most
+// platforms that is still the only integration path that exists.
+//
+// The rule that produced them stands, with one exception now earned: do not
+// print an install command until the package is actually installable, because
+// handing someone a command that 404s is worse than handing them ten lines of
+// fetch. `@loghq/stacks` IS on npm, so Stacks gets the real thing and sets
+// `native: true`.
+//
+// Still NOT installable, so still plain HTTP: `loghq/loghq-laravel` is on
+// Packagist but its `loghq/loghq` dependency is not, so `composer require`
+// cannot resolve it. Swap the Laravel snippet over once that is submitted.
+// Same rule for a `/sdk.js` loader: not until a route serves it.
 //
 // The wire contract these snippets implement is docs/ingest.md.
 const INGEST_ENDPOINT = `${INGEST_BASE}/logs`
 
-function installGuide(platform: string | null | undefined, key: string): { label: string, install: string, code: string } {
+/**
+ * `native` marks a platform served by a published SDK rather than by the
+ * hand-rolled fetch fallback. It drives the surrounding copy, which otherwise
+ * says "nothing to install" over the top of an install command.
+ */
+function installGuide(platform: string | null | undefined, key: string): { label: string, install: string, code: string, native: boolean } {
   const p = String(platform || 'javascript').toLowerCase()
 
   // Shared JS transport. Deliberately fire-and-forget and un-awaited: logging
@@ -293,6 +305,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
     return {
       label: 'Vue',
       install: '',
+      native: false,
       code: `${jsSend}\n\n`
         + `// main.ts — route Vue's error handler into loghq\n`
         + `app.config.errorHandler = (err, _instance, info) =>\n`
@@ -303,6 +316,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
     return {
       label: 'Nuxt',
       install: '',
+      native: false,
       code: `// plugins/loghq.client.ts\n`
         + `${jsSend}\n\n`
         + `export default defineNuxtPlugin((nuxtApp) => {\n`
@@ -314,6 +328,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
     return {
       label: 'Node.js',
       install: '',
+      native: false,
       code: `${jsSend}\n\n`
         + `process.on('uncaughtException', e => loghq(e.message, 'critical', { stack: e.stack }))\n`
         + `process.on('unhandledRejection', r => loghq(String(r), 'error'))\n\n`
@@ -324,17 +339,41 @@ function installGuide(platform: string | null | undefined, key: string): { label
     return {
       label: 'React',
       install: '',
+      native: false,
       code: `${browserCapture}\n\n`
         + `// render errors need an ErrorBoundary — call loghq() from componentDidCatch`,
     }
   }
   if (p === 'javascript' || p === 'browser')
-    return { label: 'JavaScript', install: '', code: browserCapture }
+    return { label: 'JavaScript', install: '', code: browserCapture, native: false }
 
+  if (p === 'stacks') {
+    return {
+      label: 'Stacks',
+      install: 'bun add @loghq/stacks',
+      native: true,
+      code: `// config/logging.ts\n`
+        + `import type { LoggingConfig } from '@stacksjs/types'\n`
+        + `import { loghqTransport } from '@loghq/stacks'\n`
+        + `import { storagePath } from '@stacksjs/path'\n\n`
+        + `export default {\n`
+        + `  logsPath: storagePath('logs/stacks.log'),\n`
+        + `  deploymentsPath: storagePath('logs/deployments.log'),\n`
+        + `  transports: [\n`
+        + `    loghqTransport({ key: '${key}' }),\n`
+        + `  ],\n`
+        + `} satisfies LoggingConfig\n\n`
+        + `// That is the whole integration. Every log.* call already in your\n`
+        + `// codebase now ships, and captureStruct (on by default) also forwards\n`
+        + `// the framework's own http.request, db.query, db.slow_query, job.* and\n`
+        + `// cache.* events, correlated by request id.`,
+    }
+  }
   if (p === 'laravel') {
     return {
       label: 'Laravel',
       install: '',
+      native: false,
       code: `// app/Logging/LogHQHandler.php\n`
         + `use Illuminate\\Support\\Facades\\Http;\n`
         + `use Monolog\\Handler\\AbstractProcessingHandler;\n`
@@ -360,6 +399,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
     return {
       label: 'PHP',
       install: '',
+      native: false,
       code: `function loghq(string $message, string $level = 'info', array $context = []): void\n`
         + `{\n`
         + `    $ch = curl_init('${INGEST_ENDPOINT}');\n`
@@ -375,7 +415,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
         + `}`,
     }
   }
-  return { label: 'HTML', install: '', code: browserCapture }
+  return { label: 'HTML', install: '', code: browserCapture, native: false }
 }
 const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { label: '', install: '', code: '' }
 
@@ -1137,7 +1177,11 @@ onMount(() => {
         <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Install</div>
         <div class="px-5 py-5 app-panel">
           <div class="flex gap-3 items-center justify-between mb-3.5">
-            <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject?.name }}</span> over plain HTTP. Nothing to install — every entry lands in your stream, searchable and correlatable.</p>
+            @if (guide.native)
+              <p class="text-sm text-subtle">Stream <span class="font-mono text-muted">{{ activeProject?.name }}</span> through its SDK. Declare the transport once and every log call you already write lands here, searchable and correlatable.</p>
+            @else
+              <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject?.name }}</span> over plain HTTP. Nothing to install, and every entry lands in your stream, searchable and correlatable.</p>
+            @endif
             <span class="shrink-0 px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">{{ guide.label }}</span>
           </div>
           @if (guide.install)
@@ -1151,7 +1195,11 @@ onMount(() => {
             <button type="button" @click="copyCode" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
-            Native SDKs are in progress. Until then this is the whole integration — the
+            @if (guide.native)
+              The SDK batches, retries and flushes on exit for you. The
+            @else
+              Native SDKs are in progress. Until then this is the whole integration, and the
+            @endif
             <a href="https://github.com/stacksjs/loghq/blob/main/docs/ingest.md" class="text-muted underline underline-offset-2 hover:text-ink [transition:color_0.15s_ease,text-decoration-color_0.15s_ease] decoration-[var(--border)] hover:decoration-[currentColor]" target="_blank" rel="noreferrer">ingest spec</a>
             documents every field, limit, and retry rule if you want batching or backoff.
           </p>
