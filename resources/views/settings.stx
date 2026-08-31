@@ -283,7 +283,12 @@ function installGuide(platform: string | null | undefined, key: string): { label
 
   // Shared JS transport. Deliberately fire-and-forget and un-awaited: logging
   // must never block, and never reject into the caller's code path.
-  const jsSend = `async function loghq(message, level = 'info', context) {\n`
+  //
+  // Two signatures from one body. The guides that name no file are pasted into
+  // plain JS, where a type annotation is a SyntaxError — but Vue and Nuxt both
+  // name a `.ts` file, and both scaffolds are strict by default, so an untyped
+  // helper is a TS7006 implicit-any error the moment it is pasted.
+  const sendWith = (params: string) => `async function loghq(${params}) {\n`
     + `  try {\n`
     + `    await fetch('${INGEST_ENDPOINT}', {\n`
     + `      method: 'POST',\n`
@@ -294,22 +299,28 @@ function installGuide(platform: string | null | undefined, key: string): { label
     + `  catch {} // never let logging break the app\n`
     + `}`
 
+  const jsSend = sendWith(`message, level = 'info', context`)
+  const tsSend = sendWith(`message: string, level = 'info', context?: Record<string, unknown>`)
+
   const browserCapture = `${jsSend}\n\n`
     + `// uncaught errors and rejections\n`
     + `addEventListener('error', e => loghq(e.message, 'error', { stack: e.error?.stack }))\n`
     + `addEventListener('unhandledrejection', e => loghq(String(e.reason), 'error'))\n\n`
-    + `// or explicitly\n`
-    + `loghq('checkout failed', 'error', { cartId: 'cart_123' })`
+    + `// or call it yourself, anywhere in your code:\n`
+    + `// loghq('checkout failed', 'error', { cartId: 'cart_123' })`
 
   if (p === 'vue') {
     return {
       label: 'Vue',
       install: '',
       native: false,
-      code: `${jsSend}\n\n`
-        + `// main.ts — route Vue's error handler into loghq\n`
+      code: `// main.ts\n`
+        + `${tsSend}\n\n`
+        + `// route Vue's error handler into loghq. The err argument is typed\n`
+        + `// unknown, so narrow it rather than reaching for .stack, which\n`
+        + `// will not compile.\n`
         + `app.config.errorHandler = (err, _instance, info) =>\n`
-        + `  loghq(String(err), 'error', { info, stack: err?.stack })`,
+        + `  loghq(String(err), 'error', { info, stack: err instanceof Error ? err.stack : undefined })`,
     }
   }
   if (p === 'nuxt') {
@@ -318,9 +329,12 @@ function installGuide(platform: string | null | undefined, key: string): { label
       install: '',
       native: false,
       code: `// plugins/loghq.client.ts\n`
-        + `${jsSend}\n\n`
+        + `${tsSend}\n\n`
         + `export default defineNuxtPlugin((nuxtApp) => {\n`
-        + `  nuxtApp.hook('vue:error', err => loghq(String(err), 'error', { stack: err?.stack }))\n`
+        + `  // The err argument is typed unknown, so narrow it before .stack.\n`
+        + `  nuxtApp.hook('vue:error', err => loghq(String(err), 'error', {\n`
+        + `    stack: err instanceof Error ? err.stack : undefined,\n`
+        + `  }))\n`
         + `})`,
     }
   }
@@ -330,9 +344,17 @@ function installGuide(platform: string | null | undefined, key: string): { label
       install: '',
       native: false,
       code: `${jsSend}\n\n`
-        + `process.on('uncaughtException', e => loghq(e.message, 'critical', { stack: e.stack }))\n`
+        + `// Registering this handler suppresses Node's default crash, so report\n`
+        + `// and then exit anyway: a process is not safe to resume after an\n`
+        + `// uncaught exception, and a supervisor can only restart what exits.\n`
+        + `// The handler receives whatever was thrown, not always an Error.\n`
+        + `process.on('uncaughtException', (e) => {\n`
+        + `  loghq(e?.message ?? String(e), 'critical', { stack: e?.stack })\n`
+        + `    .finally(() => process.exit(1))\n`
+        + `  setTimeout(() => process.exit(1), 2000) // never let a slow ingest hold the crash open\n`
+        + `})\n`
         + `process.on('unhandledRejection', r => loghq(String(r), 'error'))\n\n`
-        + `await loghq('service started', 'info', { pid: process.pid })`,
+        + `loghq('service started', 'info', { pid: process.pid })`,
     }
   }
   if (p === 'react') {
@@ -341,7 +363,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
       install: '',
       native: false,
       code: `${browserCapture}\n\n`
-        + `// render errors need an ErrorBoundary — call loghq() from componentDidCatch`,
+        + `// render errors need an ErrorBoundary: call loghq() from componentDidCatch`,
     }
   }
   if (p === 'javascript' || p === 'browser')
@@ -363,10 +385,16 @@ function installGuide(platform: string | null | undefined, key: string): { label
         + `    loghqTransport({ key: '${key}' }),\n`
         + `  ],\n`
         + `} satisfies LoggingConfig\n\n`
-        + `// That is the whole integration. Every log.* call already in your\n`
-        + `// codebase now ships, and captureStruct (on by default) also forwards\n`
-        + `// the framework's own http.request, db.query, db.slow_query, job.* and\n`
-        + `// cache.* events, correlated by request id.`,
+        + `// That is the whole integration. Every log.* call at info and above\n`
+        + `// already in your codebase now ships. log.debug is dropped in-process\n`
+        + `// by the SDK's default minLevel; add minLevel: 'debug' above to keep it.\n\n`
+        + `// Anything logged inside a request also arrives with a trace_id\n`
+        + `// already on it, because the router puts its request id on every\n`
+        + `// record. One line then expands into the rest of its request:\n`
+        + `//   GET /api/projects/{id}/logs?trace=<trace_id>\n\n`
+        + `// captureStruct is on by default and forwards the framework's own\n`
+        + `// log.struct events (http.request, db.query, job.*, cache.*) for apps\n`
+        + `// that emit them. It costs nothing if yours does not yet.`,
     }
   }
   if (p === 'laravel') {
@@ -375,6 +403,7 @@ function installGuide(platform: string | null | undefined, key: string): { label
       install: '',
       native: false,
       code: `// app/Logging/LogHQHandler.php\n`
+        + `namespace App\\Logging;\n\n`
         + `use Illuminate\\Support\\Facades\\Http;\n`
         + `use Monolog\\Handler\\AbstractProcessingHandler;\n`
         + `use Monolog\\LogRecord;\n\n`
@@ -382,17 +411,43 @@ function installGuide(platform: string | null | undefined, key: string): { label
         + `{\n`
         + `    protected function write(LogRecord $record): void\n`
         + `    {\n`
-        + `        Http::withHeaders(['X-LogHQ-Key' => '${key}'])\n`
-        + `            ->post('${INGEST_ENDPOINT}', ['logs' => [[\n`
-        + `                'message' => $record->message,\n`
-        + `                'level'   => strtolower($record->level->getName()),\n`
-        + `                'channel' => $record->channel,\n`
-        + `                'context' => $record->context,\n`
-        + `            ]]]);\n`
+        + `        // Laravel reports unhandled exceptions as ['exception' => $e],\n`
+        + `        // and a Throwable json_encodes to {}. Flatten it or the stack\n`
+        + `        // trace is silently lost.\n`
+        + `        $context = $record->context;\n`
+        + `        if (($e = $context['exception'] ?? null) instanceof \\Throwable) {\n`
+        + `            $context['exception'] = [\n`
+        + `                'class'   => $e::class,\n`
+        + `                'message' => $e->getMessage(),\n`
+        + `                'file'    => $e->getFile(),\n`
+        + `                'line'    => $e->getLine(),\n`
+        + `                'trace'   => substr($e->getTraceAsString(), 0, 16000),\n`
+        + `            ];\n`
+        + `        }\n\n`
+        + `        try {\n`
+        + `            Http::timeout(2)->connectTimeout(1)\n`
+        + `                ->withHeaders(['X-LogHQ-Key' => '${key}'])\n`
+        + `                ->post('${INGEST_ENDPOINT}', ['logs' => [[\n`
+        + `                    'message'     => $record->message,\n`
+        + `                    'level'       => strtolower($record->level->getName()),\n`
+        + `                    'channel'     => $record->channel,\n`
+        + `                    'environment' => app()->environment(),\n`
+        + `                    'context'     => $context,\n`
+        + `                ]]]);\n`
+        + `        }\n`
+        + `        catch (\\Throwable) {\n`
+        + `            // Monolog rethrows whatever write() throws, straight out of\n`
+        + `            // the Log:: call site. Never let logging break the app.\n`
+        + `        }\n`
         + `    }\n`
         + `}\n\n`
-        + `// config/logging.php — Monolog levels are RFC 5424, so they map 1:1\n`
-        + `'loghq' => ['driver' => 'monolog', 'handler' => App\\Logging\\LogHQHandler::class],`,
+        + `// config/logging.php, inside the 'channels' array. Monolog levels are\n`
+        + `// RFC 5424, so they map 1:1 onto loghq's.\n`
+        + `'loghq' => ['driver' => 'monolog', 'handler' => App\\Logging\\LogHQHandler::class],\n\n`
+        + `// Declaring the channel does not use it. Either send everything there\n`
+        + `// with LOG_CHANNEL=loghq in .env, or add it alongside your existing\n`
+        + `// channel so you keep local logs too:\n`
+        + `'stack' => ['driver' => 'stack', 'channels' => ['single', 'loghq']],`,
     }
   }
   if (p === 'php') {
@@ -408,16 +463,49 @@ function installGuide(platform: string | null | undefined, key: string): { label
         + `        CURLOPT_RETURNTRANSFER => true,\n`
         + `        CURLOPT_TIMEOUT        => 2,\n`
         + `        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'X-LogHQ-Key: ${key}'],\n`
-        + `        CURLOPT_POSTFIELDS     => json_encode(['logs' => [compact('message', 'level', 'context')]]),\n`
+        + `        // json_encode returns false on non-UTF-8 bytes, NAN or recursion,\n`
+        + `        // and false posts as an empty body. These flags substitute instead,\n`
+        + `        // so the entry still ships.\n`
+        + `        CURLOPT_POSTFIELDS     => json_encode(\n`
+        + `            ['logs' => [compact('message', 'level', 'context')]],\n`
+        + `            JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR,\n`
+        + `        ),\n`
         + `    ]);\n`
         + `    curl_exec($ch);\n`
-        + `    curl_close($ch);\n`
+        + `    // no curl_close(): handles are objects since PHP 8.0 and free\n`
+        + `    // themselves. Calling it is deprecated as of 8.5.\n`
         + `}`,
     }
   }
-  return { label: 'HTML', install: '', code: browserCapture, native: false }
+  // Anything unrecognised, including the "other" option the create screen
+  // offers, lands here. It used to return browser-only JS labelled HTML, which
+  // is wrong for a backend in a language we have no guide for. The ingest is
+  // plain JSON over HTTP, so say that instead.
+  return {
+    label: 'HTTP',
+    install: '',
+    native: false,
+    code: `# Any language, any runtime. The ingest is plain JSON over HTTP.\n`
+      + `curl -X POST ${INGEST_ENDPOINT} \\\n`
+      + `  -H 'Content-Type: application/json' \\\n`
+      + `  -H 'X-LogHQ-Key: ${key}' \\\n`
+      + `  -d '{\n`
+      + `    "logs": [{\n`
+      + `      "message": "checkout failed",\n`
+      + `      "level": "error",\n`
+      + `      "channel": "billing",\n`
+      + `      "environment": "production",\n`
+      + `      "context": { "cartId": "cart_123" }\n`
+      + `    }]\n`
+      + `  }'\n\n`
+      + `# Only message is required. level is one of debug, info, notice,\n`
+      + `# warning, error, critical, alert, emergency. Anything else silently\n`
+      + `# becomes info.`,
+  }
 }
-const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { label: '', install: '', code: '' }
+// `native` is read at :1185 and :1203, so the no-project fallback has to carry
+// it too — omitting it left those branches reading undefined rather than false.
+const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { label: '', install: '', code: '', native: false }
 
 // Everything the client block is allowed to read from this scope, declared.
 //
@@ -1180,7 +1268,7 @@ onMount(() => {
             @if (guide.native)
               <p class="text-sm text-subtle">Stream <span class="font-mono text-muted">{{ activeProject?.name }}</span> through its SDK. Declare the transport once and every log call you already write lands here, searchable and correlatable.</p>
             @else
-              <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject?.name }}</span> over plain HTTP. Nothing to install, and every entry lands in your stream, searchable and correlatable.</p>
+              <p class="text-sm text-subtle">Send logs to <span class="font-mono text-muted">{{ activeProject?.name }}</span> over plain HTTP. Nothing to install, and every entry lands in your stream, searchable and filterable by level, channel and environment.</p>
             @endif
             <span class="shrink-0 px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">{{ guide.label }}</span>
           </div>
