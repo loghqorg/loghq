@@ -102,6 +102,31 @@ describe('access control', () => {
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('err-box')
   })
+
+  // Two apps of the same name in one account render identically everywhere, so
+  // the key you copy out of a list is a coin flip. This was found the way these
+  // things usually are: by making the duplicate and not noticing.
+  only('a second app with the same name is refused', async () => {
+    const { cookie } = await registerAndSignIn('dupe-project')
+
+    const first = await postForm('/projects/new', { name: 'Dupe App', platform: 'node' }, cookie)
+    expect(first.status).toBe(303)
+
+    const second = await postForm('/projects/new', { name: 'Dupe App', platform: 'node' }, cookie)
+    expect(second.status).toBe(200)
+    expect(await second.text()).toContain('already have an app called')
+  })
+
+  // Case is not what distinguishes two apps, so neither should it let one past.
+  only('the duplicate check ignores case', async () => {
+    const { cookie } = await registerAndSignIn('dupe-case')
+
+    expect((await postForm('/projects/new', { name: 'CaseApp', platform: 'node' }, cookie)).status).toBe(303)
+    const clash = await postForm('/projects/new', { name: 'caseapp', platform: 'node' }, cookie)
+
+    expect(clash.status).toBe(200)
+    expect(await clash.text()).toContain('already have an app called')
+  })
 })
 
 describe('every page renders', () => {

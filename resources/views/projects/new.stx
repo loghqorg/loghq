@@ -42,6 +42,21 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
   if (name.length > 255)
     return { formError: 'That name is too long.', values: kept }
 
+  // Two apps with the same name in one account is never what anyone meant, and
+  // it is silently destructive: both render identically in every list, so the
+  // key you paste into a config is a coin flip. Compared with lower() rather
+  // than ILIKE, which is Postgres-only and this app also runs on SQLite (see
+  // routes/logs.ts for the same reason).
+  //
+  // Scoped to the owner, not global: two accounts may both have an app called
+  // "api" without either being wrong.
+  const clash = (await __db.unsafe(
+    'SELECT id FROM projects WHERE owner_id = $1 AND lower(name) = lower($2) LIMIT 1',
+    [Number(user.id), name],
+  ))?.[0]
+  if (clash)
+    return { formError: `You already have an app called "${name}".`, values: kept }
+
   const id = newProjectId(name)
 
   await __db.insertInto('projects').values({

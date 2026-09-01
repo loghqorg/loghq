@@ -150,6 +150,16 @@ route.post('/api/projects', async (request: any) => {
   if (name.length > 255)
     return json({ error: 'Project name is too long.' }, 400)
 
+  // Same rule the create form enforces: one app of a given name per account.
+  // lower(), not ILIKE, because ILIKE is Postgres-only and this also runs on
+  // SQLite. 409 rather than 400: the request is well formed, it conflicts.
+  const clash = (await db.unsafe(
+    'SELECT id FROM projects WHERE owner_id = $1 AND lower(name) = lower($2) LIMIT 1',
+    [Number(user.id), name],
+  ))?.[0]
+  if (clash)
+    return json({ error: `You already have an app called "${name}".`, project: String(clash.id) }, 409)
+
   const platform = String(body.platform ?? 'javascript').slice(0, 60)
   const id = newProjectId(name)
   const ingestKey = newIngestKey()
