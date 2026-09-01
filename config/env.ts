@@ -434,6 +434,21 @@ const envSchema = defineEnv({
     default: '',
   },
 
+  // Reports this app's own errors to bughq. Empty disables capture rather than
+  // failing: the client marks itself disabled on construction and every log.*
+  // call behaves exactly as before.
+  BUGHQ_KEY: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  // Override only to point at a bughq other than the hosted one, e.g. a local
+  // dev server. Empty means the SDK's own default host.
+  BUGHQ_HOST: {
+    validation: schema.string(),
+    default: '',
+  },
+
   AUTH_PASSWORD_RESET_URL: {
     validation: schema.string(),
     default: '',
