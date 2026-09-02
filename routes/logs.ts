@@ -9,13 +9,14 @@
  */
 
 import { db } from '@stacksjs/database'
-import { response, route } from '@stacksjs/router'
+import { route } from '@stacksjs/router'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
 import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
 import { ownsLog, ownsProject } from '../app/Support/access'
+import { healthResponse } from '../app/Support/health'
 import { userFromRequest } from '../app/Support/request-auth'
 
 // Ingest abuse bounds. The public key gate is not enough on its own — a script
@@ -221,4 +222,15 @@ route.get('/api/logs/{logId}', async (request: any) => {
 // Health
 // ---------------------------------------------------------------------------
 
-route.get('/health', () => response.json({ status: 'ok', app: 'loghq' }))
+// Registered twice, and both are load-bearing. The public origin routes `/api/*`
+// to this server and everything else to the web app, so a bare `GET /health`
+// never arrives here in production — it reaches the page handler, finds no page
+// and answers the 404 HTML document. `/api/health` is the one an uptime check on
+// loghq.org can actually see; the bare path stays for anything talking to this
+// process directly (local dev, a probe on the box itself).
+//
+// See app/Support/health.ts for why this is hand-registered rather than left to
+// the framework's `route.health()`, and why it answers 503 rather than a
+// cheerful 200 when a dependency is down.
+route.get('/health', () => healthResponse())
+route.get('/api/health', () => healthResponse())
