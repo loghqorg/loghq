@@ -1,4 +1,6 @@
 import type { StxOptions as UiOptions } from '@stacksjs/stx'
+import { env } from '@stacksjs/env'
+import { tsAnalyticsStxConfig } from '@ts-analytics/tracking/stx'
 
 /**
  * stx configuration — the root of this application. There is no index.html.
@@ -27,6 +29,26 @@ import type { StxOptions as UiOptions } from '@stacksjs/stx'
  * transit and would read as configured behaviour while doing nothing.
  */
 export default {
+  // Page views to analyticshq. stx injects the script on every render, so this
+  // is the whole integration - no tag in a layout, and SPA route changes are
+  // counted without router wiring.
+  //
+  // The App ID comes from the environment so a fork, a CI run and a laptop do
+  // not all report into production's numbers; with it unset the block is inert
+  // and nothing is rendered.
+  //
+  // `apiEndpoint` is named rather than left to the package default. Every
+  // release of @ts-analytics/tracking up to 0.1.13 baked in
+  // `http://localhost:2027`, so an app supplying only an App ID beaconed into
+  // nothing; saying the origin here means a regression in that default cannot
+  // quietly take this app's analytics with it.
+  analytics: tsAnalyticsStxConfig({
+    // `?? ''` because this app's env type makes the key optional, and the
+    // package documents a blank App ID as inert - the same "unset means off"
+    // path as a missing variable, rather than a second way to be broken.
+    appId: env.ANALYTICSHQ_APP_ID ?? '',
+    apiEndpoint: 'https://analyticshq.org',
+  }),
   // --- Project shape -------------------------------------------------------
   // Pinned, not inferred. Without `root`, resolveStxRoot (config.js:363-374)
   // decides the whole topology from `fs.existsSync('resources/layouts')`. That
