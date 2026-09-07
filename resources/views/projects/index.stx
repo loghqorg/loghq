@@ -79,7 +79,7 @@ useSeoMeta({
 //
 // The theme button holds no state at all now. Its icon swap is a CSS rule keyed
 // off the root element's data-theme (public/tokens.css), which stx's color-mode
-// boot script sets before first paint from app.colorMode in config/ui.ts. The
+// boot script sets before first paint from app.colorMode in config/stx.ts. The
 // mirror signal this file used to keep — and the :data-t binding it fed — meant
 // neither icon matched until hydration, so the button rendered empty.
 function toggleTheme(): void {
@@ -103,7 +103,7 @@ function logout(): void {
 @extends('layouts/default')
 
 @section('content')
-{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
+{{-- No hand-written theme guard here. config/stx.ts declares app.colorMode, and
     stx emits the pre-paint boot script from that one declaration — first inside
     <head>, above every stylesheet, reading the same loghq_theme key and setting
     the same data-theme attribute this script used to set by hand. The generated

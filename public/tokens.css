@@ -1,6 +1,6 @@
 /* loghq design tokens — the single source for the app surface.
  *
- * Linked once from config/ui.ts `app.head.link`, so every page gets it without
+ * Linked once from config/stx.ts `app.head.link`, so every page gets it without
  * repeating it. Ten app views used to declare their own byte-similar copy of
  * this block: 90 custom-property declarations in four subtly diverging
  * variants, which is how the dashboard's `--mono` stack ended up one entry
@@ -238,7 +238,7 @@ body {
  * before first paint.
  *
  * stx's color-mode boot script sets data-theme on the root above every
- * stylesheet (config/ui.ts app.colorMode), and useColorMode keeps it current
+ * stylesheet (config/stx.ts app.colorMode), and useColorMode keeps it current
  * afterwards, so the correct icon paints immediately and the mirror signal the
  * binding needed is gone from all three pages. */
 :root[data-theme='light'] .theme-btn .ic-sun {

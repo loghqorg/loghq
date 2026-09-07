@@ -28,7 +28,7 @@
       "@/*": ["./resources/*"]
     }
   },
-  // `satisfies UiOptions` in config/ui.ts is only evaluated if tsc sees the
+  // `satisfies UiOptions` in config/stx.ts is only evaluated if tsc sees the
   // file. It previously did not: this list covered nine project files and
   // matched nothing under config/ or resources/, so the one place a typo costs
   // an entire subsystem was unchecked. resources/stores/**/*.ts is here because

@@ -57,7 +57,7 @@
     lives here instead. --}}
 
 @head
-{{-- Marketing-only stylesheet, deliberately NOT in config/ui.ts app.head: app
+{{-- Marketing-only stylesheet, deliberately NOT in config/stx.ts app.head: app
     pages never linked it and define their own conflicting .btn and .panel
     rules. The shared fonts, charset, viewport and favicon DO live in app.head —
     they are genuinely site-wide, and injectConfigHeadTags dedupes by exact href
@@ -77,7 +77,7 @@
 
 @include('SiteNav')
 
-{{-- The single router container (config/ui.ts router.container). Pages must not
+{{-- The single router container (config/stx.ts router.container). Pages must not
     declare their own: the server slices the fragment between the first opening
     tag and the last closing one, so a second one makes the span ambiguous. --}}
 <main>
