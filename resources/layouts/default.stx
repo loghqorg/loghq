@@ -1,14 +1,14 @@
 {{-- App and auth chrome. Layout group 'default'.
 
     A FRAGMENT, not a document. stx synthesises the doctype, the html/head/body
-    elements and their contents from config/stx.ts `app.head` merged with each
+    elements and their contents from config/ui.ts `app.head` merged with each
     page's useSeoMeta() (process.js:205-233 → document-shell.js). Writing a
     document here would make hasDocumentShell() true (document-shell.js:64),
     turn ensureDocumentShell() into a no-op, and silently drop every page's
     title, description and og tags on the floor.
 
     This layout owns the single router container, and that is load-bearing
-    rather than cosmetic. config/stx.ts pins `router.container: 'main'`;
+    rather than cosmetic. config/ui.ts pins `router.container: 'main'`;
     getContainer() (stx-router client.js:193-195) returns the FIRST match, and
     when it returns null shouldIntercept bails at client.js:796 and swap()
     falls back to a full location assignment at client.js:395 — every link

@@ -14,7 +14,7 @@
  * substitute, and it is also the router-safe home — the SPA router destroys
  * every <head> style that is not the Crosswind tag, but leaves <link>s alone.
  *
- * Linked once from config/stx.ts `app.head.link`, after /tokens.css so it can
+ * Linked once from config/ui.ts `app.head.link`, after /tokens.css so it can
  * read the palette, before the Crosswind sheet so utilities still win a
  * specificity tie against anything here.
  *

@@ -1193,7 +1193,7 @@ onMount(() => {
 @extends('layouts/default')
 
 @section('content')
-{{-- No hand-written theme guard here. config/stx.ts declares app.colorMode, and
+{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
     stx emits the pre-paint boot script from that one declaration — first inside
     <head>, above every stylesheet, reading the same loghq_theme key and setting
     the same data-theme attribute this script used to set by hand. The generated
