@@ -1332,7 +1332,7 @@ onMount(() => {
               <button @click="verifyRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Verify</button>
               <button @click="disconnectRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Disconnect</button>
             </div>
-            <dl class="grid grid-cols-2 gap-y-1.5 text-xs sm:grid-cols-3">
+            <dl class="grid gap-y-1.5 grid-cols-2 sm:grid-cols-3 text-xs">
               <div><dt class="text-subtle">Default branch</dt><dd class="font-mono text-muted" :text="repo()?.default_branch || 'unknown'">.</dd></div>
               <div><dt class="text-subtle">Token</dt><dd class="font-mono text-muted" :text="repo()?.token_hint ? ('ending ' + repo().token_hint) : 'stored'">.</dd></div>
               <div><dt class="text-subtle">Last verified</dt><dd class="font-mono text-muted" :text="repo()?.last_verified_at || 'never'">.</dd></div>
@@ -1403,7 +1403,7 @@ onMount(() => {
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
             <input :model="inviteEmail" type="email" aria-label="Invite a teammate by email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
-            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-sm text-accent-ink bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
+            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
           </div>
           <span class="mt-2.5 text-ok text-xs" :show="!!inviteNote()" :class="inviteNoteOk() ? 'mt-2.5 text-xs text-ok' : 'mt-2.5 text-xs text-accent'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1469,7 +1469,7 @@ onMount(() => {
           <input :model="whUrl" :placeholder="whPlaceholder()" type="url" aria-label="Webhook URL" class="mb-2 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
           <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
-            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-sm text-accent-ink bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
             <span class="text-ok text-xs" :show="!!whNote()" :class="whNoteOk() ? 'text-xs text-ok' : 'text-xs text-accent'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
