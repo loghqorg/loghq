@@ -23,10 +23,10 @@ useSeoMeta({
   robots: 'noindex, nofollow',
 })
 
-const query = new URLSearchParams(__stxServeSearch || '')
+const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const logId = (query.get('log') || '').slice(0, 255)
 
-const __token = cookies.loghq_token ?? ''
+const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
 let __user: any = null
 if (__token) {
   try {
@@ -124,6 +124,9 @@ function stampOf(value: unknown): string {
 }
 
 const analyzedAt = stampOf(run?.completed_at)
+const analysisSuspects = Array.isArray(analysis?.suspects) ? analysis.suspects : []
+const analysisSteps = Array.isArray(analysis?.steps) ? analysis.steps : []
+const analysisVerification = Array.isArray(analysis?.verification) ? analysis.verification : []
 
 // The page handles its own POST (stx#1847). The analysis is one model call, so
 // it completes inside this request rather than needing a queue and a poller -
@@ -240,10 +243,10 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
           <p class="leading-relaxed text-muted text-sm">{{ analysis.rootCause }}</p>
         </div>
 
-        @if (analysis.suspects && analysis.suspects.length)
+        @if (analysisSuspects.length)
           <div class="px-5 py-4 border-b border-line">
             <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">Where to look</div>
-            @foreach (analysis.suspects as suspect)
+            @foreach (analysisSuspects as suspect)
               <div class="mb-2.5 last:mb-0">
                 <div class="font-mono text-ink text-xs tnum">{{ suspect.location }}</div>
                 <div class="mt-0.5 text-muted text-sm">{{ suspect.reason }}</div>
@@ -252,11 +255,11 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
           </div>
         @endif
 
-        @if (analysis.steps && analysis.steps.length)
+        @if (analysisSteps.length)
           <div class="px-5 py-4 border-b border-line">
             <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">Suggested fix</div>
             <ol>
-              @foreach (analysis.steps as step)
+              @foreach (analysisSteps as step)
                 <li class="grid grid-cols-[1.5rem_1fr] mb-3 last:mb-0">
                   <span class="font-mono text-subtle text-xs tnum">{{ loop.iteration }}.</span>
                   <span>
@@ -276,11 +279,11 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
           </div>
         @endif
 
-        @if (analysis.verification && analysis.verification.length)
+        @if (analysisVerification.length)
           <div class="px-5 py-4 border-b border-line">
             <div class="mb-2.5 font-semibold text-subtle text-xs tracking-wider uppercase">How to verify</div>
             <ul>
-              @foreach (analysis.verification as check)
+              @foreach (analysisVerification as check)
                 <li class="mb-1.5 last:mb-0 text-muted text-sm">{{ check }}</li>
               @endforeach
             </ul>

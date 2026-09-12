@@ -31,7 +31,7 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/login' }] })
 // provider. Read here rather than from location.search in a client block: it is
 // server-known at render time, so reading it on the client meant the message
 // could not exist until hydration.
-const oauthError = new URLSearchParams(__stxServeSearch || '').get('error') || ''
+const oauthError = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '').get('error') || ''
 
 // What the action merges back on a rejected submit, declared with its
 // resting values.

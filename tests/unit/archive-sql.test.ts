@@ -164,6 +164,23 @@ describe('buildSearchSql', () => {
     expect(sql).not.toMatch(/OR '1'='1'/)
   })
 
+  test('keeps trace and request correlation available after archival', () => {
+    const sql = buildSearchSql('logs', ['project_id=demo/day=2026-09-12/logs.parquet'], {
+      traceId: 'trace-42',
+      requestId: 'request-9',
+    })
+    expect(sql).toContain('"trace_id" = \'trace-42\'')
+    expect(sql).toContain('"request_id" = \'request-9\'')
+  })
+
+  test('caps archive correlation filters to their stored column width', () => {
+    const sql = buildSearchSql('logs', ['project_id=demo/day=2026-09-12/logs.parquet'], {
+      traceId: 't'.repeat(100),
+    })
+    expect(sql).toContain(`"trace_id" = '${'t'.repeat(64)}'`)
+    expect(sql).not.toContain('t'.repeat(65))
+  })
+
   test('pages on the whole (timestamp, id) pair, not timestamp alone', () => {
     // Entries share a millisecond routinely, and a cursor on a non-unique column
     // either repeats or skips rows at the page boundary.
