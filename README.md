@@ -12,7 +12,7 @@
 
 loghq is open source log management. Ship structured logs from anything that can make an HTTP request, then search, filter, and correlate them from one dashboard.
 
-[Website](https://loghq.org) | [Ingest API](./docs/ingest.md) | [Issues](https://github.com/stacksjs/loghq/issues)
+[Website](https://loghq.org) | [Documentation](https://loghq.org/docs) | [Ingest API](./docs/reference/ingest.md) | [Issues](https://github.com/stacksjs/loghq/issues)
 
 > [!NOTE]
 > loghq is under active development. Interfaces and deployment details may change before the first stable release.
@@ -106,7 +106,7 @@ await fetch('http://localhost:3108/logs', {
 
 A `201` returns `{ ok, stored, dropped, skipped }`. Check those counts — a `201` does not mean every entry landed, and this is the only signal that some did not.
 
-**[docs/ingest.md](./docs/ingest.md) is the full wire contract**: every field, every limit, the retry semantics for each status code, and what a client library is expected to handle. It is written to be implementable from scratch in any language.
+**[docs/reference/ingest.md](./docs/reference/ingest.md) is the full wire contract**: every field, every limit, the retry semantics for each status code, and what a client library is expected to handle. It is written to be implementable from scratch in any language.
 
 ## Read logs back
 
