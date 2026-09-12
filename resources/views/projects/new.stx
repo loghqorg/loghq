@@ -6,7 +6,7 @@ import { Auth } from '@stacksjs/auth'
 import { db as __db } from '@stacksjs/database'
 // Shared with routes/projects.ts so the two callers cannot drift on how an id
 // or an ingest key is minted.
-import { newIngestKey, newProjectId } from '../../../app/Support/projects'
+import { newIngestKey, newProjectId } from '../../app/Support/projects'
 useSeoMeta({
   title: 'New app - loghq',
   description: 'Create an app to get an ingest key and start streaming logs.',
@@ -16,7 +16,7 @@ useSeoMeta({
 // Server-side session check, replacing a client guard that navigated away
 // after hydration. A logged-out visitor now gets an honest prompt in the first
 // response instead of a create form that flashes and disappears.
-const authed = !!cookies.loghq_token
+const authed = typeof cookies !== 'undefined' && !!cookies.loghq_token
 
 // Resting values for what the action merges back.
 let formError = ''

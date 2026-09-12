@@ -38,7 +38,7 @@ import { utcIsoHoursAgo } from '../../app/Support/time'
 // the serve path immediately before the block runs — not a global to reach
 // through globalThis for. Reading it bare has no ordering requirement and no
 // cross-request global to race on.
-const query = new URLSearchParams(__stxServeSearch || '')
+const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 
 // Level filter is a MINIMUM-severity threshold: the key names the floor, and we
 // expand it to the set of levels at or above it. Whitelisted — the raw param is
@@ -119,7 +119,7 @@ const activeRange = RANGES.find(r => r.key === rangeParam) ?? DEFAULT_RANGE
 const rangeFilter = activeRange.key
 
 const requestedProject = query.get('project')
-const cookieProject = cookies.loghq_project ?? ''
+const cookieProject = typeof cookies !== 'undefined' ? (cookies.loghq_project ?? '') : ''
 
 const PAGE_SIZE = 50
 const pageParam = Number.parseInt(query.get('page') || '1', 10)
@@ -135,7 +135,7 @@ const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 
 // put the raw session credential in the page source of every /dashboard render,
 // because `useStore('session').token()` appears in the client block below. See
 // the fuller note in settings.stx.
-const __token = cookies.loghq_token ?? ''
+const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
 let user: AuthUser | null = null
 if (__token) {
   try {

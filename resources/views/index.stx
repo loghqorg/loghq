@@ -48,7 +48,7 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/' }] })
 // This also settles ch.9.1. Both CTAs were plain `<a href>` carrying a `:href`
 // binding, which is a same-origin navigation done as a full document load. They
 // are `<StxLink>` now — one branch, one destination, no binding to override it.
-const pageAuthed = !!cookies.loghq_token
+const pageAuthed = typeof cookies !== 'undefined' && !!cookies.loghq_token
 </script>
 
 <script client>

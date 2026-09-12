@@ -25,7 +25,7 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/register' }] })
 // It has to survive the POST too. The form posts to /register with no query
 // string, so both values are carried as hidden inputs below — that is the
 // no-JS equivalent of the client reading location.search on every submit.
-const __regQuery = new URLSearchParams(__stxServeSearch || '')
+const __regQuery = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const isInvite = !!__regQuery.get('invite')
 const invitedEmail = __regQuery.get('email') || ''
 

@@ -24,7 +24,7 @@
 // marketing page changes auth state in place: signing in navigates, and
 // signOut() does a declared full load, so the next render is server-truth
 // anyway.
-const navAuthed = !!cookies.loghq_token
+const navAuthed = typeof cookies !== 'undefined' && !!cookies.loghq_token
 </script>
 
 {{-- Do NOT write a template comment's opening marker as prose anywhere in this
@@ -115,4 +115,3 @@ const navAuthed = !!cookies.loghq_token
     </details>
   </div>
 </nav>
-
