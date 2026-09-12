@@ -44,6 +44,7 @@ database/*.sqlite-shm
 
 # Build files
 .cache
+/.output/
 temp
 .temp
 data.ms
