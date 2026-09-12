@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "clients": [
+    {
+      "name": "@loghq/stacks",
+      "path": "/logs",
+      "headerKey": "loghq_stacks",
+      "body": {
+        "logs": [
+          {
+            "level": "error",
+            "message": "checkout failed",
+            "channel": "payments",
+            "context": { "orderId": "ord_42" },
+            "environment": "production",
+            "release": "web@1.2.3",
+            "framework": "stacks",
+            "host": "web-01",
+            "timestamp": "2026-09-12T00:00:00.000Z",
+            "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "requestId": "req-42",
+            "sdk": { "name": "loghq.stacks", "version": "0.2.6" }
+          }
+        ]
+      }
+    },
+    {
+      "name": "loghq/php",
+      "path": "/logs",
+      "headerKey": "loghq_php",
+      "body": {
+        "logs": [
+          {
+            "project": "api",
+            "level": "warning",
+            "message": "queue latency high",
+            "channel": "workers",
+            "context": { "queue": "mail" },
+            "framework": "php",
+            "timestamp": "2026-09-12T00:00:00.000Z",
+            "sdk": { "name": "loghq.php", "version": "0.2.0" }
+          }
+        ]
+      }
+    },
+    {
+      "name": "loghq/laravel",
+      "path": "/logs",
+      "headerKey": "loghq_laravel",
+      "body": {
+        "logs": [
+          {
+            "project": "laravel-api",
+            "level": "info",
+            "message": "cache warmed",
+            "channel": "loghq",
+            "context": { "keys": 12 },
+            "framework": "laravel",
+            "timestamp": "2026-09-12T00:00:00.000Z",
+            "sdk": { "name": "loghq.laravel", "version": "0.2.0" }
+          }
+        ]
+      }
+    }
+  ]
+}
