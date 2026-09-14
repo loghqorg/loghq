@@ -34,9 +34,6 @@ jobs:
   # promoted, and it costs about a minute. Without it a promotion carrying a
   # broken commit deploys, and nothing ever says so.
   #
-  # Deliberately not lint or build: neither changes what the box serves. This
-  # gate is about correctness, and the "does it actually serve" half is asserted
-  # against the live site at the end of the deploy job.
   gate:
     runs-on: ubuntu-latest
     steps:
@@ -55,6 +52,10 @@ jobs:
         run: bunx --bun tsc --noEmit
       - name: Test
         run: bun run test
+      - name: Build the production artifact
+        run: bun run build
+      - name: Validate the production artifact
+        run: bun run release:validate
 
   deploy:
     needs: gate
@@ -327,3 +328,6 @@ jobs:
             || { echo "::error::ingest did not reject a bogus key with 'unknown project'"; exit 1; }
 
           echo "== all deploy verifications passed =="
+
+      - name: Verify public metadata
+        run: bun run deployment:smoke

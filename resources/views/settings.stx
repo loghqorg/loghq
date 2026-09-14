@@ -54,9 +54,9 @@ const INGEST_BASE = ingestUrl()
 //
 // Deliberately not naming that global here: the ch.5.5 gate greps for it by
 // name, and prose in a comment would keep the check permanently non-zero.
-const query = new URLSearchParams(__stxServeSearch || '')
+const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const requestedProject = query.get('project')
-const cookieProject = cookies.loghq_project ?? ''
+const cookieProject = typeof cookies !== 'undefined' ? (cookies.loghq_project ?? '') : ''
 
 // ---------------------------------------------------------------------------
 // THE `__` PREFIX IS A SECURITY BOUNDARY IN THIS FILE. READ BEFORE RENAMING.
@@ -81,7 +81,7 @@ const cookieProject = cookies.loghq_project ?? ''
 // Renaming a `__` binding to a bare one re-opens the leak silently, with no lint
 // error and no test failure.
 // ---------------------------------------------------------------------------
-const __token = cookies.loghq_token ?? ''
+const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
 let user: AuthUser | null = null
 if (__token) {
   try {

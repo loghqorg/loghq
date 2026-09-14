@@ -141,6 +141,8 @@ export interface ArchiveFilters {
   channel?: string
   environment?: string
   release?: string
+  traceId?: string
+  requestId?: string
   /** Free text matched against the message. */
   q?: string
   fromDay?: string
@@ -186,6 +188,12 @@ function filterClauses(f: ArchiveFilters): string[] {
 
   if (f.release)
     where.push(`"release" = ${sqlQuote(String(f.release).slice(0, 255))}`)
+
+  if (f.traceId)
+    where.push(`"trace_id" = ${sqlQuote(String(f.traceId).slice(0, 64))}`)
+
+  if (f.requestId)
+    where.push(`"request_id" = ${sqlQuote(String(f.requestId).slice(0, 64))}`)
 
   if (f.q) {
     // `%` and `_` are left literal rather than escaped: a user typing them into

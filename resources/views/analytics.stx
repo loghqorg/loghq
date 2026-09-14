@@ -13,7 +13,7 @@ import { archiveConfig } from '../../app/Archive/config'
 import { projectPlan } from '../../app/Archive/plan'
 import { archiveSummary, levelsByRelease, volumeSeries } from '../../app/Archive/query'
 
-const query = new URLSearchParams(__stxServeSearch || '')
+const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 
 // Whitelisted, like the dashboard's ranges: the key comes from the URL and only
 // the mapped day count is ever used in a query.
@@ -34,9 +34,9 @@ const RANGES: AnalyticsRange[] = [
 const activeRange = RANGES.find(r => r.key === query.get('range')) ?? DEFAULT_RANGE
 
 const requestedProject = query.get('project')
-const cookieProject = cookies.loghq_project ?? ''
+const cookieProject = typeof cookies !== 'undefined' ? (cookies.loghq_project ?? '') : ''
 
-const __token = cookies.loghq_token ?? ''
+const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
 let user: AuthUser | null = null
 if (__token) {
   try {
