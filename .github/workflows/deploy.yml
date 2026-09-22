@@ -297,21 +297,24 @@ jobs:
           probe "/login" 200
 
           # 4. Sign-in issues a session cookie. This is the regression that shipped
-          #    green: page actions could not set cookies at all on the stx the app
-          #    resolved, so login 303'd to /dashboard with no Set-Cookie and the
-          #    dashboard bounced straight back. A 303 alone proves nothing.
-          hdrs="$(curl -sS -D - -o /dev/null -X POST "${URL}/login" \
+          #    green once: a login that reported success and set no usable cookie,
+          #    so the dashboard bounced straight back. Success alone proves nothing.
+          #    Login is now the JSON API action at /api/auth/login (200 + Set-Cookie),
+          #    not the old page-action 303, and the cookie is the unified auth-token.
+          body="$(jq -nc --arg e "$SMOKE_EMAIL" --arg p "$SMOKE_PASSWORD" '{email:$e,password:$p}')"
+          hdrs="$(curl -sS -D - -o /dev/null -X POST "${URL}/api/auth/login" \
                     --max-time 20 \
-                    --data-urlencode "email=${SMOKE_EMAIL}" \
-                    --data-urlencode "password=${SMOKE_PASSWORD}")"
-          echo "$hdrs" | grep -qiE '^HTTP/[0-9.]+ 303' \
-            || { echo "::error::POST /login did not 303"; echo "$hdrs" | grep -iE '^HTTP/' ; exit 1; }
-          echo "$hdrs" | grep -qiE '^set-cookie: *loghq_token=' \
-            || { echo "::error::POST /login set no loghq_token cookie"; exit 1; }
-          echo "   POST /login -> 303 + loghq_token cookie"
+                    -H 'Content-Type: application/json' \
+                    -H 'Accept: application/json' \
+                    --data "$body")"
+          echo "$hdrs" | grep -qiE '^HTTP/[0-9.]+ 200' \
+            || { echo "::error::POST /api/auth/login did not 200"; echo "$hdrs" | grep -iE '^HTTP/' ; exit 1; }
+          echo "$hdrs" | grep -qiE '^set-cookie: *auth-token=' \
+            || { echo "::error::POST /api/auth/login set no auth-token cookie"; exit 1; }
+          echo "   POST /api/auth/login -> 200 + auth-token cookie"
 
           # 5. The token the cookie carries is really a session, not just a string.
-          TOKEN="$(echo "$hdrs" | grep -iE '^set-cookie: *loghq_token=' | head -1 | sed -E 's/.*loghq_token=([^;]*).*/\1/' | tr -d '\r')"
+          TOKEN="$(echo "$hdrs" | grep -iE '^set-cookie: *auth-token=' | head -1 | sed -E 's/.*auth-token=([^;]*).*/\1/' | tr -d '\r')"
           me="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/api/me" -H "Authorization: Bearer ${TOKEN}")"
           echo "   GET /api/me -> $me"
           [ "$me" = "200" ] || { echo "::error::/api/me returned $me for a freshly issued token"; exit 1; }
