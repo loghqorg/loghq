@@ -1,17 +1,4 @@
 <script server>
-// STATIC import, and that is load-bearing — do not turn it into an
-// `await import('@stacksjs/auth')` inside the action below.
-//
-// A static import here is resolved against this project. A dynamic import
-// evaluated inside an action's body is resolved in the context of the module
-// running it — stx's variable-extractor — and the stx fork's
-// node_modules/@stacksjs/auth is a symlink into a SIBLING PROJECT (bughq). So
-// the dynamic form loaded another app's auth package, whose `@stacksjs/orm`
-// has no User model generated for this database, and `Auth.login` died on
-// `User.where is not a function`. Measured, not theorised: the stack trace
-// named bughq's path.
-import { Auth } from '@stacksjs/auth'
-
 // Show a provider's sign-in button only when it's actually configured, so the
 // buttons stay hidden until credentials are set (then reappear automatically —
 // no code change). See config/services.ts.
@@ -32,77 +19,105 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/login' }] })
 // server-known at render time, so reading it on the client meant the message
 // could not exist until hydration.
 const oauthError = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '').get('error') || ''
+</script>
 
-// What the action merges back on a rejected submit, declared with its
-// resting values.
+<script client>
+// Client-fetch sign-in, matching the uniform HQ auth model (statushq et al).
 //
-// Not decoration. On a GET neither name exists at all, so the template's
-// `@if (formError)` and `values?.email` were reading undeclared identifiers —
-// harmless at runtime, because an undefined name is falsy, but it left the
-// page's own contract implicit and unreadable. Declaring them states what the
-// action returns and gives the template something real to read on both paths.
-// The action's `Object.assign` overwrites these on the POST render.
-let formError = ''
-let values: { email?: string } = {}
-
-// ---------------------------------------------------------------------------
-// The page handles its own POST (stx#1847).
+// The page no longer handles its own POST. Sign-in is a same-origin fetch to
+// POST /api/auth/login (routes/auth.ts), which on success sets the HttpOnly
+// `auth-token` cookie server-side and returns a token in its body; the browser
+// then carries that cookie on the full-page navigation to /dashboard. There is
+// no client token, no Authorization header and no localStorage.
 //
-// `action` is picked up off the render context, so a plain top-level binding in
-// this block is the declaration — and being a function it is dropped by the
-// server→client bridge, so it never reaches the HTML.
-//
-// This is the whole form now. There is no fetch, no preventDefault and no
-// client mirror of the error: the browser posts the form, this runs, and either
-// a 303 carries the session cookie to /dashboard or the same template
-// re-renders with `formError` and `values` merged into its context. That is one
-// handler for the scripting-off path and the scripting-on path, which is what
-// the app never had — measured in stx#1847, five of five forms inert without
-// JavaScript.
-//
-// `Auth.login` carries the rate limiting with it: `Auth.attempt` calls
-// RateLimiter.isRateLimited before verifying and records a failed attempt after,
-// keyed by email. So dropping `.rateLimit(5, 'minute')` from the route does not
-// drop the protection — it moves into the same function that checks the
-// password.
-//
-// The cookie is deliberately NOT httpOnly. loghq's session store reads
-// `loghq_token` with useCookie to attach the bearer to API calls, so making it
-// httpOnly here would sign the user in and then leave every client fetch
-// unauthenticated. Same name, maxAge and SameSite the store writes, so a
-// session established here and one established by the enhanced path are
-// indistinguishable afterwards.
-const action = async ({ form, request }: { form: Record<string, string | string[]>, request: Request }) => {
-  const email = String(form.email ?? '').trim()
-  const password = String(form.password ?? '')
+// Written in loghq's own signal idiom (`:model` inputs, `:show`/`:text`
+// bindings, @click/@submit handlers) rather than statushq's plain-DOM IIFE.
+const mode = state('credentials')
+const email = state('')
+const password = state('')
+const remember = state(false)
+const code = state('')
+const error = state('')
+const loading = state(false)
+// The 2FA challenge from step one. Not a signal — nothing renders it, it is
+// just carried to the verify request. Plain module state survives between the
+// two handler calls.
+let challengeToken = ''
 
-  // Cheap checks first, in the same shape the failure path uses, so an empty
-  // submit does not cost a database round trip.
-  if (!email || !password)
-    return { formError: 'Enter your email and password.', values: { email } }
+async function post(url: string, body: Record<string, unknown>): Promise<{ ok: boolean, status: number, data: any }> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  })
+  let data: any = {}
+  try { data = await res.json() }
+  catch {}
+  return { ok: res.ok, status: res.status, data }
+}
 
-  const result = await Auth.login({ email, password })
+async function onLogin(e: Event): Promise<void> {
+  e.preventDefault()
+  error.set('')
+  const em = email().trim()
+  const pw = password()
+  if (!em || !pw) {
+    error.set('Enter your email and password.')
+    return
+  }
+  if (loading())
+    return
+  loading.set(true)
+  try {
+    const r = await post('/api/auth/login', { email: em, password: pw, remember: remember() ? '1' : '0' })
+    if (r.data && r.data.requires_two_factor) {
+      // A 2FA-enabled account: carry the challenge to step two. loghq ships no
+      // enrolment UI, but the step exists so such an account cannot lock out.
+      challengeToken = r.data.challenge_token
+      mode.set('twofa')
+      return
+    }
+    if (r.ok && (r.data.token || r.data.access_token)) {
+      navigate('/dashboard', { reload: true })
+      return
+    }
+    error.set((r.data && (r.data.message || r.data.error)) || 'Invalid email or password.')
+  }
+  catch {
+    error.set('Something went wrong. Please try again.')
+  }
+  finally {
+    loading.set(false)
+  }
+}
 
-  // One message for "no such account" and "wrong password" on purpose — saying
-  // which is an account-enumeration oracle. The framework made the same change
-  // for its own auth in 0.70.362.
-  if (!result?.token)
-    return { formError: 'Invalid email or password.', values: { email } }
-
-  return {
-    redirect: '/dashboard',
-    cookies: {
-      loghq_token: {
-        value: result.token,
-        maxAge: 2592000,
-        sameSite: 'Lax',
-        path: '/',
-        // Secure only where it can be honoured. Setting it unconditionally
-        // would make the cookie undeliverable over plain http, which is what
-        // local dev serves.
-        secure: new URL(request.url).protocol === 'https:',
-      },
-    },
+async function onVerify(e: Event): Promise<void> {
+  e.preventDefault()
+  error.set('')
+  if (loading())
+    return
+  loading.set(true)
+  try {
+    const r = await post('/api/auth/verify-two-factor-login', {
+      challenge_token: challengeToken,
+      code: code().trim(),
+      remember: remember() ? '1' : '0',
+    })
+    if (r.ok && (r.data.token || r.data.access_token)) {
+      navigate('/dashboard', { reload: true })
+      return
+    }
+    // Challenge tokens are single-use; send a failed attempt back to step one.
+    error.set((r.data && (r.data.message || r.data.error)) || 'Invalid code — please sign in again.')
+    code.set('')
+    mode.set('credentials')
+  }
+  catch {
+    error.set('Something went wrong. Please try again.')
+  }
+  finally {
+    loading.set(false)
   }
 }
 </script>
@@ -111,9 +126,7 @@ const action = async ({ form, request }: { form: Record<string, string | string[
 {{-- Explicit layout binding, per ch.3.4. Without it the page relies on
     the implicit path (process.js:310-338), which applies defaultLayout only
     while the page has no DOCTYPE and then wraps it in a synthetic
-    @section('content'). That is fragile in a specific way: the gate is
-    `if (!hasDoctype || hasSections)`, so the binding depends on what the
-    page does NOT contain. --}}
+    @section('content'). --}}
 @extends('layouts/default')
 
 @section('content')
@@ -124,40 +137,43 @@ const action = async ({ form, request }: { form: Record<string, string | string[
       <p class="mt-2 text-sm text-subtle">Sign in to your account</p>
     </div>
 
-    {{-- action and method, so the browser can submit this on its own. The page
-        handles its own POST — see the action in the server block — so there is
-        no separate endpoint and no handler to keep in step with one. --}}
-    <form action="/login" method="POST" class="space-y-4">
-      @if (formError)
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
-      @endif
+    {{-- The shared error box for both steps. `:text` overwrites the (empty)
+        static label after hydration and never cloaks. --}}
+    <div :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
 
+    {{-- Step 1: credentials. A same-origin fetch, not a native POST — the
+        submit is intercepted so the browser never navigates to /login itself. --}}
+    <form :show="mode() === 'credentials'" action="/api/auth/login" method="POST" @submit="onLogin" class="space-y-4">
       <div>
         <label for="login-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" value="{{ values?.email || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <label for="login-password" class="block font-medium text-muted text-xs">Password</label>
           <StxLink to="/forgot-password" class="font-medium text-accent text-xs">Forgot password?</StxLink>
         </div>
-        <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" :model="password" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 
-      {{-- The label is a `:text` binding with the resting label written into the
-          element, not a `{{ }}` expression in the body. stx cloaks any element
-          whose TEXT contains an unresolved expression (misc-directives.ts:228)
-          and the cloak rule is `[x-cloak]{display:none !important}` — so the
-          form's only submit control was display:none until the client runtime
-          booted. `:text` overwrites the static label after hydration and never
-          cloaks, so the button is present and pressable at first paint. --}}
-      {{-- A plain button. The `:disabled` and `:text` bindings that used to sit
-          here read a client mutation's loading flag; with a native submit the
-          browser owns that state, and a binding onto a signal this page no
-          longer has would have been a dangling expression. The label is static
-          markup, so it is present and pressable at first paint rather than
-          waiting on hydration to be written. --}}
-      <button type="submit" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
+      {{-- Remember me, default OFF: unchecked is the baseline week, checked is
+          30 days (sessionExpiryMinutes reads this on the server). --}}
+      <label for="login-remember" class="flex gap-2 items-center text-sm text-subtle cursor-pointer select-none">
+        <input id="login-remember" name="remember" type="checkbox" :model="remember" class="h-4 w-4 accent-[var(--accent)]">
+        <span>Keep me signed in for 30 days</span>
+      </label>
+
+      <button type="submit" :disabled="loading()" :text="loading() ? 'Signing in…' : 'Sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Sign in</button>
+    </form>
+
+    {{-- Step 2: TOTP, shown only when the account has 2FA enabled. --}}
+    <form :show="mode() === 'twofa'" action="/api/auth/verify-two-factor-login" method="POST" @submit="onVerify" class="space-y-4">
+      <p class="text-sm text-subtle">Enter the 6-digit code from your authenticator app.</p>
+      <div>
+        <label for="login-code" class="block mb-1.5 font-medium text-muted text-xs">Authentication code</label>
+        <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" :model="code" class="px-3.5 py-2.5 w-full text-sm field">
+      </div>
+      <button type="submit" :disabled="loading()" :text="loading() ? 'Verifying…' : 'Verify and sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Verify and sign in</button>
     </form>
 
     @if (oauthError)

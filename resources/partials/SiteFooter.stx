@@ -7,7 +7,7 @@
 // Each partial owns its own copy: a partial's scope does not reach across
 // includes, and this is one boolean rather than a signal plus an onMount plus an
 // effect.
-const footerAuthed = typeof cookies !== 'undefined' && !!cookies.loghq_token
+const footerAuthed = typeof cookies !== 'undefined' && !!cookies['auth-token']
 </script>
 
 <footer class="footer shell">

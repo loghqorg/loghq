@@ -26,7 +26,7 @@ useSeoMeta({
 const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const logId = (query.get('log') || '').slice(0, 255)
 
-const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
+const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') : ''
 let __user: any = null
 if (__token) {
   try {
@@ -132,7 +132,7 @@ const analysisVerification = Array.isArray(analysis?.verification) ? analysis.ve
 // it completes inside this request rather than needing a queue and a poller -
 // see the note in app/Fix/analyze.ts.
 const action = async ({ form, cookies: reqCookies }: { form: Record<string, string | string[]>, cookies: Record<string, string> }) => {
-  const token = reqCookies.loghq_token || ''
+  const token = reqCookies['auth-token'] || ''
   // Re-authenticated from the request the action was handed. A POST is its own
   // request and the session can expire between drawing the button and pressing
   // it.

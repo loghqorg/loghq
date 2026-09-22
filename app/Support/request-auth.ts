@@ -8,10 +8,12 @@
  * This exists instead of the `auth` middleware alias because that alias does not
  * reliably populate `request.user()` on these route handlers (see the note in
  * routes/projects.ts), so the token is read and resolved directly. Two carriers
- * are accepted: a bearer header, which is what the API clients send, and the
- * `loghq_token` cookie, which is what the dashboard has after signing in.
+ * are accepted: a bearer header, which is what the external API clients send,
+ * and the HttpOnly `auth-token` cookie (config.auth.defaultTokenName), which is
+ * what the dashboard has after signing in.
  */
 import { Auth } from '@stacksjs/auth'
+import { config } from '@stacksjs/config'
 
 export async function userFromRequest(request: any): Promise<any | null> {
   const authHeader = request.headers?.get?.('authorization') ?? ''
@@ -19,7 +21,8 @@ export async function userFromRequest(request: any): Promise<any | null> {
 
   if (!token) {
     const cookie = request.headers?.get?.('cookie') ?? ''
-    const m = cookie.match(/(?:^|;)\s*loghq_token=([^;]+)/)
+    const name = (config.auth?.defaultTokenName || 'auth-token').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const m = cookie.match(new RegExp(`(?:^|;)\\s*${name}=([^;]+)`))
     if (m)
       token = decodeURIComponent(m[1])
   }

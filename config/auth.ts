@@ -47,20 +47,37 @@ export default {
   password: env.AUTH_PASSWORD_FIELD || 'password',
 
   /**
-   * Access-token expiry in milliseconds (default: 1 hour).
+   * Access-token expiry in milliseconds (default: 7 days).
    *
-   * Access tokens are deliberately short-lived: a leaked bearer (logs,
-   * proxy, browser storage) is then usable for an hour, not a month. The
-   * paired refresh token (`refreshTokenExpiry`) carries the long-lived
-   * session and is rotated on use, so UX is unaffected.
+   * This value IS the browser session length, not just an API-bearer TTL.
+   * The custom auth actions (LoginAction, RegisterAction,
+   * VerifyTwoFactorLoginAction, SocialCallbackAction) mirror the issued
+   * access token into the HttpOnly `auth-token` cookie (see
+   * Actions/Auth/authCookie.ts) because the dashboard is server-rendered stx
+   * with no client hydration and has no other way to know who is asking. Both
+   * the cookie's Max-Age and the `oauth_access_tokens.expires_at` row are
+   * stamped from here, and nothing extends either one — `getUserFromToken`
+   * bumps `updated_at` on every request but leaves `expires_at` alone, then
+   * deletes the row once it passes. So a signed-in operator is logged out
+   * exactly this long after login regardless of activity.
+   *
+   * This is the BASELINE only. LoginAction and VerifyTwoFactorLoginAction
+   * pass a per-login `expiresInMinutes` from the sign-in form's "remember me"
+   * checkbox (see sessionExpiryMinutes in Actions/Auth/authCookie.ts): a week
+   * unchecked, 30 days checked. This default covers the entry points that have
+   * no such checkbox — register, SSO — so they land on the baseline week.
    */
-  // 30 days: the dashboard is a long-lived session (token kept in localStorage +
-  // a cookie). A 1h expiry logged users out mid-session.
-  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 30 * 24 * 60 * 60 * 1000,
+  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 7 * 24 * 60 * 60 * 1000,
 
   /**
-   * Refresh-token expiry in milliseconds (default: 30 days). This is the
-   * long-lived credential exchanged for fresh access tokens.
+   * Refresh-token expiry in milliseconds (default: 30 days).
+   *
+   * NOT WIRED UP. A refresh token is minted and returned in the login
+   * response body by the auth actions and consumed by nothing: there is no
+   * refresh route and no cookie stores it, so the value below only bounds a
+   * row in `oauth_refresh_tokens` that never gets read. Session length is
+   * `tokenExpiry` above, alone — the long-lived `auth-token` cookie IS the
+   * session.
    */
   refreshTokenExpiry: env.AUTH_REFRESH_TOKEN_EXPIRY || 30 * 24 * 60 * 60 * 1000,
 

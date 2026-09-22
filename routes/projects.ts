@@ -7,9 +7,9 @@
  * localStorage. Each new project gets its own public `ingest_key`.
  */
 
-import { Auth } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
+import { userFromRequest } from '../app/Support/request-auth'
 import { type ChannelType, sendTestAlert, validateWebhook } from '../app/Errors/channels'
 import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites'
 import { purgeProject } from '../app/Archive/exporter'
@@ -62,35 +62,22 @@ function newChannelId(): string {
   return `ch_${globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`
 }
 
-// Resolve the authenticated user from the bearer token. The `auth` middleware
-// alias does not reliably populate `request.user()` on route handlers (see
-// CreateCheckoutAction), so we read the token and resolve it directly.
+// Resolve the authenticated user for a request. Delegates to the shared
+// userFromRequest helper, which accepts BOTH carriers: a bearer header (what
+// the external API clients send) and the HttpOnly `auth-token` cookie (what the
+// dashboard sends on same-origin fetches after signing in). The `auth`
+// middleware alias does not reliably populate `request.user()` on these route
+// handlers (see CreateCheckoutAction), so the token is read and resolved
+// directly. The cookie fallback is what keeps every settings/dashboard mutation
+// working now that the client no longer holds a readable bearer.
 async function currentUser(request: any): Promise<any | null> {
-  const authHeader = request.headers?.get?.('authorization') ?? ''
-  const bearer = request.bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
-  if (!bearer)
-    return null
-  try {
-    return await Auth.getUserFromToken(bearer)
-  }
-  catch {
-    return null
-  }
+  return userFromRequest(request)
 }
 
-// Resolve the user from the `loghq_token` cookie (browser navigations like the
-// /join link carry no bearer header, only the cookie login mirrors).
+// The /join browser navigation carries no bearer header, only the cookie —
+// userFromRequest resolves that carrier too, so this shares one code path.
 async function userFromCookie(request: any): Promise<any | null> {
-  const cookie = request.headers?.get?.('cookie') ?? ''
-  const m = cookie.match(/(?:^|;)\s*loghq_token=([^;]+)/)
-  if (!m)
-    return null
-  try {
-    return await Auth.getUserFromToken(decodeURIComponent(m[1]))
-  }
-  catch {
-    return null
-  }
+  return userFromRequest(request)
 }
 
 function newMemberId(): string {

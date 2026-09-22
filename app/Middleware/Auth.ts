@@ -17,6 +17,18 @@ export default new Middleware({
       if (!isValid)
         throw new HttpError(401, 'Unauthorized. Invalid token.')
 
+      // Stamp the resolved user like the cookie branch below and the
+      // framework-default middleware do — `request.user()` returns
+      // `_authenticatedUser` with no fallback, so without this a route behind
+      // `.middleware('auth')` that reads `await request.user()` (e.g.
+      // CreateCheckoutAction) saw undefined even after a valid bearer passed
+      // here. Do NOT overwrite `request.user` itself — it is the accessor.
+      const user = await Auth.getUserFromToken(bearerToken)
+      if (user) {
+        Auth.setUser(user)
+        ;(request as { _authenticatedUser?: unknown })._authenticatedUser = user
+      }
+
       log.debug(`[middleware:auth] Bearer token valid`)
       return
     }
@@ -51,10 +63,17 @@ export default new Middleware({
 
     if (sessionId) {
       log.debug(`[middleware:auth] Validating session`)
-      const { sessionCheck } = await import('@stacksjs/auth')
+      const { sessionCheck, sessionUser } = await import('@stacksjs/auth')
       const isValid = await sessionCheck(sessionId)
       if (!isValid)
         throw new HttpError(401, 'Unauthorized. Session expired.')
+
+      // Same stamping for the session branch.
+      const user = await sessionUser(sessionId)
+      if (user) {
+        Auth.setUser(user)
+        ;(request as { _authenticatedUser?: unknown })._authenticatedUser = user
+      }
 
       log.debug(`[middleware:auth] Session valid`)
       return

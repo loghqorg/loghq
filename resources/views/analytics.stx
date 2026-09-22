@@ -51,7 +51,7 @@ const rangeLabel = isCustom
 const requestedProject = query.get('project')
 const cookieProject = typeof cookies !== 'undefined' ? (cookies.loghq_project ?? '') : ''
 
-const __token = typeof cookies !== 'undefined' ? (cookies.loghq_token ?? '') : ''
+const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') : ''
 let user: AuthUser | null = null
 if (__token) {
   try {
@@ -378,8 +378,14 @@ summary:focus-visible {
 
   <div class="mx-auto max-w-5xl">
 
+    {{-- Signed-out gate. An stx GET server block cannot 302, so instead of a
+        client pre-paint bounce (deleted with AuthGuard) the server renders a
+        sign-in panel when the auth-token cookie resolved no user. --}}
     @if (!user)
-      <div id="auth-pending" class="py-24 text-center text-sm text-subtle">Loading…</div>
+      <div class="py-24 text-center">
+        <p class="mb-4 text-sm text-subtle">You're signed out.</p>
+        <StxLink to="/login" class="inline-block px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px]">Sign in</StxLink>
+      </div>
     @endif
 
     @if (user && projectsUnavailable)

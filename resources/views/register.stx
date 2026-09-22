@@ -1,9 +1,4 @@
 <script server>
-// Static, not a dynamic import inside the action — see the note in login.stx:
-// the dynamic form resolves through stx's own node_modules, which links into a
-// sibling project, and loads an auth package whose ORM has no model for this
-// database.
-import { register } from '@stacksjs/auth'
 // Show a provider's sign-in button only when it's actually configured, so the
 // buttons stay hidden until credentials are set (then reappear automatically —
 // no code change). See config/services.ts.
@@ -19,64 +14,67 @@ useSeoMeta({
 })
 useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/register' }] })
 
-// Invite context, read on the server so it is part of the first render rather
-// than something hydration adds.
-//
-// It has to survive the POST too. The form posts to /register with no query
-// string, so both values are carried as hidden inputs below — that is the
-// no-JS equivalent of the client reading location.search on every submit.
+// Invite context, read on the server so it is part of the first render. Both
+// values bridge to the client block (their names appear there), which is what
+// lets the client decide where to land and pre-fill a locked email.
 const __regQuery = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const isInvite = !!__regQuery.get('invite')
 const invitedEmail = __regQuery.get('email') || ''
+</script>
 
-// Resting values for what the action merges back on a rejected submit.
-let formError = ''
-let values: { name?: string, email?: string } = {}
+<script client>
+// Client-fetch sign-up, matching the uniform HQ auth model. A same-origin fetch
+// to POST /api/auth/register (routes/auth.ts) creates the account and sets the
+// HttpOnly `auth-token` cookie server-side; the browser then carries it on the
+// full-page navigation into the app. Where that lands depends on the invite
+// context the server bridged in: an invited user joins the project they were
+// asked to (the dashboard), everyone else creates their first app.
+const name = state('')
+const email = state(invitedEmail || '')
+const password = state('')
+const error = state('')
+const loading = state(false)
 
-// The page handles its own POST (stx#1847). Same contract as login.stx: a 303
-// carrying the session cookie, or a context merge that redraws this template
-// with the message and the fields still filled.
-const action = async ({ form, request }: { form: Record<string, string | string[]>, request: Request }) => {
-  const name = String(form.name ?? '').trim()
-  const email = String(form.email ?? '').trim()
-  const password = String(form.password ?? '')
-  const invited = !!String(form.invite ?? '')
-  const kept = { name, email }
-
-  if (!name || !email || !password)
-    return { formError: 'Fill in your name, email and password.', values: kept }
-  if (password.length < 8)
-    return { formError: 'Password must be at least 8 characters.', values: kept }
-
-  // `register` throws an HttpError for an invalid address, a short password or
-  // a duplicate. Its duplicate message is deliberately vague — the framework
-  // treats "this email exists" as an enumeration oracle — so it is surfaced
-  // as-is rather than replaced with something more specific.
-  let result
+async function onRegister(e: Event): Promise<void> {
+  e.preventDefault()
+  error.set('')
+  const nm = name().trim()
+  const em = email().trim()
+  const pw = password()
+  if (!nm || !em || !pw) {
+    error.set('Fill in your name, email and password.')
+    return
+  }
+  if (pw.length < 8) {
+    error.set('Password must be at least 8 characters.')
+    return
+  }
+  if (loading())
+    return
+  loading.set(true)
   try {
-    result = await register({ name, email, password })
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name: nm, email: em, password: pw }),
+    })
+    let data: any = {}
+    try { data = await res.json() }
+    catch {}
+    if (res.ok && data.token) {
+      // An invited user goes straight to the dashboard; everyone else has no
+      // project yet, so they land on the create-your-first-app page.
+      navigate(isInvite ? '/dashboard' : '/projects/new', { reload: true })
+      return
+    }
+    error.set(data.message || 'Could not create the account.')
   }
-  catch (err) {
-    return { formError: (err as Error)?.message || 'Could not create the account.', values: kept }
+  catch {
+    error.set('Something went wrong. Please try again.')
   }
-
-  if (!result?.token)
-    return { formError: 'Could not create the account.', values: kept }
-
-  // An invited user goes straight to the dashboard — the project already
-  // exists, they were asked to join it. Everyone else has no project yet, so
-  // they land on the create-your-first-app page.
-  return {
-    redirect: invited ? '/dashboard' : '/projects/new',
-    cookies: {
-      loghq_token: {
-        value: result.token,
-        maxAge: 2592000,
-        sameSite: 'Lax',
-        path: '/',
-        secure: new URL(request.url).protocol === 'https:',
-      },
-    },
+  finally {
+    loading.set(false)
   }
 }
 </script>
@@ -97,32 +95,24 @@ const action = async ({ form, request }: { form: Record<string, string | string[
       <p class="mb-3.5 invite-hint">You've been invited to a project — sign up to join it.</p>
     @endif
 
-    {{-- Posts to itself; the action in the server block handles it. --}}
-    <form action="/register" method="POST" class="space-y-4">
-      {{-- The invite context, carried across the POST. Without these the query
-          string is lost on submit and an invited user would be sent to
-          /projects/new to create a project they were invited to. --}}
-      @if (isInvite)<input type="hidden" name="invite" value="1">@endif
-      @if (formError)
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
-      @endif
+    <div :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
 
+    {{-- A same-origin fetch, not a native POST — the submit is intercepted. --}}
+    <form action="/api/auth/register" method="POST" @submit="onRegister" class="space-y-4">
       <div>
         <label for="register-name" class="block mb-1.5 font-medium text-muted text-xs">Name</label>
-        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" value="{{ values?.name || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" :model="name" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <label for="register-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" value="{{ values?.email || invitedEmail }}" {{ invitedEmail ? 'readonly' : '' }} class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" {{ invitedEmail ? 'readonly' : '' }} class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
         <label for="register-password" class="block mb-1.5 font-medium text-muted text-xs">Password</label>
-        <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" :model="password" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 
-      {{-- A plain button with a static label. The loading bindings that were
-          here read a client mutation this page no longer has. --}}
-      <button type="submit" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
+      <button type="submit" :disabled="loading()" :text="loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
     </form>
 
     @if (anyOauth)

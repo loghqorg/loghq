@@ -189,9 +189,4 @@ onMount(() => {
   </div>
 </div>
 
-{{-- Auth guard. Navigation only, renders nothing, and must run before the page is
-    usable — a directive would hydrate too late and flash the account shell to a
-    signed-out visitor. --}}
-
-@include('AuthGuard')
 @endsection

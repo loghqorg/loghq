@@ -2,25 +2,28 @@ import { passwordResets } from '@stacksjs/auth'
 import { response, route } from '@stacksjs/router'
 
 /**
- * `/logout`, re-registered at the root with `.skipCsrf()`.
+ * Uniform cookie-session auth (matches statushq and the other HQ apps).
  *
- * The framework's default Auth actions are CSRF-gated, which blocks a
- * same-origin `fetch()`. Token auth is CSRF-immune — a bearer token is not sent
- * automatically by the browser the way a cookie is — so skipping CSRF here is
- * safe. User route files load before the framework defaults, so this wins on
- * the duplicate method+path.
+ * Sign-in, sign-up and 2FA are custom API actions under the proxied `/api/`
+ * prefix (config/server.ts). login.stx / register.stx are now client-fetch
+ * forms that POST here with `credentials: 'same-origin'`; on success each
+ * action returns a single HttpOnly `auth-token` cookie (see
+ * Actions/Auth/authCookie.ts) that IS the session — there is no localStorage
+ * token, no Authorization header and no refresh exchange anywhere.
  *
- * `/login` and `/register` USED to be re-registered here for the same reason,
- * and are deliberately gone. Their whole justification was the same-origin
- * fetch from the sign-in and sign-up pages, and those pages do not fetch any
- * more: each handles its own POST through a page action (see login.stx and
- * register.stx). Removing them means the framework's own CSRF-gated defaults
- * apply to those paths again, which is strictly tighter than what was here —
- * this app no longer has two sign-in entry points, one of them CSRF-exempt.
- *
- * `/logout` stays because it is still a same-origin fetch: the session store
- * calls it fire-and-forget from signOut().
+ * `.skipCsrf()` stays: the endpoints are same-origin fetches, and the cookie
+ * they set is SameSite=Lax, which is the CSRF barrier for the state-changing
+ * routes it later authenticates. `Auth.attempt` inside LoginAction carries its
+ * own per-email rate limiting; the `.rateLimit(...)` here adds an IP bucket on
+ * top. User route files load before the framework defaults, so these win on any
+ * duplicate method+path.
  */
+route.post('/api/auth/login', 'Actions/Auth/LoginAction').skipCsrf().rateLimit(5, 'minute')
+route.post('/api/auth/register', 'Actions/Auth/RegisterAction').skipCsrf().rateLimit(5, 'minute')
+route.post('/api/auth/verify-two-factor-login', 'Actions/Auth/VerifyTwoFactorLoginAction').skipCsrf().rateLimit(10, 'minute')
+
+// Logout is still a same-origin fetch from the session store's signOut(); the
+// custom LogoutAction revokes the token and clears the HttpOnly cookie.
 route.post('/logout', 'Actions/Auth/LogoutAction').skipCsrf()
 route.get('/api/me', 'Actions/MeAction').skipCsrf()
 

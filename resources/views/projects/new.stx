@@ -16,7 +16,7 @@ useSeoMeta({
 // Server-side session check, replacing a client guard that navigated away
 // after hydration. A logged-out visitor now gets an honest prompt in the first
 // response instead of a create form that flashes and disappears.
-const authed = typeof cookies !== 'undefined' && !!cookies.loghq_token
+const authed = typeof cookies !== 'undefined' && !!cookies['auth-token']
 
 // Resting values for what the action merges back.
 let formError = ''
@@ -28,7 +28,7 @@ let values: { name?: string, platform?: string } = {}
 // page render: a POST is its own request, and the session could have expired
 // between drawing the form and submitting it.
 const action = async ({ form, cookies: reqCookies }: { form: Record<string, string | string[]>, cookies: Record<string, string> }) => {
-  const token = reqCookies.loghq_token || ''
+  const token = reqCookies['auth-token'] || ''
   const user = token ? await Auth.getUserFromToken(token) : null
   if (!user)
     return { redirect: '/login' }

@@ -1,9 +1,9 @@
 import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
-import { Auth } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { Payment } from '@stacksjs/payments'
 import { response } from '@stacksjs/router'
+import { userFromRequest } from '../Support/request-auth'
 
 /**
  * Return the authenticated user plus their Pro status. The dashboard calls this
@@ -16,9 +16,10 @@ export default new Action({
   description: 'Return the current user and their Pro status',
   method: 'GET',
   async handle(request: RequestInstance) {
-    const authHeader = ((request as any).headers?.get?.('authorization') ?? '')
-    const bearer = (request as any).bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
-    const user = bearer ? await Auth.getUserFromToken(bearer) : await request.user()
+    // Resolve from either carrier: an external bearer header, or the HttpOnly
+    // `auth-token` cookie the dashboard sends on same-origin fetches. /api/me
+    // has no `.middleware('auth')`, so the resolution happens here.
+    const user = await userFromRequest(request)
     if (!user)
       return response.unauthorized('Authentication required')
 
