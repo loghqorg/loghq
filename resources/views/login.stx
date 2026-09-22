@@ -109,7 +109,7 @@ async function onVerify(e: Event): Promise<void> {
       return
     }
     // Challenge tokens are single-use; send a failed attempt back to step one.
-    error.set((r.data && (r.data.message || r.data.error)) || 'Invalid code — please sign in again.')
+    error.set((r.data && (r.data.message || r.data.error)) || 'Invalid code - please sign in again.')
     code.set('')
     mode.set('credentials')
   }
