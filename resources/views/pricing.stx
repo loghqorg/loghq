@@ -15,9 +15,10 @@ const err = state('')
 
 function pick(v: 'monthly' | 'yearly'): void { interval.set(v) }
 
-// No Authorization header here — the session store's configureFetch attaches
-// the bearer to every data-primitive request. See login.stx for why `err` is a
-// page signal and not the primitive's own.
+// No Authorization header here — the session store's configureFetch sends the
+// HttpOnly auth-token cookie (credentials: 'same-origin') on every data-primitive
+// request; the browser attaches it automatically. `err` is a page signal, not
+// the primitive's own.
 const checkout = useMutation('/payments/checkout', {
   onError(e: { status?: number, data?: { error?: string } }) {
     // A 401 means the stored token is stale; the interceptor has already
@@ -38,7 +39,14 @@ const checkout = useMutation('/payments/checkout', {
 })
 
 async function upgrade(): Promise<void> {
-  if (!useStore('session').token()) {
+  // The token is HttpOnly now, so there is nothing to read client-side. Prove
+  // sign-in by the viewer instead: loadViewer() resolves /api/me on the cookie
+  // (and its own 401 handler bounces a signed-out visitor to /login). If it
+  // comes back empty, send them to sign in rather than firing a checkout that
+  // would 401.
+  const session = useStore('session')
+  await session.loadViewer()
+  if (!session.viewer()) {
     navigate('/login')
     return
   }

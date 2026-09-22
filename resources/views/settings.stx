@@ -1,6 +1,6 @@
 <script server>
 // Per-project settings (owner-only admin surface): the ingest key, team members,
-// Slack/Discord alerts, and deletion. Authenticates from the loghq_token cookie
+// Slack/Discord alerts, and deletion. Authenticates from the auth-token cookie
 // and resolves the active project from the loghq_project cookie (same browsing
 // preference the dashboard uses), scoped to projects the user OWNS — members can
 // read the log stream but only an owner administers a project. Reads happen here
@@ -54,9 +54,9 @@ const INGEST_BASE = ingestUrl()
 //
 // Deliberately not naming that global here: the ch.5.5 gate greps for it by
 // name, and prose in a comment would keep the check permanently non-zero.
-const query = new URLSearchParams(__stxServeSearch || '')
+const query = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '')
 const requestedProject = query.get('project')
-const cookieProject = cookies.loghq_project ?? ''
+const cookieProject = typeof cookies !== 'undefined' ? (cookies.loghq_project ?? '') : ''
 
 // ---------------------------------------------------------------------------
 // THE `__` PREFIX IS A SECURITY BOUNDARY IN THIS FILE. READ BEFORE RENAMING.
@@ -71,9 +71,10 @@ const cookieProject = cookies.loghq_project ?? ''
 // That last part is what makes this dangerous rather than merely wasteful. A
 // binding does not have to be USED by client code to be published; the word
 // merely has to appear. Measured on this page before the fix: `var token = "…"`
-// carried the raw session token into the HTML because `useStore('session').token()`
-// appears in the client block, and `projects` published every ingest_key because
-// the string `/api/projects/${…}` appears in a fetch URL.
+// carried the raw session credential into the HTML, and `projects` published
+// every ingest_key because the string `/api/projects/${…}` appears in a fetch
+// URL. The session cookie is HttpOnly now, but the SSR read below still holds
+// its raw value, so it stays `__`-prefixed and out of the bridge.
 //
 // So anything holding a credential is named `__something` and never reaches the
 // template. What the template renders is a projection built below — channelView,
@@ -81,7 +82,7 @@ const cookieProject = cookies.loghq_project ?? ''
 // Renaming a `__` binding to a bare one re-opens the leak silently, with no lint
 // error and no test failure.
 // ---------------------------------------------------------------------------
-const __token = cookies.loghq_token ?? ''
+const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') : ''
 let user: AuthUser | null = null
 if (__token) {
   try {
@@ -570,10 +571,6 @@ function toggleTheme(): void {
   useStore('theme').toggle()
 }
 
-const authHeaders = (): Record<string, string> => ({
-  'Authorization': `Bearer ${useStore('session').token()}`,
-  'Content-Type': 'application/json',
-})
 const projUrl = `/api/projects/${encodeURIComponent(projectId || '')}`
 const chBase = `${projUrl}/channels`
 
@@ -597,13 +594,17 @@ async function readJson(res: Response): Promise<any> {
  * primitives, applied to the one surface that cannot use them. Keep the two in
  * step: if the interceptor's 401 behaviour changes, change it here too.
  *
- * signOut() clears the token cookie and does a declared full load, so a caller
- * that keeps running after this returns is on a page that is already leaving.
+ * Auth rides the HttpOnly `auth-token` cookie the browser sends automatically
+ * (credentials: 'same-origin') — there is no client token to attach, so no
+ * Authorization header. A 401 means the session is stale/absent; signOut() does
+ * a declared full load, so a caller that keeps running after this returns is on
+ * a page that is already leaving.
  */
 async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const res = await fetch(url, {
     ...init,
-    headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...(init.headers as Record<string, string> | undefined) },
   })
   if (res.status === 401)
     useStore('session').signOut()
@@ -1193,7 +1194,7 @@ onMount(() => {
 @extends('layouts/default')
 
 @section('content')
-{{-- No hand-written theme guard here. config/stx.ts declares app.colorMode, and
+{{-- No hand-written theme guard here. config/ui.ts declares app.colorMode, and
     stx emits the pre-paint boot script from that one declaration — first inside
     <head>, above every stylesheet, reading the same loghq_theme key and setting
     the same data-theme attribute this script used to set by hand. The generated
@@ -1605,9 +1606,4 @@ onMount(() => {
   </div>
 </div>
 
-{{-- Auth guard. Navigation only, renders nothing, and must run before the page
-    is usable — a directive would hydrate too late and flash the settings UI to
-    a signed-out visitor. --}}
-
-@include('AuthGuard')
 @endsection

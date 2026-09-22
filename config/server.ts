@@ -29,16 +29,22 @@ import type { ServerConfig } from '@stacksjs/types'
  *
  *   routes/api.ts       auto-prefixed /api        -> covered by the prefix
  *   routes/projects.ts  all under /api/           -> covered by the prefix
- *   routes/auth.ts      NOT prefixed              -> named individually
+ *   routes/auth.ts      sign-in/up/2FA under /api/auth/ -> covered by the prefix;
+ *                       /logout + the /password/* + /payments/* + /webhooks/*
+ *                       paths are NOT prefixed    -> named individually below
  *   routes/logs.ts      POST /logs (SDK ingest)   -> named
  *   routes/buddy.ts     POST /jobs/{id}/cancel|retry, parameterised -> prefix
  *
  * `paths` is matched exactly and IGNORES THE METHOD, so a path listed here
  * takes its GET with it. That is why `/login` and `/register` are absent: they
- * are the only two paths in the app that have both a POST route and a GET page,
- * and listing them would proxy the sign-in page itself away. They are page
- * actions now — the page handles its own POST — which is what made emptying
- * `methods` possible without breaking them.
+ * each still render a GET page (the sign-in / sign-up forms), and listing them
+ * would proxy that page away. Their POST no longer lives at those paths — the
+ * forms are client-fetch to `/api/auth/login` and `/api/auth/register` (under
+ * the proxied `/api/` prefix) — so nothing here needs to name them. The four
+ * remaining page-action forms (fix, forgot-password, reset-password,
+ * projects/new) DO handle their own POST at their own path, which is what makes
+ * emptying `methods` load-bearing: naming any of them here would proxy the page
+ * away.
  *
  * Do not add a path here without checking `resources/views/` for a page of the
  * same name first. The failure is silent: the page stops rendering and the

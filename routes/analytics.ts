@@ -127,6 +127,8 @@ route.get('/api/projects/{projectId}/archive/search', async (request: any) => {
       channel: q.channel ? String(q.channel) : undefined,
       environment: q.environment ? String(q.environment) : undefined,
       release: q.release ? String(q.release) : undefined,
+      traceId: q.trace ? String(q.trace) : undefined,
+      requestId: q.request ? String(q.request) : undefined,
       q: q.q ? String(q.q) : undefined,
       fromDay: q.from ? String(q.from) : undefined,
       toDay: q.to ? String(q.to) : undefined,

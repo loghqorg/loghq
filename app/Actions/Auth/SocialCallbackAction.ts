@@ -6,6 +6,7 @@ import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
 import { GitHubProvider, GoogleProvider } from '@stacksjs/socials'
+import { buildAuthCookie, sessionExpiryMinutes } from './authCookie'
 
 function makeDriver(provider: string): GitHubProvider | GoogleProvider | null {
   const svc = config.services as any
@@ -97,22 +98,23 @@ export default new Action({
         .execute()
     }
 
-    const result = await Auth.loginUsingId(userId)
+    // SSO has no "remember me" checkbox, so it lands on the baseline session
+    // (a week). loginUsingId stamps expires_at from expiresInMinutes and
+    // returns the matching expiresIn, which buildAuthCookie uses for Max-Age —
+    // one number drives both.
+    const result = await Auth.loginUsingId(userId, { expiresInMinutes: sessionExpiryMinutes(false) })
     if (!result?.token)
       return fail('We could not sign you in.')
 
-    // Hand the token to the client, mirroring the email/password flow exactly:
-    // localStorage for bearer API calls + the loghq_token cookie so the very
-    // first server-rendered page is already authenticated. Token is embedded in
-    // the response body, never in the URL. Then land in the app.
-    const token = JSON.stringify(result.token)
-    const user = JSON.stringify({ id: userId, email, name: social.name })
-    return response.html(
-      `<!doctype html><meta charset="utf-8"><title>Signing you in</title>`
-      + `<script>try{localStorage.setItem('token', ${token});localStorage.setItem('user', ${user});`
-      + `document.cookie='loghq_token='+${token}+'; path=/; max-age=2592000; samesite=lax'+(location.protocol==='https:'?'; secure':'')}catch(e){}`
-      + `location.replace('/dashboard')</script>Signing you in...`,
-      200,
-    )
+    // Establish the session server-side, exactly like the email/password flow:
+    // a 302 to /dashboard carrying the single HttpOnly `auth-token` cookie. No
+    // localStorage, no client-readable cookie, no token in the URL.
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/dashboard',
+        'Set-Cookie': buildAuthCookie(result.token, result.expiresIn),
+      },
+    })
   },
 })
