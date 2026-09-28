@@ -53,7 +53,7 @@ export default {
    * The custom auth actions (LoginAction, RegisterAction,
    * VerifyTwoFactorLoginAction, SocialCallbackAction) mirror the issued
    * access token into the HttpOnly `auth-token` cookie (see
-   * Actions/Auth/authCookie.ts) because the dashboard is server-rendered stx
+   * Support/authCookie.ts) because the dashboard is server-rendered stx
    * with no client hydration and has no other way to know who is asking. Both
    * the cookie's Max-Age and the `oauth_access_tokens.expires_at` row are
    * stamped from here, and nothing extends either one — `getUserFromToken`
@@ -63,7 +63,7 @@ export default {
    *
    * This is the BASELINE only. LoginAction and VerifyTwoFactorLoginAction
    * pass a per-login `expiresInMinutes` from the sign-in form's "remember me"
-   * checkbox (see sessionExpiryMinutes in Actions/Auth/authCookie.ts): a week
+   * checkbox (see sessionExpiryMinutes in Support/authCookie.ts): a week
    * unchecked, 30 days checked. This default covers the entry points that have
    * no such checkbox — register, SSO — so they land on the baseline week.
    */

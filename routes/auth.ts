@@ -8,7 +8,7 @@ import { response, route } from '@stacksjs/router'
  * prefix (config/server.ts). login.stx / register.stx are now client-fetch
  * forms that POST here with `credentials: 'same-origin'`; on success each
  * action returns a single HttpOnly `auth-token` cookie (see
- * Actions/Auth/authCookie.ts) that IS the session — there is no localStorage
+ * Support/authCookie.ts) that IS the session — there is no localStorage
  * token, no Authorization header and no refresh exchange anywhere.
  *
  * `.skipCsrf()` stays: the endpoints are same-origin fetches, and the cookie

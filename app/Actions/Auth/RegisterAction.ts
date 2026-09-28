@@ -3,7 +3,7 @@ import { Action } from '@stacksjs/actions'
 import { Auth, register } from '@stacksjs/auth'
 import { response } from '@stacksjs/router'
 import { schema } from '@stacksjs/validation'
-import { buildAuthCookie } from './authCookie'
+import { buildAuthCookie } from '../../Support/authCookie'
 
 /**
  * Account creation, registered at POST /api/auth/register (routes/auth.ts).

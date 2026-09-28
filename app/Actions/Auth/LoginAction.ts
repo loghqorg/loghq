@@ -4,7 +4,7 @@ import { Auth, createTwoFactorChallenge, getTwoFactorState } from '@stacksjs/aut
 import { User } from '@stacksjs/orm'
 import { response } from '@stacksjs/router'
 import { schema } from '@stacksjs/validation'
-import { buildAuthCookie, sessionExpiryMinutes } from './authCookie'
+import { buildAuthCookie, sessionExpiryMinutes } from '../../Support/authCookie'
 
 /**
  * Email/password sign-in, registered at POST /api/auth/login (routes/auth.ts).
