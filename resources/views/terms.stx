@@ -1,0 +1,55 @@
+@extends('layouts/marketing')
+
+<script server>
+useSeoMeta({
+  title: 'Terms - loghq',
+  description: 'The terms that apply when you use loghq for log streaming and error tracking.',
+  ogImage: 'https://loghq.org/og.png',
+})
+useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/terms' }] })
+</script>
+
+@section('content')
+<section class="legal shell">
+  <p class="legal-eyebrow">Legal</p>
+  <h1 class="legal-title">Terms</h1>
+  <p class="legal-date">Effective 3 October 2026</p>
+
+  <div class="legal-body">
+    <section>
+      <h2>Using loghq</h2>
+      <p>You are responsible for the projects you create, the data your applications send us, the people you invite, and your compliance with the privacy and data-protection laws that apply to you. Log data is your data: you decide what your application forwards, and you can stop forwarding it at any time.</p>
+    </section>
+
+    <section>
+      <h2>What you send us</h2>
+      <p>Logs and stack traces routinely contain more than intended. Do not send payment card numbers, government identifiers, credentials, or health records. Scrub them before they leave your application. We provide an ingest key per project so you can rotate it if it leaks, and rotating one immediately invalidates the old key.</p>
+    </section>
+
+    <section>
+      <h2>Billing</h2>
+      <p>Plans, event allowances and the retention window for each are described on the <StxLink to="/pricing">pricing page</StxLink> and confirmed before any charge. Paid plans renew until cancelled. Cancelling stops future renewals; it does not retroactively refund a period already served.</p>
+    </section>
+
+    <section>
+      <h2>Availability</h2>
+      <p>We work to keep ingestion and the dashboard reliable, but availability is not guaranteed and these terms carry no uptime commitment.</p>
+    </section>
+
+    <section>
+      <h2>Self-hosting</h2>
+      <p>loghq is open source and you may run it on your own infrastructure under its licence. These terms govern the hosted service at loghq.org only. A self-hosted instance is yours: we neither receive its data nor support it under these terms.</p>
+    </section>
+
+    <section>
+      <h2>Ending the agreement</h2>
+      <p>You may close your account at any time and export your data first. We may suspend an account that is being used unlawfully, that is attempting to disrupt the service for others, or that has not paid. Where we suspend rather than terminate, we will tell you why and what would resolve it.</p>
+    </section>
+
+    <section>
+      <h2>Questions</h2>
+      <p>Anything about these terms can go to <a href="mailto:hello@loghq.org">hello@loghq.org</a>.</p>
+    </section>
+  </div>
+</section>
+@endsection
