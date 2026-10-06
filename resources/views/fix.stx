@@ -211,7 +211,7 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
     </section>
 
     @if (formError)
-      <div class="mb-6 px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
+      <div role="alert" class="mb-6 px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
     @endif
 
     @if (!enabled)
