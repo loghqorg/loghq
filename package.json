@@ -69,7 +69,8 @@
     "test:types": "./buddy test:types",
     "bud": "./buddy",
     "stx": "./buddy",
-    "typecheck:app": "bun x --bun tsc --noEmit -p tsconfig.json --pretty false"
+    "typecheck:app": "bun x --bun tsc --noEmit -p tsconfig.json --pretty false",
+    "serve:validate": "bun scripts/validate-serve.ts"
   },
   "system": {
     "bun": "^1.3.0",
