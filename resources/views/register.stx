@@ -95,21 +95,21 @@ async function onRegister(e: Event): Promise<void> {
       <p class="mb-3.5 invite-hint">You've been invited to a project — sign up to join it.</p>
     @endif
 
-    <div :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
+    <div id="form-error" role="alert" :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
 
     {{-- A same-origin fetch, not a native POST — the submit is intercepted. --}}
     <form action="/api/auth/register" method="POST" @submit="onRegister" class="space-y-4">
       <div>
         <label for="register-name" class="block mb-1.5 font-medium text-muted text-xs">Name</label>
-        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" :model="name" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-name" name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" :model="name" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
       </div>
       <div>
         <label for="register-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" {{ invitedEmail ? 'readonly' : '' }} class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" {{ invitedEmail ? 'readonly' : '' }} class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
       </div>
       <div>
         <label for="register-password" class="block mb-1.5 font-medium text-muted text-xs">Password</label>
-        <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" :model="password" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" :model="password" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
       </div>
 
       <button type="submit" :disabled="loading()" :text="loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
