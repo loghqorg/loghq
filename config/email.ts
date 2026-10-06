@@ -41,6 +41,16 @@ export default {
 
   server: {
     enabled: true,
+    /*
+     * The shared mail box belongs to the `stacks` app, and without this the
+     * deploy's mail step falls back to THIS app's own box: `mailIp = ip` unless
+     * `email.server.attachTo` names an owner to look up. That is not cosmetic —
+     * the deploy rewrites Porkbun records, so on 2026-10-06 it reset
+     * `mail.loghq.org` and the SPF to 167.233.116.134, the web box, which runs
+     * no mail service at all. Mail DNS fixed by hand does not survive a deploy
+     * without this line. bughq has carried it since its own mail setup.
+     */
+    attachTo: 'stacks',
     scan: true, // scans for spam and viruses
     subdomain: 'mail', // mail.stacksjs.com
 
