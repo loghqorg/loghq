@@ -8,6 +8,8 @@
 // includes, and this is one boolean rather than a signal plus an onMount plus an
 // effect.
 const footerAuthed = typeof cookies !== 'undefined' && !!cookies['auth-token']
+
+const footerYear = new Date().getFullYear()
 </script>
 
 <footer class="footer shell">
@@ -64,6 +66,13 @@ const footerAuthed = typeof cookies !== 'undefined' && !!cookies['auth-token']
         <StxLink class="footer-link" to="/register">Get started</StxLink>
       @endif
     </div>
+    <div class="flex flex-col gap-[0.6rem] footer-col">
+      <h4 class="footer-head">Legal</h4>
+      <StxLink class="footer-link" to="/terms">Terms</StxLink>
+      <StxLink class="footer-link" to="/privacy">Privacy</StxLink>
+      <StxLink class="footer-link" to="/security">Security</StxLink>
+      <a class="footer-link" href="mailto:hello@loghq.org">Contact</a>
+    </div>
   </div>
 
   <div class="footer-bottom">
@@ -72,5 +81,6 @@ const footerAuthed = typeof cookies !== 'undefined' && !!cookies['auth-token']
       <span class="brand-name">loghq</span>
     </StxLink>
     <span>Open source log streaming, built on Stacks and Postgres.</span>
+    <span class="footer-copy">&copy; {{ footerYear }} loghq &middot; <a href="mailto:hello@loghq.org">hello@loghq.org</a></span>
   </div>
 </footer>

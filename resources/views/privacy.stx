@@ -1,0 +1,51 @@
+@extends('layouts/marketing')
+
+<script server>
+useSeoMeta({
+  title: 'Privacy - loghq',
+  description: 'What loghq collects, how long it is kept, and the rights you have over it.',
+  ogImage: 'https://loghq.org/og.png',
+})
+useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/privacy' }] })
+</script>
+
+@section('content')
+<section class="legal shell">
+  <p class="legal-eyebrow">Legal</p>
+  <h1 class="legal-title">Privacy</h1>
+  <p class="legal-date">Effective 3 October 2026</p>
+
+  <div class="legal-body">
+    <section>
+      <h2>What we process</h2>
+      <p>Two different things, and the distinction matters. <strong>Account data</strong> is what you give us to have an account: your email address, your name if you provide one, your projects, your team members, and billing records. <strong>Log data</strong> is what your application sends to our ingest endpoint: log lines, stack traces, release and environment tags, and whatever context your code attaches to them.</p>
+      <p>We decide what account data we need. You decide what log data reaches us.</p>
+    </section>
+
+    <section>
+      <h2>How long we keep it</h2>
+      <p>Log data is deleted when its retention window expires. The window depends on your plan and is stated on the <StxLink to="/pricing">pricing page</StxLink>. Account and billing records outlive the logs, because tax and accounting rules require it. Deleting a project deletes its log data; closing your account deletes the rest, except records we are obliged to retain.</p>
+    </section>
+
+    <section>
+      <h2>What we do not do</h2>
+      <p>We do not sell personal data. We do not use your log data to train models. We do not read your logs except when you ask us to help with a specific problem, or where we must to keep the service running or to meet a legal obligation.</p>
+    </section>
+
+    <section>
+      <h2>Your rights</h2>
+      <p>You can export your data, correct it, or have it erased. Most of this you can do yourself from <StxLink to="/settings">settings</StxLink> without asking us. For anything you cannot, write to <a href="mailto:privacy@loghq.org">privacy@loghq.org</a> and we will handle it.</p>
+    </section>
+
+    <section>
+      <h2>Keeping logs clean</h2>
+      <p>Logs pick up personal data by accident more than by design. If something has reached us that should not have, deleting the project removes it, and we will confirm a targeted deletion if you ask. The surest protection is to scrub at the source, before the line is written.</p>
+    </section>
+
+    <section>
+      <h2>Self-hosting</h2>
+      <p>If you run loghq yourself, none of your log data reaches us and this policy does not apply to it. That option exists precisely for teams who cannot send logs to a third party.</p>
+    </section>
+  </div>
+</section>
+@endsection

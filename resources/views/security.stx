@@ -1,0 +1,51 @@
+@extends('layouts/marketing')
+
+<script server>
+useSeoMeta({
+  title: 'Security - loghq',
+  description: 'How loghq protects your account and your log data, and how to report a vulnerability.',
+  ogImage: 'https://loghq.org/og.png',
+})
+useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/security' }] })
+</script>
+
+@section('content')
+<section class="legal shell">
+  <p class="legal-eyebrow">Trust</p>
+  <h1 class="legal-title">Security</h1>
+  <p class="legal-date">Last reviewed 3 October 2026</p>
+
+  <div class="legal-body">
+    <section>
+      <h2>Reporting a vulnerability</h2>
+      <p>Send it to <a href="mailto:security@loghq.org">security@loghq.org</a>. Tell us what you found and how to reproduce it; you do not need a proof-of-concept exploit. We will acknowledge it, and we will not pursue anyone who reports a genuine finding in good faith and does not access other people's data while doing so.</p>
+    </section>
+
+    <section>
+      <h2>In transit</h2>
+      <p>Everything, including ingestion, is served over TLS. There is no plaintext ingest endpoint.</p>
+    </section>
+
+    <section>
+      <h2>Accounts</h2>
+      <p>Passwords are hashed with bcrypt and never stored or logged in a recoverable form. Sessions are held in an HttpOnly cookie, so page scripts cannot read them.</p>
+    </section>
+
+    <section>
+      <h2>Ingest keys</h2>
+      <p>Each project has its own ingest key, and it is the only credential that endpoint accepts. Keys are per project so a leak is contained to one project rather than an account, and you can rotate one from the dashboard at any time. Rotating invalidates the previous key immediately, which is the right trade: a brief gap while you redeploy is better than a window where both keys work.</p>
+    </section>
+
+    <section>
+      <h2>The honest limits</h2>
+      <p>Worth stating plainly rather than leaving you to infer it. loghq carries no SOC 2 report and no ISO certification. There is no contractual uptime commitment. If your procurement process requires an audited provider, loghq is not one yet.</p>
+      <p>What we offer instead is that the whole thing is open source and self-hostable. If you cannot send logs to a third party, run it yourself and the question does not arise.</p>
+    </section>
+
+    <section>
+      <h2>Your side of it</h2>
+      <p>The most common way log data becomes sensitive is that an application writes it there. Scrub credentials, tokens, card numbers and personal identifiers before the line is written. Nothing we can do downstream is as effective as not sending it.</p>
+    </section>
+  </div>
+</section>
+@endsection

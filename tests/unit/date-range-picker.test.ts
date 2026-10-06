@@ -10,7 +10,11 @@ const analytics = readFileSync(join(ROOT, 'resources/views/analytics.stx'), 'utf
 // fence off the part that touches no runtime, and this evaluates exactly that
 // text, so the tests run against the code the page runs.
 const pureSlice = component.match(/\/\/ #region pure\n([\s\S]*?)\n\/\/ #endregion pure/)?.[1] ?? ''
-const pure = new Function(`${pureSlice}\nreturn { pickYmd, pickShift, pickShiftMonth, pickGrid, pickOrder, pickPreset, pickQuery }`)() as Record<string, (...a: any[]) => any>
+// The shared core is typed (it is kept byte-identical with the other three HQ
+// pickers); strip the types with Bun's transpiler so this evaluates the exact
+// runtime code the page runs.
+const pureJs = new Bun.Transpiler({ loader: 'ts' }).transformSync(pureSlice)
+const pure = new Function(`${pureJs}\nreturn { pickYmd, pickShift, pickShiftMonth, pickGrid, pickOrder, pickPreset, pickQuery }`)() as Record<string, (...a: any[]) => any>
 
 describe('loghq date range picker: grid + day math', () => {
   test('six weeks starting on the Sunday on or before the 1st', () => {
