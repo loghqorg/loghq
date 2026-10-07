@@ -46,6 +46,16 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
 export default {
   theme: {
     extend: {
+      borderRadius: {
+        /*
+         * `rounded-panel` is @stacksjs/components' radius role name:
+         * <EmptyState variant="panel"> renders `bg-panel rounded-panel
+         * ring-1 ring-line`. Without this it resolves to nothing and the
+         * panel renders square. Pointed at this app's own panel radius:
+         * the `app-panel` shortcut uses rounded-xl.
+         */
+        panel: '0.75rem',
+      },
       colors: {
         canvas: 'var(--bg)',
         panel: 'var(--panel)',
