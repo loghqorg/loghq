@@ -179,8 +179,14 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
   </div>
 
   @if (!authed)
-    <div class="px-3 py-3 text-sm rounded-lg err-box">You need to be signed in to analyze a log entry.</div>
-    <p class="mt-6 text-sm text-subtle"><StxLink to="/login" class="font-medium text-accent">Go to sign in</StxLink></p>
+    {{-- Being signed out is not an error, so this is an empty state with an
+         action rather than the red err-box it used to be. --}}
+    <EmptyState
+      title="Sign in required"
+      description="You need to be signed in to analyze a log entry."
+    >
+      <StxLink to="/login" class="font-medium text-accent">Go to sign in</StxLink>
+    </EmptyState>
   @elseif (!entry)
     <h1 class="mb-2 font-semibold text-xl tracking-tight">Log entry not found</h1>
     <p class="text-sm text-subtle">It may have been removed, or it belongs to an app you cannot access.</p>
