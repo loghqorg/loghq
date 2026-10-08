@@ -87,9 +87,9 @@
   },
   "//overrides": "stx is not a direct dependency \u2014 the only reference is a type import in config/ui.ts. But it arrives through nine transitive paths, and bun-plugin-stx asks for a range so loose (^0.2.72) that dropping the old direct pin let the hoisted copy fall to 0.2.176 while the framework packages sat on 0.2.231. bun-plugin-stx resolves to the HOISTED copy, so that is the version that renders every .stx file. Every constraint in the tree (0.2.378, ^0.2.378, ^0.2.375, >=0.2.227, ^0.2.82, as of stacks 0.75.79) is satisfied by 0.2.378, so pinning it here collapses the tree to one copy without re-declaring a dependency this app does not have. Re-check after a stacks bump.",
   "overrides": {
-    "@stacksjs/components": "0.2.399",
-    "bun-plugin-stx": "0.2.399",
-    "@stacksjs/stx": "0.2.399"
+    "@stacksjs/components": "0.2.401",
+    "bun-plugin-stx": "0.2.401",
+    "@stacksjs/stx": "0.2.401"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.121",
