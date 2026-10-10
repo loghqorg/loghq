@@ -9,6 +9,11 @@ const marketing = readFileSync(join(ROOT, 'public/marketing.css'), 'utf8')
 // taller than an 812px viewport. The panel has to scroll inside the viewport
 // and the page behind it has to stay put, or the last links are unreachable.
 describe('mobile layout contracts', () => {
+  test('stacked subscription fields do not keep the desktop flex basis as height', () => {
+    const mobile = marketing.slice(marketing.indexOf('@media (max-width: 30rem)'))
+    expect(mobile).toMatch(/\.sub-field\s*\{\s*flex:\s*none;\s*\}/)
+  })
+
   test('marketing menu is bounded by the visible mobile viewport', () => {
     const panel = marketing.match(/\.nav-menu-panel\s*\{[^}]*\}/)?.[0] ?? ''
     expect(panel).toContain('max-height: calc(100dvh - 92px)')
