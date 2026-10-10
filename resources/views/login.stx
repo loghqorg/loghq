@@ -139,21 +139,21 @@ async function onVerify(e: Event): Promise<void> {
 
     {{-- The shared error box for both steps. `:text` overwrites the (empty)
         static label after hydration and never cloaks. --}}
-    <div :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
+    <div id="login-error" role="alert" :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
 
     {{-- Step 1: credentials. A same-origin fetch, not a native POST — the
         submit is intercepted so the browser never navigates to /login itself. --}}
     <form :show="mode() === 'credentials'" action="/api/auth/login" method="POST" @submit="onLogin" class="space-y-4">
       <div>
         <label for="login-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
-        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
       </div>
       <div>
         <div class="flex items-center justify-between mb-1.5">
           <label for="login-password" class="block font-medium text-muted text-xs">Password</label>
           <StxLink to="/forgot-password" class="font-medium text-accent text-xs">Forgot password?</StxLink>
         </div>
-        <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" :model="password" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" :model="password" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
       </div>
 
       {{-- Remember me, default OFF: unchecked is the baseline week, checked is
@@ -171,13 +171,13 @@ async function onVerify(e: Event): Promise<void> {
       <p class="text-sm text-subtle">Enter the 6-digit code from your authenticator app.</p>
       <div>
         <label for="login-code" class="block mb-1.5 font-medium text-muted text-xs">Authentication code</label>
-        <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" :model="code" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" :model="code" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
       </div>
       <button type="submit" :disabled="loading()" :text="loading() ? 'Verifying…' : 'Verify and sign in'" class="py-2.5 w-full font-semibold text-sm btn-solid">Verify and sign in</button>
     </form>
 
     @if (oauthError)
-      <div class="mt-4 px-3 py-2 text-sm rounded-lg err-box">{{ oauthError }}</div>
+      <div role="alert" class="mt-4 px-3 py-2 text-sm rounded-lg err-box">{{ oauthError }}</div>
     @endif
 
     @if (anyOauth)

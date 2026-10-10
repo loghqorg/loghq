@@ -7,10 +7,23 @@
     Each crumb is { label, href?, url? }. The last has no href: it is the
     current page.
 
-    Deliberately NOT the shipped Breadcrumb component. That component builds its
-    trail with @foreach(item in displayItems), and the loop parser only accepts
-    the ` as ` form — the ` in ` form is skipped outright, so the literal
-    directive text would ship to the browser on all 22 pages.
+    Still hand-written rather than the shipped <Breadcrumb>, but no longer
+    because the component is broken. It used to be: the component loops with
+    @foreach(item in displayItems), the parser accepted only the ` as ` form,
+    and the directive text shipped literally on all 22 pages.
+
+    That is fixed as of stx 0.2.395, checked by rendering rather than by
+    reading: `<Breadcrumb :items="…" />` emits a real
+    <nav aria-label="Breadcrumb"><ol>, the separator inside each <li> and
+    hidden from assistive tech, aria-current="page" on the last item, and
+    data-stx-link on the anchors so the SPA router still intercepts them.
+    That is the same markup this file writes by hand. analyticshq's own
+    partial already calls the component this way.
+
+    What is left is a styling choice rather than a constraint: the component
+    brings its own utilities (flex, gap-2, text-sm, text-fg-muted) where this
+    trail is dressed by `shell subnav`. Worth doing deliberately, not as a
+    side effect of editing this file.
 
     Ordered list, not a row of anchors: this is a sequence, the position is
     meaningful, and assistive tech should say so. The separators are decorative

@@ -94,20 +94,24 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
       {{-- Reached without a session. The client guard this replaces navigated
           away after hydration, so a logged-out visitor saw the form flash
           first; this is the honest answer in the first response. --}}
-      <div class="px-3 py-3 text-sm rounded-lg err-box">You need to be signed in to create an app.</div>
-      <p class="mt-6 text-center text-sm text-subtle">
+      {{-- Being signed out is not an error, so this is an empty state with an
+           action rather than the red err-box it used to be. --}}
+      <EmptyState
+        title="Sign in required"
+        description="You need to be signed in to create an app."
+      >
         <StxLink to="/login" class="font-medium text-accent">Go to sign in</StxLink>
-      </p>
+      </EmptyState>
     @else
     {{-- Posts to itself; the action is in the server block. --}}
     <form action="/projects/new" method="POST" class="space-y-4">
       @if (formError)
-        <div class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
+        <div id="form-error" role="alert" class="px-3 py-2 text-sm rounded-lg err-box">{{ formError }}</div>
       @endif
 
       <div>
         <label for="newapp-name" class="block mb-1.5 font-medium text-muted text-xs">App name</label>
-        <input id="newapp-name" name="name" type="text" required autofocus placeholder="Acme Web" value="{{ values?.name || '' }}" class="px-3.5 py-2.5 w-full text-sm field">
+        <input id="newapp-name" name="name" type="text" required autofocus placeholder="Acme Web" value="{{ values?.name || '' }}" class="px-3.5 py-2.5 w-full text-sm field" aria-invalid="{{ formError ? 'true' : 'false' }}"@if (formError) aria-describedby="form-error"@endif>
       </div>
       <div>
         <label for="newapp-platform" class="block mb-1.5 font-medium text-muted text-xs">Platform</label>

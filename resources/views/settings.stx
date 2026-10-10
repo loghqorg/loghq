@@ -1455,10 +1455,7 @@ onMount(() => {
               <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
             </div>
           @empty
-            <div class="px-5 py-8 text-center app-panel">
-              <div class="mb-1 font-medium text-sm">No chat alerts yet</div>
-              <div class="text-subtle text-xs">Add a Slack or Discord webhook below to start getting pinged.</div>
-            </div>
+            <EmptyState title="No chat alerts yet" description="Add a Slack or Discord webhook below to start getting pinged." />
           @endforelse
         </div>
         <div class="px-5 py-5 app-panel">
