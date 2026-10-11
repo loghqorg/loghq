@@ -112,7 +112,7 @@ async function onRegister(e: Event): Promise<void> {
         <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" :model="password" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
       </div>
 
-      <button type="submit" :disabled="loading()" :text="loading() ? 'Creating account…' : 'Create account'" class="py-2.5 w-full font-semibold text-sm btn-solid">Create account</button>
+      <Button type="submit" size="sm" fullWidth :disabled="loading()" :label="loading() ? 'Creating account…' : 'Create account'" className="auth-submit">Create account</Button>
     </form>
 
     @if (anyOauth)

@@ -197,6 +197,14 @@ export default {
       + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
       + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',
 
+    // Shared Button owns semantics and reactive state. These explicit
+    // overrides preserve the existing auth controls without depending on
+    // utility order or copying the component into the app.
+    'auth-submit': '!py-2.5 !shadow-none '
+      + '![transition:transform_0.12s_ease,opacity_0.15s_ease] '
+      + 'hover:!bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
+      + 'active:translate-y-px disabled:!opacity-60 disabled:!cursor-default',
+
     'oauth-btn': 'bg-panel border border-line rounded-[10px] text-ink '
       + '[transition:border-color_0.15s_ease,transform_0.12s_ease] '
       + 'hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] '
