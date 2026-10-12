@@ -139,7 +139,7 @@ async function onVerify(e: Event): Promise<void> {
 
     {{-- The shared error box for both steps. `:text` overwrites the (empty)
         static label after hydration and never cloaks. --}}
-    <div id="login-error" role="alert" :show="!!error()" :text="error()" class="mb-4 px-3 py-2 text-sm rounded-lg err-box"></div>
+    <div id="login-error" role="alert" :show="!!error()" :text="error()" class="mb-4 py-2 err-box notice-box"></div>
 
     {{-- Step 1: credentials. A same-origin fetch, not a native POST — the
         submit is intercepted so the browser never navigates to /login itself. --}}
@@ -177,7 +177,7 @@ async function onVerify(e: Event): Promise<void> {
     </form>
 
     @if (oauthError)
-      <div role="alert" class="mt-4 px-3 py-2 text-sm rounded-lg err-box">{{ oauthError }}</div>
+      <div role="alert" class="mt-4 py-2 err-box notice-box">{{ oauthError }}</div>
     @endif
 
     @if (anyOauth)

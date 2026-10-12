@@ -242,6 +242,23 @@ export default {
     'err-box': 'bg-[color-mix(in_srgb,#ef4444_12%,transparent)] text-[#ef4444]',
     'ok-box': 'bg-[color-mix(in_srgb,#22c55e_12%,transparent)] text-[#16a34a]',
 
+    /*
+     * The box those two sit in. Ten sites across six views spelled
+     * `px-3 text-sm rounded-lg` out as three separate utilities, identically in
+     * every one, beside whichever of the pair gave it a colour.
+     *
+     * Kept apart from err-box and ok-box rather than folded into them, so the
+     * composite reads the same way in all three apps that have it: colour is
+     * one class, geometry is another, and `class="mb-4 py-2 err-box
+     * notice-box"` says which is which. It also means the confirmation and the
+     * error share a box instead of each carrying their own copy of it.
+     *
+     * The vertical padding stays at the call site: errors sit at py-2 and
+     * confirmations at py-3 here, in bughq and in analyticshq alike, so it is a
+     * real axis rather than an oversight.
+     */
+    'notice-box': 'px-3 text-sm rounded-lg',
+
     // SiteFooter's repeated link and column heading. Four columns and ~28
     // links, so these earn a name rather than being repeated on each element.
     'footer-head': 'm-0 mb-[0.35rem] font-mono text-[0.7rem] font-semibold '
