@@ -41,9 +41,10 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
  *                  of toCSS(). The stale note mattered, because it is why this
  *                  app's tokens went to public/app-chrome.css instead.
  *
- *                  One constraint is real: a single getCSS() returning several
- *                  rules silently loses some of them. One entry per rule; see
- *                  topLevelRules below.
+ *                  One constraint is real, and it is quoting rather than
+ *                  structure: a double-quoted font family in a preflight makes
+ *                  the engine substitute its own stack and swallow the rules
+ *                  after it. Several rules in one getCSS() are fine.
  *
  * Anything not on the surviving list is decoration. This file used to carry
  * `content`, `minify`, and `preflight: true` — and that last one is not even a
@@ -70,6 +71,20 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
  * state rules here would be worse than either: the shortcuts are unlayered and
  * a preflight lands in @layer cw-base, so every unlayered base would outrank
  * its own layered active state and the selected range would stop painting.
+ *
+ * One entry, not one per rule. An earlier version split it, on the strength of
+ * a measurement taken against @cwcss/crosswind -- which this file imports its
+ * TYPES from and which does not render this app. stx loads @stacksjs/ts-css on
+ * every path, and that engine keeps every rule in a multi-rule getCSS(): all 35
+ * here, and the 80 bughq passes through its own pageCss(). The split was
+ * guarding against a bug in an engine that is not in the loop.
+ *
+ * There IS a real preflight hazard, and it is about quoting rather than
+ * structure: a DOUBLE-quoted font family corrupts the sheet. On ts-css,
+ * `font-family:...,"Segoe UI",sans-serif` came back as the engine's own default
+ * stack with everything up to the next `transform` swallowed, taking a whole
+ * h1-h3 rule and half a @keyframes block with it. This stylesheet quotes no
+ * families, so it is unaffected; commshq's tokens use single quotes for it.
  *
  * Moving it into the layer was checked for cascade damage rather than assumed.
  * The picker's markup carries component classes only -- no utility co-occurs
@@ -208,42 +223,8 @@ summary:focus-visible {
 }
 `
 
-/**
- * Split a stylesheet into its top-level rules, one per preflight entry.
- *
- * Not organisational taste: a getCSS() that returns several rules loses some of
- * them. Measured on commshq, where ten rules in one string came back with h1-h3
- * and the first half of a @keyframes block gone and its `transform:...}to{...`
- * spliced into the preceding rule. Depth is tracked so an @media block stays a
- * single rule, which means a comment in this stylesheet must not contain a
- * brace.
- */
-function topLevelRules(css: string): string[] {
-  const rules: string[] = []
-  let depth = 0
-  let current = ''
-  for (const ch of css) {
-    current += ch
-    if (ch === '{') {
-      depth++
-    }
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) {
-        rules.push(current.trim())
-        current = ''
-      }
-    }
-  }
-  const tail = current.trim()
-  if (tail)
-    rules.push(tail)
-  // A trailing comment with no rule after it is not a rule.
-  return rules.filter(rule => rule.length > 0 && !/^\/\*[\s\S]*\*\/$/.test(rule))
-}
-
 export default {
-  preflights: topLevelRules(DATE_RANGE_PICKER_CSS).map(css => ({ getCSS: () => css })),
+  preflights: [{ getCSS: () => DATE_RANGE_PICKER_CSS }],
   theme: {
     extend: {
       borderRadius: {

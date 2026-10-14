@@ -28,7 +28,10 @@ const appPreflights = (theme as any).preflights as { getCSS: () => string }[]
 const flat = sheet.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, '').replace(/;\}/g, '}')
 
 function contains(rule: string): boolean {
-  return flat.includes(rule.replace(/\s+/g, '').replace(/;\}/g, '}'))
+  // Same normalisation as `flat`, comments included: the splitter hands a
+  // rule its preceding comment, and the sheet has none.
+  const needle = rule.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, '').replace(/;\}/g, '}')
+  return needle.length > 0 && flat.includes(needle)
 }
 
 describe('date range picker CSS reaches the generated sheet', () => {
@@ -37,8 +40,8 @@ describe('date range picker CSS reaches the generated sheet', () => {
     // the dev-server merge dropped preflights outright (stacksjs/stx#1867).
     // If that ever regresses, every rule in this file goes with it.
     expect(merged.includePreflight).toBe(true)
-    // The app's own entries, one per rule, plus the engine's built-in reset.
-    expect(appPreflights.length).toBeGreaterThan(30)
+    expect(appPreflights.length).toBe(1)
+    // Plus the engine's own reset, which is a preflight too.
     expect(merged.config.preflights.length).toBeGreaterThan(appPreflights.length)
   })
 
@@ -63,33 +66,59 @@ describe('date range picker CSS reaches the generated sheet', () => {
     expect(contains('.drp-cal.is-left .drp-nav.is-hidden { visibility: visible; }')).toBe(true)
   })
 
-  test('each preflight entry holds exactly one top-level rule', () => {
+  test('no preflight entry quotes a font family with double quotes', () => {
     /*
-     * The invariant that keeps the rest of this file true. A getCSS() returning
-     * several rules silently loses some of them -- measured on commshq, where
-     * ten in one string came back with two rules gone and a @keyframes body
-     * spliced into the rule before it. Adding a rule to an existing entry is
-     * the easy mistake, so it fails here rather than on the page.
+     * The one real preflight hazard, and it is quoting rather than structure.
+     * A double-quoted family name makes the engine substitute its own default
+     * stack AND swallow what follows: on ts-css,
+     * `font-family:...,"Segoe UI",sans-serif` came back as
+     * `font-family: ui-sans-serif, system-ui, sans-serif` with everything up to
+     * the next `transform` gone, which ate a whole h1-h3 rule and the opening
+     * half of a @keyframes block. Single quotes are clean and mean the same
+     * thing in CSS.
      *
-     * This app's entries only: the engine contributes its own preflight, and
-     * the Tailwind reset is one entry holding 38 rules.
+     * This stylesheet quotes no families today, so the check is here to keep it
+     * that way -- the failure is silent and looks like a font that never
+     * applied.
+     *
+     * An earlier version of this file asserted one rule per entry instead.
+     * That invariant came from measuring @cwcss/crosswind, which this app
+     * imports types from and which does not render it; stx loads
+     * @stacksjs/ts-css, and that engine keeps every rule in a multi-rule
+     * getCSS().
      */
     for (const preflight of appPreflights) {
       const css = preflight.getCSS()
-      let depth = 0
-      let closes = 0
-      for (const ch of css) {
-        if (ch === '{')
-          depth++
-        else if (ch === '}') {
-          depth--
-          if (depth === 0)
-            closes++
-        }
-      }
-      expect(`${css.slice(0, 60)} -> ${closes}`).toBe(`${css.slice(0, 60)} -> 1`)
+      const offenders = [...css.matchAll(/font-family\s*:[^;}]*"/g)].map(m => m[0])
+      expect(offenders).toEqual([])
     }
   })
+
+  test('every rule in the stylesheet survives the trip', () => {
+    // The whole point: it is plain CSS in a config file now, reached through a
+    // merge, and nothing else would notice if a rule stopped arriving.
+    const rules: string[] = []
+    let depth = 0
+    let current = ''
+    for (const ch of appPreflights[0].getCSS()) {
+      current += ch
+      if (ch === '{') {
+        depth++
+      }
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          rules.push(current.trim())
+          current = ''
+        }
+      }
+    }
+    const declared = rules.filter(rule => rule && !/^\/\*[\s\S]*\*\/$/.test(rule))
+    expect(declared.length).toBeGreaterThan(30)
+    for (const rule of declared)
+      expect(`${rule.slice(0, 48)}: ${contains(rule)}`).toBe(`${rule.slice(0, 48)}: true`)
+  })
+
 })
 
 describe('stx-standards rule 3', () => {
