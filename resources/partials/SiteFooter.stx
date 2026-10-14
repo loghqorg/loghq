@@ -14,12 +14,22 @@ const footerYear = new Date().getFullYear()
 
 <footer class="footer shell">
   {{-- The two source rules were `@media (max-width: 900px)` and
-      `(max-width: 560px)`. Crosswind emits nothing for a max-width
-      variant, so this is the same design stated mobile-first: one column
-      by default, two from bp-sm (561px), the 1.4fr lead column from bp-md
-      (901px). The breakpoints are declared in config/crosswind.ts and sit
-      one pixel above the max-widths they replace, which is what keeps the
-      boundaries identical. --}}
+      `(max-width: 560px)`, restated mobile-first: one column by default, two
+      from bp-sm (561px), the 1.4fr lead column from bp-md (901px). The
+      breakpoints are declared in config/crosswind.ts and sit one pixel above
+      the max-widths they replace, which is what keeps the boundaries
+      identical.
+
+      This used to say crosswind emits nothing for a max-width variant, which
+      is not true and misled a reader into thinking the direction was
+      unavailable. Measured on 0.3.8, which this app runs: `max-md:` and
+      `max-sm:` both emit their `@media (max-width: …)` correctly. What emits
+      nothing is the ARBITRARY form, `max-[560px]:` -- and 560 and 900 are not
+      on any scale, so that is the one this footer would have needed.
+
+      It stays mobile-first regardless. Min-width is the better default for a
+      layout that grows, and the named breakpoints say what they mean where a
+      pair of arbitrary max-widths did not. --}}
   <div class="grid gap-x-8 gap-y-7 grid-cols-1 bp-md:gap-x-10 bp-md:gap-y-8 bp-md:grid-cols-[1.4fr_1fr_1fr_1fr] bp-sm:grid-cols-2 pb-9 pt-4 footer-cols">
     <div class="flex flex-col gap-[0.6rem] footer-col">
       <h4 class="footer-head">Product</h4>
