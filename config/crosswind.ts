@@ -26,13 +26,24 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
  *                  HTML, not over globs, so a content list means nothing here.
  *   output         OVERRIDDEN to "". The CSS is injected as a <style> tag.
  *   minify         OVERRIDDEN to false.
- *   preflights     spread into the config and then NEVER EMITTED — toCSS()
- *                  writes the built-in reset only. Verified by putting a probe
- *                  token in a preflights entry and grepping the served page for
- *                  it: zero occurrences, on both a marketing and an app route.
- *                  This one matters: the obvious home for shared design tokens
- *                  does not work, so they have to reach the document another
- *                  way. See the token duplication noted in the styling work.
+ *   preflights     merged and EMITTED. This entry used to say the opposite,
+ *                  and it was true when it was written: the old dev-server
+ *                  merge read only `theme.extend`, `safelist` and `shortcuts`
+ *                  and dropped `preflights`, `darkMode`, `cssVariables`,
+ *                  `rules`, `blocklist` and `variants` outright. stacksjs/stx
+ *                  #1867 unified the two render paths onto one merge, and the
+ *                  installed 0.2.520 carries the fix — its own ts-css-config
+ *                  documents the old behaviour in the past tense.
+ *
+ *                  Re-verified here rather than taken from a changelog:
+ *                  mergeCssConfig() reports includePreflight true, carries the
+ *                  entries into `config`, and every rule below comes back out
+ *                  of toCSS(). The stale note mattered, because it is why this
+ *                  app's tokens went to public/app-chrome.css instead.
+ *
+ *                  One constraint is real: a single getCSS() returning several
+ *                  rules silently loses some of them. One entry per rule; see
+ *                  topLevelRules below.
  *
  * Anything not on the surviving list is decoration. This file used to carry
  * `content`, `minify`, and `preflight: true` — and that last one is not even a
@@ -43,7 +54,196 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
  *
  * @see https://github.com/cwcss/crosswind
  */
+/*
+ * The date-range picker's stylesheet, lifted out of a <style> block in
+ * resources/views/analytics.stx (stx-standards rule 3).
+ *
+ * This is a RELOCATION and not a conversion to utilities, which is a weaker
+ * outcome than the rule wants, so here is why it is the honest one. Every
+ * state in this widget is a compound selector the client script toggles --
+ * .drp-day.is-range, .drp-preset.is-active, .drp-nav.is-hidden -- and a
+ * utility cannot express "this class AND that class". The spelling that could,
+ * an arbitrary-variant utility like [&.is-range]:bg-accent, emits nothing in
+ * this engine: the extractor rejects any class whose variant is an arbitrary
+ * selector (same defect as stacksjs/ts-css#37, fixed in ts-css 0.3.16 and not
+ * in @cwcss/crosswind). Splitting base rules into shortcuts and leaving the
+ * state rules here would be worse than either: the shortcuts are unlayered and
+ * a preflight lands in @layer cw-base, so every unlayered base would outrank
+ * its own layered active state and the selected range would stop painting.
+ *
+ * Moving it into the layer was checked for cascade damage rather than assumed.
+ * The picker's markup carries component classes only -- no utility co-occurs
+ * with .range-tool, .drp-* or .date-popover -- so nothing of equal specificity
+ * now wins where it used to lose. The one place a utility does meet these
+ * rules is the shared :focus-visible list: settings.stx puts
+ * focus:outline-none on seven inputs, and that already beat input:focus-visible
+ * on specificity (0,2,0 against 0,1,1) before this move. Those fields trade
+ * the ring for a border colour deliberately, and they behave the same either
+ * way.
+ */
+const DATE_RANGE_PICKER_CSS = `
+.range-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text-2);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+.range-tool:hover { color: var(--text); border-color: var(--accent); }
+.range-tool:active { transform: scale(0.98); }
+.range-tool:focus-visible,
+.range-link:focus-visible,
+.chrome-btn:focus-visible,
+.icon-btn:focus-visible,
+select.panel:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.range-tool.is-active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.range-tool i { width: 1rem; height: 1rem; }
+.date-menu { position: relative; }
+.date-menu > summary { list-style: none; }
+.date-menu > summary::-webkit-details-marker { display: none; }
+.date-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  width: min(44rem, calc(100vw - 2.5rem));
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 10%, transparent);
+}
+/* Period picker: presets down the left, two months on the right. The range is
+   drawn flat with rounded ends, the way Fathom's is, on the --bar wash the KPI
+   bars already use so it reads as the same accent at the same strength. */
+.drp-backdrop { position: fixed; inset: 0; z-index: 39; background: transparent; cursor: default; }
+.drp { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 0.75rem; }
+.drp-presets { display: flex; flex-direction: column; gap: 0.15rem; padding-right: 0.75rem; border-right: 1px solid var(--border); }
+.drp-preset {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 0.8125rem/1.2 var(--sans, ui-sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.drp-preset:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.drp-preset.is-active { color: var(--accent-ink); background: var(--accent); }
+.drp-cals { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.drp-head { display: grid; grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 2rem; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; }
+.drp-nav {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.drp-nav:hover { color: var(--text); border-color: var(--border); }
+.drp-nav svg { width: 1rem; height: 1rem; }
+.drp-nav.is-hidden { visibility: hidden; }
+.drp-sel {
+  min-width: 0;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+}
+.drp-dow, .drp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.drp-dow span { padding: 0.25rem 0; color: var(--text-3); font: 600 0.7rem/1.2 var(--sans, ui-sans-serif); text-align: center; }
+.drp-day {
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: 500 0.8125rem/1 var(--mono, ui-monospace);
+  cursor: pointer;
+}
+.drp-day:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.drp-day.is-out { color: var(--text-3); }
+.drp-day.is-today { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.drp-day.is-range { background: var(--accent-soft); }
+.drp-day.is-edge { background: var(--accent); color: var(--accent-ink); border-radius: 8px; }
+.drp-day.is-disabled { color: var(--text-3); opacity: 0.45; cursor: default; }
+.drp-day.is-disabled:hover { background: transparent; }
+.drp-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+@media (max-width: 1023px) {
+  .date-menu { position: static; }
+  .date-popover { left: 0; right: auto; width: calc(100vw - 2rem); max-height: calc(100dvh - 6rem); overflow-y: auto; overscroll-behavior: contain; }
+  .drp { grid-template-columns: minmax(0, 1fr); }
+  .drp-presets { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.6rem; border-right: 0; border-bottom: 1px solid var(--border); }
+  .drp-preset { width: auto; padding: 0.45rem 0.65rem; border: 1px solid var(--border); border-radius: 999px; }
+  .drp-cals { grid-template-columns: minmax(0, 1fr); }
+  .drp-cal.is-right { display: none; }
+  .drp-cal.is-left .drp-nav.is-hidden { visibility: visible; }
+  .drp-day { height: 2.5rem; }
+}
+`
+
+/**
+ * Split a stylesheet into its top-level rules, one per preflight entry.
+ *
+ * Not organisational taste: a getCSS() that returns several rules loses some of
+ * them. Measured on commshq, where ten rules in one string came back with h1-h3
+ * and the first half of a @keyframes block gone and its `transform:...}to{...`
+ * spliced into the preceding rule. Depth is tracked so an @media block stays a
+ * single rule, which means a comment in this stylesheet must not contain a
+ * brace.
+ */
+function topLevelRules(css: string): string[] {
+  const rules: string[] = []
+  let depth = 0
+  let current = ''
+  for (const ch of css) {
+    current += ch
+    if (ch === '{') {
+      depth++
+    }
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        rules.push(current.trim())
+        current = ''
+      }
+    }
+  }
+  const tail = current.trim()
+  if (tail)
+    rules.push(tail)
+  // A trailing comment with no rule after it is not a rule.
+  return rules.filter(rule => rule.length > 0 && !/^\/\*[\s\S]*\*\/$/.test(rule))
+}
+
 export default {
+  preflights: topLevelRules(DATE_RANGE_PICKER_CSS).map(css => ({ getCSS: () => css })),
   theme: {
     extend: {
       borderRadius: {
