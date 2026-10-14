@@ -211,6 +211,33 @@ body {
   }
 }
 
+/* The one element that uses it, as a named class rather than an arbitrary
+ * `[animation:loghq-pulse_1.4s_ease-in-out_infinite]` utility.
+ *
+ * That utility worked. What never worked was the guard beside it,
+ * `motion-reduce:[animation:none]`: a variant on an arbitrary property is not
+ * recognised by crosswind's class extractor, so it produced no rule at all and
+ * the skeleton kept pulsing for people who asked their system not to animate.
+ * Silent, as that whole class of miss is -- no error, no warning, nothing in
+ * the sheet. Filed as stacksjs/ts-css#37; the generator side of it is fixed in
+ * 0.3.14 (#36), the extractor is not.
+ *
+ * Both halves live here, in source order, so the reduced-motion case does not
+ * depend on the extractor, on crosswind's output ordering, or on an
+ * !important. It also cannot be separated from the keyframes it guards. Note
+ * this file is linked BEFORE the generated sheet, which is why the animation
+ * is declared here rather than left as a utility for this rule to fight.
+ */
+.skeleton-pulse {
+  animation: loghq-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-pulse {
+    animation: none;
+  }
+}
+
 /* Theme-toggle icon swap. Three identical copies of this lived in
  * dashboard.stx, settings.stx and projects/index.stx.
  *

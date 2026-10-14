@@ -143,7 +143,7 @@ onMount(() => {
           {{-- Skeleton and value are separate elements rather than one element
               swapping classes: :class works but logs on every bind, and the
               skeleton needs a fixed box the real text must not inherit. --}}
-          <div class="h-5 w-[160px] bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] rounded-md [animation:loghq-pulse_1.4s_ease-in-out_infinite] motion-reduce:[animation:none]" :show="!loaded()"></div>
+          <div class="h-5 w-[160px] bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] rounded-md skeleton-pulse" :show="!loaded()"></div>
           <div class="font-semibold text-lg" :show="loaded()" :text="displayName()"></div>
           <div class="mt-1.5 text-muted text-sm" :text="email()"></div>
         </div>
