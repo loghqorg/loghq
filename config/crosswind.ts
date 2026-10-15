@@ -62,15 +62,25 @@ import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
  * This is a RELOCATION and not a conversion to utilities, which is a weaker
  * outcome than the rule wants, so here is why it is the honest one. Every
  * state in this widget is a compound selector the client script toggles --
- * .drp-day.is-range, .drp-preset.is-active, .drp-nav.is-hidden -- and a
- * utility cannot express "this class AND that class". The spelling that could,
- * an arbitrary-variant utility like [&.is-range]:bg-accent, emits nothing in
- * this engine: the extractor rejects any class whose variant is an arbitrary
- * selector (same defect as stacksjs/ts-css#37, fixed in ts-css 0.3.16 and not
- * in @cwcss/crosswind). Splitting base rules into shortcuts and leaving the
- * state rules here would be worse than either: the shortcuts are unlayered and
- * a preflight lands in @layer cw-base, so every unlayered base would outrank
- * its own layered active state and the selected range would stop painting.
+ * .drp-day.is-range, .drp-preset.is-active, .drp-nav.is-hidden -- and an
+ * ordinary utility cannot express "this class AND that class".
+ *
+ * The spelling that can, an arbitrary-variant utility like
+ * [&.is-range]:bg-accent, used to emit nothing: the extractor rejected any
+ * class whose variant is an arbitrary selector (stacksjs/ts-css#37). **Fixed
+ * in 0.3.16**, which this app now resolves -- measured through this app's own
+ * loader and merge, so against this config:
+ *
+ *   [&.is-range]:bg-accent          -> .….is-range { background-color: var(--accent) }
+ *   [&.drp-day.is-range]:bg-accent  -> .….drp-day.is-range { … }
+ *   [&.is-hidden]:hidden            -> .….is-hidden { display: none }
+ *
+ * So a conversion is possible now. Two reasons it still has not happened, and
+ * neither is the defect. First, this stylesheet is shared with bughq byte for
+ * byte, and converting it on one side forks it. Second, a PARTIAL conversion
+ * is actively worse than either end state: the shortcuts are unlayered and a
+ * preflight lands in @layer cw-base, so every unlayered base would outrank its
+ * own layered active state and the selected range would stop painting.
  *
  * One entry, not one per rule. An earlier version split it, on the strength of
  * a measurement taken against @cwcss/crosswind -- which this file imports its
