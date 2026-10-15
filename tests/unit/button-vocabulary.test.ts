@@ -34,9 +34,10 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import theme from '../../config/crosswind'
 // The installed STX package does not export these subpaths by bare specifier.
+import { processComponents } from '../../node_modules/@stacksjs/stx/dist/component-renderer.js'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
@@ -129,5 +130,98 @@ describe('settings button vocabulary', () => {
     const cta = await generate('btn-cta')
     expect(has(md, 'font-weight:500!important')).toBe(true)
     expect(has(cta, 'font-weight:600!important')).toBe(true)
+  })
+})
+
+/**
+ * The five call sites that took <Button>, and what each one gained.
+ *
+ * All five hand-rolled `:disabled="someBusy()"` and announced nothing: the
+ * served markup carried no aria-busy, and three of them also swapped their own
+ * label through `:text`, which is the spelling Button's `:label` prop exists to
+ * replace (stacksjs/stx#1997 -- `:text` writes textContent and would erase the
+ * spinner).
+ *
+ * Rendered through stx's own component renderer rather than asserted from the
+ * source, because the failure mode is not a thrown error. A component that
+ * cannot resolve ships its RAW TEMPLATE to the browser while every source-level
+ * check stays green (see [[stx-build-vs-serve-divergence]]), so the only honest
+ * assertion is on the HTML.
+ */
+describe('settings Button adoption', () => {
+  const SITES = [
+    { paint: 'btn-danger btn-sm', name: 'Rotate', bindings: ['loading'] },
+    { paint: 'btn-cta btn-solid', name: 'Invite', bindings: ['loading'] },
+    { paint: 'btn-cta btn-solid', name: 'Add channel', bindings: ['loading'] },
+    { paint: 'flex-none whitespace-nowrap btn-cta btn-danger', name: '', bindings: ['loading'] },
+    // The type-to-confirm gate is independent of busy state, so this one is the
+    // documented three-prop combination: a reactive label, a reactive loading
+    // flag, and a `disabled` that the gate owns.
+    { paint: 'btn-cta btn-danger', name: 'Confirm', bindings: ['disabled', 'loading', 'label'] },
+  ]
+
+  const FILE = join(ROOT, 'resources/views/settings.stx')
+  // `markup`, not the raw source: the comment above the members-list Remove
+  // button explains why that button is NOT a <Button>, and writing the tag in
+  // prose made this match start inside the comment and run to the first real
+  // </Button>, swallowing half the file. Strip comments before matching markup.
+  const calls = markup.match(/<Button\b[\s\S]*?<\/Button>/g) ?? []
+
+  test('there are exactly five, and none of them re-states a paint', () => {
+    expect(calls).toHaveLength(SITES.length)
+    for (const [i, call] of calls.entries()) {
+      expect(/className="([^"]*)"/.exec(call)?.[1]).toBe(SITES[i].paint)
+      // The paint comes from the vocabulary, so a call site has no utilities of
+      // its own beyond the layout ones the modal row needs.
+      expect(call).not.toMatch(/className="[^"]*\b(px-|py-|bg-panel|text-warn)/)
+      // `:text` on the root would destroy the spinner and the label span.
+      expect(call).not.toContain(':text=')
+    }
+  })
+
+  test('each renders a real button that announces its busy state', async () => {
+    for (const [i, call] of calls.entries()) {
+      const dependencies = new Set<string>()
+      const html = await processComponents(call, {
+        __stx_client_signal_names: ['rotating', 'inviting', 'adding', 'archiving', 'modalBusy', 'modalReady', 'modalConfirmLabel'],
+        __importedComponents: new Map([['button', resolve(ROOT, 'node_modules/@stacksjs/components/src/ui/button/Button.stx')]]),
+      }, FILE, { componentsDir: resolve(ROOT, 'resources/components') }, dependencies)
+
+      const where = `${SITES[i].paint}:`
+      expect(`${where} resolved`).toBe(html.includes('<Button') || html.includes('[Component Error') ? `${where} RAW TEMPLATE SHIPPED` : `${where} resolved`)
+      expect(`${where} aria-busy`).toBe(/aria-busy="(?:true|false)"/.test(html) ? `${where} aria-busy` : `${where} MISSING aria-busy`)
+      expect(`${where} spinner`).toBe(html.includes('animate-spin') ? `${where} spinner` : `${where} MISSING spinner`)
+      // The paint must reach the concrete root, not sit in data-stx-props.
+      const rootClass = /<button[^>]*class="([^"]*)"/.exec(html)?.[1] ?? ''
+      for (const token of SITES[i].paint.split(' '))
+        expect(`${where} ${token} on root`).toBe(rootClass.includes(token) ? `${where} ${token} on root` : `${where} ${token} NOT on root`)
+      // And the live bindings must be recorded, or the prop is a server snapshot.
+      const bindings = (/data-stx-parent-bindings="([^"]*)"/.exec(html)?.[1] ?? '').split(/\s+/).filter(Boolean)
+      expect(bindings.sort()).toEqual([...SITES[i].bindings].sort())
+      if (SITES[i].name)
+        expect(html).toContain(SITES[i].name)
+    }
+  })
+
+  test('<Button> is not used where it would silently drop an x-tooltip', () => {
+    /*
+     * Four more sites hand-roll busy state and are deliberately still plain
+     * buttons: the two Remove buttons in the members list, the channel Test
+     * button and the channel Remove button. Each carries `x-tooltip`, and an
+     * `x-tooltip` on a COMPONENT never reaches the DOM.
+     *
+     * Measured on the installed 0.2.532 rather than read: `x-tooltip` IS in
+     * COMPONENT_PASSTHROUGH_X_ATTRS now, so it is no longer rewritten into a
+     * `:tooltip` signal binding (the old crash dashboard.stx documents). But
+     * processComponents still emits it only inside `data-stx-props`, and the
+     * tooltip runtime reads `el.getAttribute('x-tooltip')`, so the tooltip just
+     * disappears. `title` and `aria-label` forward correctly; `x-tooltip` sits
+     * in the gap.
+     *
+     * This test exists so the four are not "finished" by someone who does not
+     * hit the silence. Filed upstream.
+     */
+    const tooltipped = [...markup.matchAll(/<Button\b[^>]*>/g)].filter(m => m[0].includes('x-tooltip'))
+    expect(tooltipped.map(m => m[0])).toEqual([])
   })
 })

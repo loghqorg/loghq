@@ -1307,7 +1307,7 @@ onMount(() => {
             <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" :text="keyShown()">{{ keyMask }}</code>
             <button @click="keyRevealed.set(!keyRevealed())" class="btn-quiet btn-sm" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
             <button @click="copyKey" class="btn-quiet btn-sm" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
-            <button @click="rotateKey" :disabled="rotating()" class="btn-danger btn-sm">Rotate</button>
+            <Button variant="ghost" @click="rotateKey" :loading="rotating()" className="btn-danger btn-sm">Rotate</Button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
@@ -1384,6 +1384,29 @@ onMount(() => {
                 <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
               </div>
               <span class="px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">Member</span>
+              {{-- STILL A PLAIN BUTTON, and the reason is x-tooltip.
+
+                  This is one of four buttons in the file that hand-roll busy
+                  state and would otherwise take <Button> like the five that
+                  did: these two Removes, the channel Test and the channel
+                  Remove. An `x-tooltip` on a COMPONENT never reaches the DOM,
+                  so adopting here would delete the tooltip without any sign.
+
+                  Measured on the installed 0.2.532, not read off a changelog.
+                  `x-tooltip` IS in COMPONENT_PASSTHROUGH_X_ATTRS now, so it is
+                  no longer rewritten into a `:tooltip` signal binding -- that
+                  is the crash dashboard.stx documents, and it is fixed. What
+                  remains is quieter: processComponents emits the attribute only
+                  inside `data-stx-props`, while the tooltip runtime reads
+                  `el.getAttribute('x-tooltip')`. `title` and `aria-label` both
+                  forward to the concrete root correctly (stx#2063);
+                  `x-tooltip` falls in the gap between the two.
+
+                  `title` instead would work and would be a different tooltip --
+                  the browser's, not the app's. Not worth trading a consistent
+                  surface for a spinner. Filed upstream; revisit when it lands.
+                  tests/unit/button-vocabulary.test.ts fails if a <Button> here
+                  ever gets an x-tooltip. --}}
               <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>
             </div>
           @endforeach
@@ -1404,7 +1427,7 @@ onMount(() => {
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
             <input :model="inviteEmail" type="email" aria-label="Invite a teammate by email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
-            <button @click="addInvite" :disabled="inviting()" class="btn-cta btn-solid" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
+            <Button variant="ghost" @click="addInvite" :loading="inviting()" className="btn-cta btn-solid">Invite</Button>
           </div>
           <span class="mt-2.5 text-ok text-xs" :show="!!inviteNote()" :class="inviteNoteOk() ? 'mt-2.5 text-xs text-ok' : 'mt-2.5 text-xs text-accent'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1467,7 +1490,7 @@ onMount(() => {
           <input :model="whUrl" :placeholder="whPlaceholder()" type="url" aria-label="Webhook URL" class="mb-2 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
           <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
-            <button @click="addChannel" :disabled="adding()" class="btn-cta btn-solid" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <Button variant="ghost" @click="addChannel" :loading="adding()" className="btn-cta btn-solid">Add channel</Button>
             <span class="text-ok text-xs" :show="!!whNote()" :class="whNoteOk() ? 'text-xs text-ok' : 'text-xs text-accent'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1560,7 +1583,7 @@ onMount(() => {
                 <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject?.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
               @endif
             </div>
-            <button @click="openArchive" :disabled="archiving()" class="flex-none whitespace-nowrap btn-cta btn-danger">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <Button variant="ghost" @click="openArchive" :loading="archiving()" className="flex-none whitespace-nowrap btn-cta btn-danger">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</Button>
           </div>
           <div class="h-px bg-[color-mix(in_srgb,var(--warn)_20%,var(--border))]"></div>
           {{-- Delete --}}
@@ -1593,7 +1616,7 @@ onMount(() => {
           <input :model="modalInput" type="text" :aria-label="modalTitle()" aria-label="Type the project name to confirm" class="mb-4 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="flex gap-2 items-center justify-end">
             <button @click="closeModal" type="button" class="btn-md btn-quiet">Cancel</button>
-            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="btn-cta btn-danger">Confirm</button>
+            <Button type="button" variant="ghost" @click="confirmModal" :disabled="!modalReady()" :loading="modalBusy()" :label="modalConfirmLabel()" className="btn-cta btn-danger">Confirm</Button>
           </div>
           <span class="mt-2.5 text-accent text-xs" :show="!!modalNote()">{{ modalNote() }}</span>
         </div>

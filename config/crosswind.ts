@@ -1106,10 +1106,10 @@ export default {
      * what all of them meant. bughq's btn-solid took the same union for the
      * same reason.
      */
-    'btn-solid': 'bg-accent text-accent-ink rounded-[10px] '
-      + '[transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
-      + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
-      + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',
+    'btn-solid': 'btn-focus bg-accent !text-accent-ink !rounded-[10px] '
+      + '![transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
+      + 'hover:!bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
+      + 'active:translate-y-px disabled:!opacity-60 disabled:!cursor-default',
 
     /*
      * ## settings.stx's button vocabulary
@@ -1138,22 +1138,63 @@ export default {
      * modal's Cancel and `btn-cta` is every primary action, and both are
      * px-4 py-2.5 text-sm.
      */
-    'btn-quiet': 'bg-panel border border-line !text-muted '
-      + '!rounded-[9px] [transition:color_0.15s_ease,border-color_0.15s_ease] '
-      + 'hover:!text-ink hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+    'btn-quiet': 'btn-focus btn-disabled bg-panel border border-line !text-muted '
+      + '!rounded-[9px] ![transition:color_0.15s_ease,border-color_0.15s_ease] '
+      + 'hover:!bg-panel hover:!text-ink '
+      + 'hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
 
-    'btn-danger': 'bg-panel border !border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] '
-      + '!text-warn !rounded-[9px] [transition:all_0.15s_ease] '
+    'btn-danger': 'btn-focus btn-disabled bg-panel border !border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] '
+      + '!text-warn !rounded-[9px] ![transition:all_0.15s_ease] '
       + 'hover:!text-accent-ink hover:!bg-warn hover:!border-warn',
 
     // The copy button that sits over a code block. Its own entry rather than a
     // size of btn-quiet: it is positioned, uses the sans stack against the
     // mono block it overlays, and is the only control in the file at 11px.
-    'btn-copy': 'absolute right-2 top-2 bg-panel border border-line '
-      + '!px-[9px] !py-[5px] !text-[11px] !font-medium font-sans leading-none '
+    'btn-copy': 'btn-focus btn-disabled absolute right-2 top-2 bg-panel border border-line '
+      + '!px-[9px] !py-[5px] !text-[11px] !font-medium font-sans !leading-none '
       + '!text-subtle cursor-pointer !rounded-[7px] '
-      + '[transition:color_0.15s_ease,border-color_0.15s_ease] '
-      + 'hover:!text-ink hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+      + '![transition:color_0.15s_ease,border-color_0.15s_ease] '
+      + 'hover:!bg-panel hover:!text-ink '
+      + 'hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+
+    /*
+     * The app's own focus treatment, restored over <Button>'s.
+     *
+     * The component declares `focus:outline-none focus:ring-2 ...`, and a
+     * utility is unlayered while this app's `button:focus-visible { outline:
+     * 2px solid var(--accent) }` is a preflight in @layer tc-base -- so the
+     * component's ring wins at any specificity and the app's outline simply
+     * stops arriving. The two look nearly identical, but the component's fires
+     * on `:focus` and the app's on `:focus-visible`, so adopting <Button>
+     * would have put a ring on nine buttons after a MOUSE click while every
+     * other control in the app rings only for the keyboard.
+     *
+     * `focus:!ring-0` cancels the component's ring and the `:focus-visible`
+     * pair restores the preflight's rule at utility level, where it outranks
+     * the component.
+     *
+     * This spelling -- a variant on an arbitrary property -- emitted NOTHING
+     * until ts-css 0.3.16 (stacksjs/ts-css#36 for the generator, #37 for the
+     * extractor). It is the first place in this app that needed it, and it was
+     * measured through this app's own loader before being relied on.
+     */
+    'btn-focus': 'focus:!ring-0 '
+      + 'focus-visible:![outline:2px_solid_var(--accent)] '
+      + 'focus-visible:![outline-offset:2px]',
+
+    /*
+     * One disabled appearance for every button.
+     *
+     * <Button> brings `disabled:opacity-50 disabled:cursor-not-allowed`, and
+     * btn-solid already declared 60% with a default cursor. Rather than let
+     * three paints disagree, all of them take the 60% that btn-solid's call
+     * sites have used all along.
+     *
+     * This is also a gain on the quiet and danger paints, which previously had
+     * no disabled styling at all: `:disabled="rotating()"` dimmed nothing, so a
+     * disabled Rotate button looked exactly like an enabled one.
+     */
+    'btn-disabled': 'disabled:!opacity-60 disabled:!cursor-default',
 
     'btn-xs': '!px-2.5 !py-1.5 !text-xs !font-medium',
     'btn-sm': '!px-3 !py-2 !text-sm !font-medium',
