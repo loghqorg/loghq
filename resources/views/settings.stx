@@ -1404,7 +1404,8 @@ onMount(() => {
 
                   `title` instead would work and would be a different tooltip --
                   the browser's, not the app's. Not worth trading a consistent
-                  surface for a spinner. Filed upstream; revisit when it lands.
+                  surface for a spinner. Filed as stacksjs/stx#2077; revisit
+                  when it lands.
                   tests/unit/button-vocabulary.test.ts fails if a <Button> here
                   ever gets an x-tooltip. --}}
               <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>

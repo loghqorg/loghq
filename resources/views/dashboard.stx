@@ -720,17 +720,30 @@ onMount(() => {
           <Icon name="lucide:moon" size="17" class="h-[17px] w-[17px] ic-moon" />
         </button>
         {{-- x-tooltip lives on this WRAPPER, not on the StxLink, and that is
-            load-bearing. component-renderer.ts:154-159 rewrites any x-* attribute
-            on a COMPONENT to a `:` signal binding unless the name is in its
-            ALPINE_PASSTHROUGH set — and x-tooltip is not in that set, even though
-            the signals runtime lists it in X_HANDLED (signals.ts:2295) as an
-            attribute it consumes itself. So x-tooltip="Settings" on the StxLink
-            became :tooltip="Settings", stx tried to evaluate the bare identifier
-            Settings as an expression, and the page logged
-            "hydration invariant failed after DOMContentLoaded: 1 expression(s)
-            never evaluated — Settings is not defined". Filed upstream. The same
-            trap applies to <Icon> and every other component; a plain element is
-            the only safe host until the two lists agree.
+            still load-bearing — but not for the reason this comment used to give,
+            so here is the current state measured on the installed 0.2.532.
+
+            WHAT WAS WRONG AND IS NOW FIXED. component-renderer rewrites any x-*
+            attribute on a COMPONENT to a `:` signal binding unless the name is in
+            its ALPINE_PASSTHROUGH set, and x-tooltip was not in that set even
+            though the runtime consumed it itself. So x-tooltip="Settings" became
+            :tooltip="Settings", stx evaluated the bare identifier, and the page
+            logged "hydration invariant failed after DOMContentLoaded: 1
+            expression(s) never evaluated — Settings is not defined". The two
+            lists agree now: ALPINE_PASSTHROUGH is built FROM
+            RUNTIME_HANDLED_X_ATTRS, which lists x-tooltip, so no rewrite happens
+            and the crash is gone.
+
+            WHAT IS STILL WRONG, AND IS QUIETER. The attribute escapes the
+            rewrite and then never reaches the element: processComponents emits it
+            only inside data-stx-props, while the tooltip runtime reads
+            el.getAttribute("x-tooltip"). So x-tooltip on a component now costs
+            the tooltip instead of the page. title and aria-label both forward to
+            the concrete root correctly (stx#2063); x-tooltip falls in the gap
+            between the two. Filed as stacksjs/stx#2077.
+
+            So the wrapper stays, and a plain element is still the only safe host
+            — for <Icon> and every other component too.
 
             The span is inline-flex so it behaves as the same flex item the
             anchor used to be, and the hover area is unchanged. --}}
