@@ -211,23 +211,16 @@ export default {
       // /dashboard and /settings, which define their own conflicting versions of
       // the same class names. It lives in resources/layouts/marketing.stx
       // instead, so it arrives with the shell that needs it.
+      //
+      // /tokens.css and /app-chrome.css used to be linked here and are gone:
+      // both are `preflights` entries in config/crosswind.ts now, emitted into
+      // the generated sheet (stx-standards rule 3). Nothing replaced them in
+      // this list, because the generated sheet is injected by the renderer.
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap' },
-        // Design tokens, once. Ten app views each carried their own copy of
-        // this block. Deliberately BEFORE /marketing.css, which the marketing
-        // layout adds and which defines a richer overlapping set — later wins,
-        // which is the intent.
-        { rel: 'stylesheet', href: '/tokens.css' },
-        // App-surface CSS that utilities provably cannot express —
-        // pseudo-elements, attribute-state selectors, bare element selectors,
-        // @keyframes, and the dashboard's page-scoped accent. After
-        // /tokens.css so it can read the palette; still before the Crosswind
-        // sheet, which the renderer injects last, so a utility continues to
-        // win a specificity tie against anything in here.
-        { rel: 'stylesheet', href: '/app-chrome.css' },
       ],
     },
   },

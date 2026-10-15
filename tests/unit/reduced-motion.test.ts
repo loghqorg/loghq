@@ -18,22 +18,35 @@
  * { animation: none } }`. So the spelling is no longer a trap, and the test
  * that failed any view for using it has been removed.
  *
- * Both halves still live in public/tokens.css, in source order, and that is
- * still the better home: as utilities the two rules tie on specificity and
- * the guard wins only because the generator happens to emit the media query
- * second. tokens.css makes the order explicit, and it is linked BEFORE the
- * generated sheet, which is why the animation moved there too rather than
- * staying a utility for the guard to fight.
+ * Both halves still travel together, in source order, and that is still the
+ * better home: as utilities the two rules tie on specificity and the guard
+ * wins only because the generator happens to emit the media query second.
+ * Declaring them next to each other makes the order explicit.
+ *
+ * They moved with the rest of public/tokens.css into the TOKENS preflight in
+ * config/crosswind.ts (stx-standards rule 3, §11.2), so this now reads them
+ * out of the config rather than the deleted stylesheet. The order argument is
+ * unchanged -- one block, same specificity, later wins -- but the second test
+ * below matters MORE than it did. A preflight lands in @layer tc-base, so an
+ * `[animation:loghq-pulse...]` utility on the same element would no longer
+ * merely outrank the guard on source order; being unlayered it would beat it
+ * outright, at any specificity.
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import theme from '../../config/crosswind'
 
 const ROOT = join(import.meta.dir, '../..')
-const tokens = readFileSync(join(ROOT, 'public/tokens.css'), 'utf8')
+
+/** The preflight entry that carries the palette and the skeleton. */
+const tokens = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+  .map(entry => entry.getCSS())
+  .find(css => css.includes('.skeleton-pulse')) ?? ''
 
 describe('reduced motion', () => {
   test('the skeleton declares its animation and its guard, in that order', () => {
+    expect(tokens).not.toBe('')
     const base = tokens.search(/\.skeleton-pulse\s*\{/)
     const guard = tokens.search(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.skeleton-pulse\s*\{/)
     expect(`base declared: ${base >= 0}`).toBe('base declared: true')
@@ -46,9 +59,9 @@ describe('reduced motion', () => {
   test('the element that pulses is the one the guard names', () => {
     const account = readFileSync(join(ROOT, 'resources/views/account.stx'), 'utf8')
     expect(account).toContain('skeleton-pulse')
-    // The animation must not also be applied as a utility: that lands in the
-    // generated sheet, which is linked after tokens.css, and would outrank the
-    // guard on source order while tying on specificity.
+    // The animation must not also be applied as a utility. A utility is
+    // unlayered and the guard is now in @layer tc-base, so it would not merely
+    // outrank the guard on source order -- it would win at any specificity.
     expect(account).not.toMatch(/\[animation:loghq-pulse/)
   })
 })
