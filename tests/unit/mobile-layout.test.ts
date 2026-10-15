@@ -1,9 +1,19 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import theme from '../../config/crosswind'
 
-const ROOT = join(import.meta.dir, '../..')
-const marketing = readFileSync(join(ROOT, 'public/marketing.css'), 'utf8')
+/*
+ * The marketing sheet, read out of the MARKETING preflight. It was
+ * public/marketing.css until it moved into config/crosswind.ts, scoped to the
+ * marketing layout group (stx-standards rule 3, §11.2).
+ *
+ * Everything below still reads the same, because the move nested the rules
+ * under one prefix rather than rewriting them: `body:has(.nav-menu[open])` is
+ * still spelled exactly that way in the source, and the prefix is prepended at
+ * the top of the block.
+ */
+const marketing = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+  .map(entry => entry.getCSS())
+  .find(css => css.includes('content="marketing"')) ?? ''
 
 // The phone menu lists every marketing destination in one column, which is
 // taller than an 812px viewport. The panel has to scroll inside the viewport

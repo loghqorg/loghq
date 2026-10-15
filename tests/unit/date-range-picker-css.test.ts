@@ -28,8 +28,9 @@ const appPreflights = (theme as any).preflights as { getCSS: () => string }[]
 /*
  * Addressed by content, not by index. This was `appPreflights[0]` while the
  * picker was the config's only entry; TOKENS and APP_CHROME joined it when
- * public/tokens.css and public/app-chrome.css moved in, and an index would
- * have silently started asserting about the palette instead.
+ * public/tokens.css, public/app-chrome.css and public/marketing.css moved in,
+ * and an index would have silently started asserting about the palette
+ * instead.
  */
 const picker = appPreflights.find(entry => entry.getCSS().includes('.drp-day'))!
 const flat = sheet.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, '').replace(/;\}/g, '}')
@@ -47,8 +48,8 @@ describe('date range picker CSS reaches the generated sheet', () => {
     // the dev-server merge dropped preflights outright (stacksjs/stx#1867).
     // If that ever regresses, every rule in this file goes with it.
     expect(merged.includePreflight).toBe(true)
-    // The picker, the design tokens and the app chrome.
-    expect(appPreflights.length).toBe(3)
+    // The picker, the design tokens, the app chrome, and the marketing sheet.
+    expect(appPreflights.length).toBe(4)
     expect(picker).toBeDefined()
     // Plus the engine's own reset, which is a preflight too.
     expect(merged.config.preflights.length).toBeGreaterThan(appPreflights.length)

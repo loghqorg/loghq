@@ -35,7 +35,7 @@
  * They carry !important now, per declaration rather than per rule.
  */
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import theme from '../../config/crosswind'
 // The installed stx package does not export these subpaths by bare specifier.
@@ -49,6 +49,7 @@ const ENTRIES = ((theme as { preflights?: { getCSS: () => string }[] }).prefligh
   .map(entry => entry.getCSS())
 const TOKENS = ENTRIES.find(css => css.includes('--accent-soft:')) ?? ''
 const CHROME = ENTRIES.find(css => css.includes('.dz-overlay')) ?? ''
+const MARKETING = ENTRIES.find(css => css.includes('content="marketing"')) ?? ''
 
 async function generate(): Promise<string> {
   const engine = await loadCssEngine()
@@ -79,7 +80,8 @@ describe('the claim that kept them out of the config', () => {
     // started asserting about the palette when these two joined it.
     expect(TOKENS).not.toBe('')
     expect(CHROME).not.toBe('')
-    expect(ENTRIES).toHaveLength(3)
+    expect(MARKETING).not.toBe('')
+    expect(ENTRIES).toHaveLength(4)
   })
 })
 
@@ -104,20 +106,64 @@ describe('one declaration site', () => {
       expect({ href, onDisk: stylesheets.includes(href.slice(1)) }).toEqual({ href, onDisk: true })
   })
 
-  test('public/marketing.css is the one stylesheet left, and it is not site-wide', () => {
+  test('public/ holds no stylesheet at all now', () => {
     /*
-     * Not part of this move and not the same problem. It is linked from
-     * resources/layouts/marketing.stx rather than config/ui.ts, because app
-     * pages define their own conflicting `.btn` and `.panel`, so it cannot
-     * become an unscoped preflight the way these two could. Its 32 token
-     * declarations are the remaining §11.2 debt in this app, recorded here so
-     * the number is explicit rather than implied by the absence of a check.
+     * marketing.css was the last one. It could not become an unscoped
+     * preflight the way TOKENS and APP_CHROME did -- a preflight reaches every
+     * page, and this sheet gives `.btn`, `.panel` and `.shell` meanings the
+     * app pages contradict, which is exactly why it was linked from
+     * resources/layouts/marketing.stx rather than config/ui.ts. It carries the
+     * layout group instead.
      */
-    const marketing = readFileSync(join(PUBLIC, 'marketing.css'), 'utf8')
-    const declarations = [...marketing.matchAll(/^\s*(--[a-z][\w-]*)\s*:/gm)].length
-    expect({ declarations }).toEqual({ declarations: 35 })
-    expect(readFileSync(join(ROOT, 'resources/layouts/marketing.stx'), 'utf8')).toContain('href="/marketing.css"')
-    expect(readFileSync(join(ROOT, 'config/ui.ts'), 'utf8')).not.toContain('href: \'/marketing.css\'')
+    const stylesheets = existsSync(PUBLIC) ? readdirSync(PUBLIC).filter(name => name.endsWith('.css')) : []
+    expect(stylesheets).toEqual([])
+
+    const layout = readFileSync(join(ROOT, 'resources/layouts/marketing.stx'), 'utf8')
+    expect(layout).not.toContain('<link rel="stylesheet" href="/marketing.css">')
+  })
+
+  test('the marketing sheet is scoped, and the site-wide ones are not', () => {
+    // The whole arrangement in one assertion: TOKENS and APP_CHROME reach
+    // every page, MARKETING reaches only its own layout group.
+    expect(TOKENS).not.toContain('stx-layout-group')
+    expect(CHROME).not.toContain('stx-layout-group')
+    expect(MARKETING).toContain('[content="marketing"]')
+
+    /*
+     * Written once with nesting rather than pasted onto every selector. The
+     * exceptions are the rules that CANNOT nest, because nesting puts the
+     * prefix in front of a descendant and these are rooted at or above <html>:
+     * the four token blocks, the `html` background rule, and `*`, which
+     * matched html itself and so becomes `P, P *`.
+     */
+    const prefixes = [...MARKETING.matchAll(/html:has\(meta/g)].length
+    const braces = [...MARKETING.matchAll(/\{/g)].length
+    expect({ prefixes: prefixes <= 10, rules: braces > 150 }).toEqual({ prefixes: true, rules: true })
+    expect(MARKETING).toMatch(/\[content="marketing"\]\), html:has\([^)]*\) \* \{ box-sizing: border-box; \}/)
+    expect(MARKETING).not.toMatch(/(?:^|\n):root/)
+    expect(MARKETING).not.toMatch(/(?:^|\n)html \{/)
+  })
+
+  test('the six tokens it shared with TOKENS are declared once, not twice', () => {
+    /*
+     * --accent, --bg, --border, --text, --text-2 and --text-3 were declared in
+     * both, byte-identical in all four theme blocks, so marketing pages
+     * inherit them. --mono went too: it differed only by double quotes against
+     * single, which CSS does not distinguish.
+     *
+     * --sans is the exception and stays: this copy carries `-apple-system` and
+     * the TOKENS copy does not. Keeping it is what makes the move a no-op.
+     */
+    /*
+     * Comments stripped first. One of them reads "Not --text-3: the code block
+     * is dark", which a naive match reads as a declaration of --text-3.
+     */
+    const declarations = MARKETING.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const token of ['--accent', '--bg', '--border', '--text', '--text-2', '--text-3', '--mono'])
+      expect({ token, redeclared: new RegExp(`${token}\\s*:`).test(declarations) }).toEqual({ token, redeclared: false })
+    expect(MARKETING).toContain('--sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif')
+    for (const token of ['--surface', '--surface-2', '--border-strong', '--accent-line', '--code-bg', '--code-ink', '--code-cap', '--r', '--r-sm'])
+      expect({ token, present: MARKETING.includes(`${token}:`) }).toEqual({ token, present: true })
   })
 
   test('all four theme blocks, and the chrome, reach the generated sheet', async () => {
