@@ -1095,10 +1095,70 @@ export default {
       + 'focus:outline-none focus:border-accent '
       + 'focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]',
 
+    /*
+     * The union of the transition lists, not this app's first one.
+     *
+     * This entry animated transform and opacity only, so the accent fill it
+     * sets on :hover SNAPPED. settings.stx's two solid buttons declared
+     * `background 0.15s ease, opacity 0.15s ease` instead and eased it, which
+     * is how the omission surfaced when they were folded in here. Each copy had
+     * named the properties its own call site happened to animate; the union is
+     * what all of them meant. bughq's btn-solid took the same union for the
+     * same reason.
+     */
     'btn-solid': 'bg-accent text-accent-ink rounded-[10px] '
-      + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
+      + '[transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
       + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
       + 'active:translate-y-px disabled:opacity-60 disabled:cursor-default',
+
+    /*
+     * ## settings.stx's button vocabulary
+     *
+     * Three paints and four sizes, which is what its 23 raw `<button>`
+     * elements actually were. Measured class string by class string: 14
+     * distinct strings collapsed to these, with no string left over and no
+     * paint invented. The four controls that are NOT ordinary buttons -- the
+     * theme toggle (`icon-btn`), the channel switch (`tgl`) and the two
+     * segment buttons (`seg`) -- keep their own shortcuts and are untouched.
+     *
+     * Marked `!important` throughout, and this is the reason rather than a
+     * habit. The next step puts `<Button variant="ghost">` behind these, and
+     * the component's own `variantClasses.ghost` and `sizeClasses.md` are
+     * single-class selectors exactly like a shortcut: specificity ties, and
+     * crosswind sorts its output by category rather than by generation order,
+     * so an unmarked override lands PARTIALLY. Half an override is worse than
+     * none, because it reads as working. bughq marked its family for the same
+     * reason and the comment there has the measurement.
+     *
+     * Marked across the whole family, including the `:hover` steps: a marked
+     * base outranks its own unmarked hover.
+     *
+     * The weight lives with the size, not the paint, because the two sizes
+     * that exist in both weights differ ONLY in weight: `btn-md` is the
+     * modal's Cancel and `btn-cta` is every primary action, and both are
+     * px-4 py-2.5 text-sm.
+     */
+    'btn-quiet': 'bg-panel border border-line !text-muted '
+      + '!rounded-[9px] [transition:color_0.15s_ease,border-color_0.15s_ease] '
+      + 'hover:!text-ink hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+
+    'btn-danger': 'bg-panel border !border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] '
+      + '!text-warn !rounded-[9px] [transition:all_0.15s_ease] '
+      + 'hover:!text-accent-ink hover:!bg-warn hover:!border-warn',
+
+    // The copy button that sits over a code block. Its own entry rather than a
+    // size of btn-quiet: it is positioned, uses the sans stack against the
+    // mono block it overlays, and is the only control in the file at 11px.
+    'btn-copy': 'absolute right-2 top-2 bg-panel border border-line '
+      + '!px-[9px] !py-[5px] !text-[11px] !font-medium font-sans leading-none '
+      + '!text-subtle cursor-pointer !rounded-[7px] '
+      + '[transition:color_0.15s_ease,border-color_0.15s_ease] '
+      + 'hover:!text-ink hover:!border-[color-mix(in_srgb,var(--accent)_45%,var(--border))]',
+
+    'btn-xs': '!px-2.5 !py-1.5 !text-xs !font-medium',
+    'btn-sm': '!px-3 !py-2 !text-sm !font-medium',
+    'btn-md': '!px-4 !py-2.5 !text-sm !font-medium',
+    'btn-cta': '!px-4 !py-2.5 !text-sm !font-semibold',
 
     // Shared Button owns semantics and reactive state. These explicit
     // overrides preserve the existing auth controls without depending on
@@ -1137,8 +1197,7 @@ export default {
      *
      * Kept apart from err-box and ok-box rather than folded into them, so the
      * composite reads the same way in all three apps that have it: colour is
-     * one class, geometry is another, and `class="mb-4 py-2 err-box
-     * notice-box"` says which is which. It also means the confirmation and the
+     * one class, geometry is another, and `class="mb-4 py-2 * err-box notice-box"` says which is which. It also means the confirmation and the
      * error share a box instead of each carrying their own copy of it.
      *
      * The vertical padding stays at the call site: errors sit at py-2 and
