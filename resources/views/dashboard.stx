@@ -674,7 +674,7 @@ onMount(() => {
     @if (user && projectsUnavailable)
       <div class="py-24 text-center">
         <p class="text-muted text-sm"><span class="font-semibold text-ink">Can't reach your projects right now.</span> Make sure Postgres is provisioned.</p>
-        <p class="mt-2 text-subtle text-xs">Nothing has been lost — reload once the database is back.</p>
+        <p class="mt-2 text-subtle text-xs">Nothing has been lost. Reload once the database is back.</p>
       </div>
     @endif
 
