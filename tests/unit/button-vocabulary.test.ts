@@ -151,6 +151,11 @@ describe('settings button vocabulary', () => {
 describe('settings Button adoption', () => {
   const SITES = [
     { paint: 'btn-danger btn-sm', name: 'Rotate', bindings: ['loading'] },
+    // The read key's pair (#14). Issue doubles as Replace once a key exists, so
+    // its label is reactive — through `:label`, never `:text`, which writes
+    // textContent and would erase the spinner this file exists to protect.
+    { paint: 'btn-quiet btn-sm', name: 'Issue key', bindings: ['loading', 'label'] },
+    { paint: 'btn-danger btn-sm', name: 'Revoke', bindings: ['loading'] },
     { paint: 'btn-cta btn-solid', name: 'Invite', bindings: ['loading'] },
     { paint: 'btn-cta btn-solid', name: 'Add channel', bindings: ['loading'] },
     { paint: 'flex-none whitespace-nowrap btn-cta btn-danger', name: '', bindings: ['loading'] },
@@ -167,7 +172,7 @@ describe('settings Button adoption', () => {
   // </Button>, swallowing half the file. Strip comments before matching markup.
   const calls = markup.match(/<Button\b[\s\S]*?<\/Button>/g) ?? []
 
-  test('there are exactly five, and none of them re-states a paint', () => {
+  test('there are exactly as many as are registered, and none re-states a paint', () => {
     expect(calls).toHaveLength(SITES.length)
     for (const [i, call] of calls.entries()) {
       expect(/className="([^"]*)"/.exec(call)?.[1]).toBe(SITES[i].paint)
@@ -183,7 +188,7 @@ describe('settings Button adoption', () => {
     for (const [i, call] of calls.entries()) {
       const dependencies = new Set<string>()
       const html = await processComponents(call, {
-        __stx_client_signal_names: ['rotating', 'inviting', 'adding', 'archiving', 'modalBusy', 'modalReady', 'modalConfirmLabel'],
+        __stx_client_signal_names: ['rotating', 'inviting', 'adding', 'archiving', 'modalBusy', 'modalReady', 'modalConfirmLabel', 'readKeyBusy', 'hasReadKey'],
         __importedComponents: new Map([['button', resolve(ROOT, 'node_modules/@stacksjs/components/src/ui/button/Button.stx')]]),
       }, FILE, { componentsDir: resolve(ROOT, 'resources/components') }, dependencies)
 
