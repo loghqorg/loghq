@@ -257,8 +257,8 @@ const keyMask = maskKey(keyFull)
 // it is issued and never again (#14). Only whether one exists, and when it was
 // last used, so somebody can tell a live key from a forgotten one before
 // revoking it.
-const hasReadKey = !!(__activeRow && __activeRow.read_key)
-const readKeyUsed = __activeRow && __activeRow.read_key_last_used_at ? String(__activeRow.read_key_last_used_at) : ''
+const hasReadKeyInitial = !!(__activeRow && __activeRow.read_key)
+const readKeyUsedInitial = __activeRow && __activeRow.read_key_last_used_at ? String(__activeRow.read_key_last_used_at) : ''
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
@@ -545,8 +545,8 @@ defineClientPayload({
   codeText: guide.code,
   initialKeyFull: keyFull,
   initialKeyMask: keyMask,
-  initialHasReadKey: hasReadKey,
-  initialReadKeyUsed: readKeyUsed,
+  hasReadKeyInitial,
+  readKeyUsedInitial,
 })
 
 useSeoMeta({
@@ -841,8 +841,8 @@ async function rotateKey(): Promise<void> {
 // signal only for as long as the page that issued it is open: it is never
 // rendered from the server and nothing stores it, so closing the page is the
 // end of the only copy the browser ever had.
-const hasReadKey = state(initialHasReadKey)
-const readKeyUsed = state(initialReadKeyUsed)
+const hasReadKey = state(hasReadKeyInitial)
+const readKeyUsed = state(readKeyUsedInitial)
 const readKeyOnce = state('')
 const readKeyBusy = state(false)
 const readKeyNote = state('')
