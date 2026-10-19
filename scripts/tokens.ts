@@ -33,7 +33,7 @@
  * KNOWN LIMIT: a value built by string interpolation rather than written
  * literally cannot be resolved here; it is emitted as-is and flagged.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import theme from '../config/crosswind'
 
@@ -65,7 +65,20 @@ const MUST_DIFFER: [string, string][] = [
   ['line', 'line-strong'],
 ]
 
-const source = readFileSync(resolve(ROOT, 'config/crosswind.ts'), 'utf8')
+/*
+ * The CSS the engine actually receives, not the TypeScript that produces it.
+ *
+ * Parsing the config file was the wrong source and failed three different ways:
+ * comments were read as selectors, `@media` nesting was lost to a regex, and
+ * bughq -- where this was found -- declares its tokens as ARRAY ELEMENTS
+ * (`` `--text: ${p.text}`, ``) with no semicolon at all, so a scan keyed on `;`
+ * found none of them. `preflights[].getCSS()` is the generated stylesheet, so
+ * every app's declarations arrive in one shape no matter how the config spells
+ * them, already interpolated.
+ */
+const source = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+  .map(preflight => preflight.getCSS())
+  .join('\n')
 
 /**
  * The custom properties in force for one surface and one colour mode.
@@ -136,7 +149,11 @@ function declarations(surface: string, dark: boolean): Map<string, string> {
     if (qualifier ? (scoped && !qualifier.test(context)) : scoped)
       continue
     const isDark = /data-theme\s*=\s*["']dark["']|prefers-color-scheme:\s*dark/.test(context)
-    const isLight = /data-theme\s*=\s*["']light["']/.test(context)
+    // `@media (prefers-color-scheme: light)` counts too. Without it, a light
+    // media block reads as unqualified and overwrites the dark column -- which
+    // is what happened to analyticshq's dark-first marketing and auth surfaces,
+    // where the unscoped block holds the DARK values and light is the override.
+    const isLight = /data-theme\s*=\s*["']light["']|prefers-color-scheme:\s*light/.test(context)
     if (dark ? isLight : isDark)
       continue
     out.set(name, value)
@@ -144,15 +161,60 @@ function declarations(surface: string, dark: boolean): Map<string, string> {
   return out
 }
 
+/**
+ * Resolve `var()` by matching parentheses, not by regex.
+ *
+ * A regex has to bound how deep a fallback may nest, and these nest deeper than
+ * is comfortable to guess: analyticshq declares
+ * `warning: var(--warn, var(--text-2, var(--muted)))`, three levels, because
+ * its three layout groups name that colour three different ways. A
+ * one-level-nesting pattern resolved the inner chain and left the outer
+ * `var(--warn, ...)` sitting in the output.
+ */
 function resolveValue(value: string, vars: Map<string, string>, depth = 0): string {
   if (depth > 8)
     return value
-  return value.replace(/var\((--[a-z0-9-]+)(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g, (whole, name, fallback) => {
-    const found = vars.get(name)
-    if (found) return resolveValue(found, vars, depth + 1)
-    if (fallback) return resolveValue(fallback.trim(), vars, depth + 1)
-    return whole
-  })
+
+  let out = ''
+  let i = 0
+  while (i < value.length) {
+    const at = value.indexOf('var(', i)
+    if (at < 0) {
+      out += value.slice(i)
+      break
+    }
+    out += value.slice(i, at)
+
+    let depthHere = 0
+    let close = at + 3
+    for (; close < value.length; close++) {
+      if (value[close] === '(') depthHere++
+      else if (value[close] === ')') { depthHere--; if (depthHere === 0) break }
+    }
+    const inner = value.slice(at + 4, close)
+
+    // the first comma that is not inside a nested call separates name from fallback
+    let comma = -1
+    let nested = 0
+    for (let x = 0; x < inner.length; x++) {
+      if (inner[x] === '(') nested++
+      else if (inner[x] === ')') nested--
+      else if (inner[x] === ',' && nested === 0) { comma = x; break }
+    }
+    const name = (comma < 0 ? inner : inner.slice(0, comma)).trim()
+    const fallback = comma < 0 ? '' : inner.slice(comma + 1).trim()
+
+    const declared = vars.get(name)
+    if (declared !== undefined)
+      out += resolveValue(declared, vars, depth + 1)
+    else if (fallback)
+      out += resolveValue(fallback, vars, depth + 1)
+    else
+      out += value.slice(at, close + 1)
+
+    i = close + 1
+  }
+  return out
 }
 
 /*
@@ -177,7 +239,7 @@ for (const surface of Object.keys(SURFACES)) {
     for (const role of ROLES) {
       const expression = colors[role]
       if (!expression) {
-        if (surface === 'base' && mode === 'light') missing.push(role)
+        if (surface === Object.keys(SURFACES)[0] && mode === 'light') missing.push(role)
         continue
       }
       const value = resolveValue(expression, vars)
@@ -188,20 +250,41 @@ for (const surface of Object.keys(SURFACES)) {
   }
 }
 
+/*
+ * Whether this app has a dark mode at all.
+ *
+ * commshq has none -- not one `prefers-color-scheme: dark` or
+ * `[data-theme="dark"]` in its stylesheet -- so its two columns are the same
+ * palette twice. Recording that is the difference between "this app is
+ * light-only" and "the dark context was never found", which look identical in
+ * the output and are very different facts.
+ */
+const hasDarkMode = /prefers-color-scheme:\s*dark|data-theme\s*=\s*["']dark["']/.test(source)
+
+/*
+ * Read off the first surface. Not `base` by name: analyticshq declares almost
+ * nothing unscoped and its surfaces are the three layout groups, so a hardcoded
+ * `base` resolves to nothing there. A collapse is a limit of the palette rather
+ * than of one surface anyway -- the surfaces differ in accent, not in whether
+ * two greys are the same grey.
+ */
+const primary = Object.keys(SURFACES)[0]
 const lost = MUST_DIFFER
-  .filter(([a, b]) => manifest.dashboard.light[a] && manifest.dashboard.light[a] === manifest.dashboard.light[b])
+  .filter(([a, b]) => manifest[primary].light[a] && manifest[primary].light[a] === manifest[primary].light[b])
   .map(([a, b]) => `${a} = ${b}`)
 
 const out = resolve(ROOT, 'config/tokens.json')
-writeFileSync(out, `${JSON.stringify({ roles: manifest, lost }, null, 2)}\n`)
+writeFileSync(out, `${JSON.stringify({ darkMode: hasDarkMode, roles: manifest, lost }, null, 2)}\n`)
 
-console.log(`Resolved ${Object.keys(manifest.base.light).length} of ${ROLES.length} roles, per surface (${Object.keys(SURFACES).join(', ')}), light and dark.`)
+console.log(`Resolved ${Object.keys(manifest[primary].light).length} of ${ROLES.length} roles, per surface (${Object.keys(SURFACES).join(', ')}), light and dark.`)
 if (missing.length)
   console.log(`  no utility generated for: ${missing.join(', ')}`)
 if (unresolved.length) {
   console.log(`  not reducible to a literal (${unresolved.length}):`)
   for (const entry of unresolved) console.log(`    ${entry}`)
 }
+if (!hasDarkMode)
+  console.log('  this app declares no dark mode; both columns are the same palette')
 console.log(lost.length
   ? `  lost distinctions (${lost.length}): ${lost.join(', ')}`
   : '  no lost distinctions')

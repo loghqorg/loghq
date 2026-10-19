@@ -21,12 +21,30 @@ import { join } from 'node:path'
 
 const ROOT = join(import.meta.dir, '../..')
 const manifest = JSON.parse(readFileSync(join(ROOT, 'config/tokens.json'), 'utf8')) as {
+  darkMode: boolean
   roles: Record<string, Record<string, Record<string, string>>>
   lost: string[]
 }
 const config = readFileSync(join(ROOT, 'config/crosswind.ts'), 'utf8')
 
 describe('token manifest', () => {
+  /*
+   * Recorded because the alternative reading is indistinguishable in the output:
+   * commshq declares no dark mode at all, so its two columns are the same
+   * palette twice, which looks exactly like a dark context the resolver failed
+   * to find. This app has one.
+   */
+  test('this app has a dark mode, and light and dark differ', () => {
+    expect(manifest.darkMode).toBe(true)
+    for (const surface of Object.keys(manifest.roles)) {
+      const light = manifest.roles[surface].light
+      const dark = manifest.roles[surface].dark
+      const identical = Object.keys(light).filter(role => light[role] === dark[role]).length
+      expect(`${surface}: all identical = ${identical === Object.keys(light).length}`)
+        .toBe(`${surface}: all identical = false`)
+    }
+  })
+
   test('covers both surfaces in both modes', () => {
     expect(Object.keys(manifest.roles).sort()).toEqual(['base', 'dashboard', 'marketing'])
     for (const surface of Object.keys(manifest.roles))
