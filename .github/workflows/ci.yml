@@ -96,9 +96,15 @@ jobs:
       # the count down, then delete `continue-on-error` and add the grep that
       # fails on anything but "0 error(s), 0 warning(s)".
       #
-      # When that happens, note that --lib must be a SINGLE file: the checker
-      # does not read ambient types from tsconfig `include`, and repeating the
-      # flag silently drops all but the last (stacksjs/stx#1926).
+      # When that happens: --lib is required, because the checker does not read
+      # ambient types from tsconfig `include`. It may be REPEATED, so the
+      # declarations do not have to be crammed into one file.
+      # stacksjs/stx#1926, where all but the last flag were silently dropped,
+      # is fixed. Verified on this repo's own installed stx (0.2.532) with two
+      # .d.ts files each declaring one global: both passed resolves both, and
+      # passing only the first fails with `Cannot find name 'betaGlobal'`,
+      # which is the control that proves the checker ran at all.
+      # stacksjs/analyticshq passes six --lib flags in CI today.
       - name: Typecheck .stx (advisory)
         continue-on-error: true
         run: bunx --bun stx typecheck 'resources/**/*.stx'
