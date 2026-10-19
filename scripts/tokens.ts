@@ -77,6 +77,7 @@ const source = readFileSync(resolve(ROOT, 'config/crosswind.ts'), 'utf8')
 const SURFACES: Record<string, RegExp | null> = {
   base: null,
   dashboard: /\.page-dashboard/,
+  marketing: /stx-layout-group/,
 }
 
 /**
@@ -89,7 +90,15 @@ const SURFACES: Record<string, RegExp | null> = {
  * `.page-dashboard` overrides -- so the naive version attributed the dashboard's
  * indigo to the base surface and reported an accent no base page renders.
  */
-function* declarationsInContext(css: string): Generator<[string, string, string]> {
+function* declarationsInContext(raw: string): Generator<[string, string, string]> {
+  /*
+   * Comments out first. The scan below treats whatever precedes a `{` as a
+   * selector, so a comment is not inert here -- prose containing a brace, a
+   * semicolon or the words `data-theme="dark"` lands in the selector stack and
+   * can reclassify a whole block. Found while pointing this at the other five
+   * apps, where sentences from comment blocks turned up as selector names.
+   */
+  const css = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, ' ')
   const stack: string[] = []
   let i = 0
   let pending = ''

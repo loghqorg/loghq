@@ -28,7 +28,7 @@ const config = readFileSync(join(ROOT, 'config/crosswind.ts'), 'utf8')
 
 describe('token manifest', () => {
   test('covers both surfaces in both modes', () => {
-    expect(Object.keys(manifest.roles).sort()).toEqual(['base', 'dashboard'])
+    expect(Object.keys(manifest.roles).sort()).toEqual(['base', 'dashboard', 'marketing'])
     for (const surface of Object.keys(manifest.roles))
       expect(Object.keys(manifest.roles[surface]).sort(), surface).toEqual(['dark', 'light'])
   })
@@ -76,6 +76,23 @@ describe('token manifest', () => {
    * value as `fg` and `bg-panel`. That is a real limit on what a shared
    * component can express here; the list exists so a NEW collapse is visible.
    */
+  /*
+   * Marketing declares its own block but overrides nothing any component role
+   * reads, so it resolves identically to base. Asserted rather than left
+   * implicit: if marketing ever moves off the base palette, this is where it
+   * shows up, instead of the manifest quietly carrying a surface nobody checks.
+   */
+  test('marketing resolves identically to base, and dashboard differs only in the accent', () => {
+    for (const mode of ['light', 'dark'] as const)
+      expect(manifest.roles.marketing[mode], mode).toEqual(manifest.roles.base[mode])
+
+    for (const mode of ['light', 'dark'] as const) {
+      const differing = Object.keys(manifest.roles.base[mode])
+        .filter(role => manifest.roles.base[mode][role] !== manifest.roles.dashboard[mode][role])
+      expect(differing.sort(), mode).toEqual(['accent', 'accent-solid'])
+    }
+  })
+
   test('the known lost distinctions are exactly these two', () => {
     expect(manifest.lost.sort()).toEqual(['fg = fg-strong', 'panel = field'])
   })
