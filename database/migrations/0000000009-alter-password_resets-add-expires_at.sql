@@ -12,8 +12,13 @@
 -- skips it and the ALTER below would hard-fail. Mirror the framework schema
 -- (storage/framework/core/database/src/auth-tables.ts) so this migration stands
 -- alone, and is a no-op when the table already exists.
+--
+-- AUTOINCREMENT dropped, nothing else touched; see the fuller note in
+-- 0000000004-create-users-table.sql. In short: one sqlite-only keyword makes
+-- `buddy migrate` refuse the entire corpus, and bare `INTEGER PRIMARY KEY`
+-- parses in both dialects while still auto-assigning in sqlite.
 CREATE TABLE IF NOT EXISTS "password_resets" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "id" INTEGER PRIMARY KEY,
   "email" varchar(255) NOT NULL,
   "token" varchar(255) NOT NULL,
   "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
