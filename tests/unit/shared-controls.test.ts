@@ -41,7 +41,13 @@ describe('shared auth submit controls', () => {
         // A label binding belongs to Button, not :text on its root, which
         // would destroy its accessible slot and internal state elements.
         expect(control).toContain(':label=')
-        expect(control).toContain(':disabled="loading()"')
+        // `:loading`, not `:disabled`. Both gate the control -- Button computes
+        // `isDisabled = disabled || loading` -- but only `loading` also writes
+        // `aria-busy` and shows the spinner, and a submit that is merely disabled
+        // is dropped from the focus order while saying nothing about why. Passing
+        // `:aria-busy` here instead would fight the binding Button writes itself.
+        expect(control).toContain(':loading="loading()"')
+        expect(control).not.toContain(':disabled=')
         expect(control).not.toContain(':text=')
       }
     })

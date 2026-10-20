@@ -722,6 +722,14 @@ const repo = state<any>(repository || null)
 const repoRef = state('')
 const repoToken = state('')
 const repoBusy = state(false)
+/*
+ * Which repository button is working. `repoBusy` gates all three, which is right
+ * for :disabled -- none of them should be clickable while any runs -- and wrong
+ * for aria-busy, which names ONE element as updating. Verify and Disconnect sit
+ * in the same `:show="!!repo()"` block, so with the shared signal on both,
+ * verifying would announce Disconnect as busy too.
+ */
+const repoAction = state('')
 const repoNote = state('')
 const repoNoteOk = state(true)
 
@@ -733,10 +741,12 @@ async function connectRepo(): Promise<void> {
     return
   }
   repoBusy.set(true)
+  repoAction.set('connect')
   try {
     const res = await apiFetch(`${projUrl}/repository`, { method: 'POST', body: JSON.stringify({ repository: ref, token }) })
     const body = await readJson(res)
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       note(repoNote, repoNoteOk, body.error || 'Could not connect.', false)
       return
@@ -749,16 +759,19 @@ async function connectRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
 
 async function verifyRepo(): Promise<void> {
   repoBusy.set(true)
+  repoAction.set('verify')
   try {
     const res = await apiFetch(`${projUrl}/repository/verify`, { method: 'POST' })
     const body = await readJson(res)
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       note(repoNote, repoNoteOk, body.error || 'Verification failed.', false)
       return
@@ -768,6 +781,7 @@ async function verifyRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
@@ -779,9 +793,11 @@ async function disconnectRepo(): Promise<void> {
   if (!(await Promise.resolve(ask)))
     return
   repoBusy.set(true)
+  repoAction.set('disconnect')
   try {
     const res = await apiFetch(`${projUrl}/repository`, { method: 'DELETE' })
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       const body = await readJson(res)
       note(repoNote, repoNoteOk, body.error || 'Could not disconnect.', false)
@@ -792,6 +808,7 @@ async function disconnectRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
@@ -1460,8 +1477,8 @@ onMount(() => {
           <div :show="!!repo()">
             <div class="flex flex-wrap gap-2 items-center mb-3.5">
               <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm truncate bg-canvas border border-line rounded-[10px]" :text="repo()?.full_name">.</code>
-              <button @click="verifyRepo" :disabled="repoBusy()" class="btn-quiet btn-sm">Verify</button>
-              <button @click="disconnectRepo" :disabled="repoBusy()" class="btn-danger btn-sm">Disconnect</button>
+              <button @click="verifyRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'verify'" class="btn-quiet btn-sm">Verify</button>
+              <button @click="disconnectRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'disconnect'" class="btn-danger btn-sm">Disconnect</button>
             </div>
             <dl class="grid gap-y-1.5 grid-cols-2 sm:grid-cols-3 text-xs">
               <div><dt class="text-subtle">Default branch</dt><dd class="font-mono text-muted" :text="repo()?.default_branch || 'unknown'">.</dd></div>
@@ -1478,7 +1495,7 @@ onMount(() => {
             <label class="block mb-1.5 font-medium text-muted text-xs" for="repo-token">GitHub token</label>
             <input id="repo-token" :model="repoToken" type="password" autocomplete="off" placeholder="github_pat_..." class="mb-3 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none">
 
-            <button @click="connectRepo" :disabled="repoBusy()" class="btn-cta btn-solid">Connect repository</button>
+            <button @click="connectRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'connect'" class="btn-cta btn-solid">Connect repository</button>
 
             <p class="mt-3.5 leading-relaxed text-subtle text-xs">
               Use a <span class="text-muted">fine-grained</span> personal access token scoped to this one
@@ -1538,7 +1555,7 @@ onMount(() => {
                   when it lands.
                   tests/unit/button-vocabulary.test.ts fails if a <Button> here
                   ever gets an x-tooltip. --}}
-              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>
+              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" :aria-busy="removingMember() === '{{ m.id }}'" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>
             </div>
           @endforeach
           @foreach (inviteView as i)
@@ -1550,7 +1567,7 @@ onMount(() => {
               </div>
               <span class="px-[9px] py-0.5 font-semibold text-[11px] text-muted tracking-[0.02em] bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] rounded-[999px]" x-tooltip="Pending: becomes a member once they accept">Invited</span>
               <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="btn-quiet btn-xs" x-tooltip="Copy join link">Copy link</button>
-              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="btn-danger btn-xs" x-tooltip="Revoke invite">Remove</button>
+              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" :aria-busy="removingMember() === '{{ i.id }}'" class="btn-danger btn-xs" x-tooltip="Revoke invite">Remove</button>
             </div>
           @endforeach
         </div>
