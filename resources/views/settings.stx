@@ -116,7 +116,7 @@ if (user) {
   try {
     // Owned projects only — settings is the owner's admin surface.
     __projectRows = (await __db.unsafe(
-      'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+      'SELECT id, name, platform, ingest_key, is_active, read_key, read_key_last_used_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
     )) ?? []
     if (__projectRows.length === 0)
@@ -158,8 +158,8 @@ if (user) {
 
 // Template-facing projections. `ingest_key` is dropped here and nowhere else:
 // the switcher needs a project's id, name and state, never its credential.
-const projects = __projectRows.map(({ ingest_key: _ignored, ...p }) => p)
-const activeProject = __activeRow ? (({ ingest_key: _ignored, ...p }) => p)(__activeRow) : null
+const projects = __projectRows.map(({ ingest_key: _ignored, read_key: _secret, ...p }) => p)
+const activeProject = __activeRow ? (({ ingest_key: _ignored, read_key: _secret, ...p }) => p)(__activeRow) : null
 const projectId = activeProject?.id || null
 
 // The connected repository, for the Repository section below. Loaded here
@@ -253,6 +253,12 @@ const inviteView = __inviteRows.map(i => ({ id: i.id, email: i.email, registered
 // named value, so publishing it stays a decision rather than a side effect.
 const keyFull = __activeRow ? String(__activeRow.ingest_key || '') : ''
 const keyMask = maskKey(keyFull)
+// The read key itself never reaches the page: it is a secret, shown once when
+// it is issued and never again (#14). Only whether one exists, and when it was
+// last used, so somebody can tell a live key from a forgotten one before
+// revoking it.
+const hasReadKeyInitial = !!(__activeRow && __activeRow.read_key)
+const readKeyUsedInitial = __activeRow && __activeRow.read_key_last_used_at ? String(__activeRow.read_key_last_used_at) : ''
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
@@ -539,6 +545,8 @@ defineClientPayload({
   codeText: guide.code,
   initialKeyFull: keyFull,
   initialKeyMask: keyMask,
+  hasReadKeyInitial,
+  readKeyUsedInitial,
 })
 
 useSeoMeta({
@@ -825,6 +833,88 @@ async function rotateKey(): Promise<void> {
   catch {
     rotating.set(false)
     note(keyNote, keyNoteOk, 'Network error.', false)
+  }
+}
+
+// ---- read key ----
+// Issued on demand, shown once, and revocable (#14). The key is held in a
+// signal only for as long as the page that issued it is open: it is never
+// rendered from the server and nothing stores it, so closing the page is the
+// end of the only copy the browser ever had.
+const hasReadKey = state(hasReadKeyInitial)
+const readKeyUsed = state(readKeyUsedInitial)
+const readKeyOnce = state('')
+const readKeyBusy = state(false)
+const readKeyNote = state('')
+const readKeyNoteOk = state(true)
+const copiedReadKey = state(false)
+
+/** "never", or the stamp as the browser's locale writes it. */
+const readKeyUsedLabel = (): string => {
+  const at = readKeyUsed()
+  if (!at)
+    return 'never used'
+  const when = new Date(at)
+  return Number.isNaN(when.getTime()) ? 'used recently' : `last used ${when.toLocaleString()}`
+}
+
+function copyReadKey(): void {
+  void copyText(readKeyOnce(), copiedReadKey)
+}
+
+async function issueReadKey(): Promise<void> {
+  // Replacing one is destructive in the same way rotating the ingest key is,
+  // so it asks — but only when there is something to break.
+  if (hasReadKey()) {
+    const ask = window.stxConfirm
+      ? window.stxConfirm('The current read key stops working immediately, and anything still using it will get 404 until you update it. Continue?', { title: 'Replace read key?', confirmText: 'Replace key', cancelText: 'Cancel', type: 'warning' })
+      : Promise.resolve(true)
+    if (!(await Promise.resolve(ask)))
+      return
+  }
+  readKeyBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/read-key`, { method: 'POST' })
+    const body = await readJson(res)
+    readKeyBusy.set(false)
+    if (!res.ok) {
+      note(readKeyNote, readKeyNoteOk, body.error || 'Could not issue a key.', false)
+      return
+    }
+    readKeyOnce.set(String(body.read_key || ''))
+    hasReadKey.set(true)
+    readKeyUsed.set('')
+    note(readKeyNote, readKeyNoteOk, 'Copy it now. This is the only time it is shown.', true)
+  }
+  catch {
+    readKeyBusy.set(false)
+    note(readKeyNote, readKeyNoteOk, 'Network error.', false)
+  }
+}
+
+async function revokeReadKey(): Promise<void> {
+  const ask = window.stxConfirm
+    ? window.stxConfirm('Anything using this key stops reading immediately. Continue?', { title: 'Revoke read key?', confirmText: 'Revoke', cancelText: 'Cancel', type: 'warning' })
+    : Promise.resolve(true)
+  if (!(await Promise.resolve(ask)))
+    return
+  readKeyBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/read-key`, { method: 'DELETE' })
+    const body = await readJson(res)
+    readKeyBusy.set(false)
+    if (!res.ok) {
+      note(readKeyNote, readKeyNoteOk, body.error || 'Could not revoke.', false)
+      return
+    }
+    hasReadKey.set(false)
+    readKeyUsed.set('')
+    readKeyOnce.set('')
+    note(readKeyNote, readKeyNoteOk, 'Revoked.', true)
+  }
+  catch {
+    readKeyBusy.set(false)
+    note(readKeyNote, readKeyNoteOk, 'Network error.', false)
   }
 }
 
@@ -1254,6 +1344,7 @@ onMount(() => {
       <nav class="flex flex-wrap gap-2 items-center mb-8 text-sm">
         <a href="#install" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Install</a>
         <a href="#keys" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Keys</a>
+        <a href="#read-key" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Read key</a>
         <a href="#repository" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Repository</a>
         <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
         <a href="#alerts" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Alerts</a>
@@ -1313,6 +1404,45 @@ onMount(() => {
             Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span>. Anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
           </p>
           <span class="mt-2 text-ok text-xs" :show="!!keyNote()" :class="keyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ keyNote() }}</span>
+        </div>
+      </section>
+
+      {{-- ========================= READ KEY ========================= --}}
+      <section id="read-key" class="mb-10 scroll-mt-[84px]">
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Read key</div>
+        <div class="px-5 py-5 app-panel">
+          <p class="mb-4 text-sm text-subtle">
+            Lets a server read this project's logs without signing in as you: a Stacks dashboard, or anything else reading the API machine-to-machine.
+            Unlike the API key above this one <em>is</em> a secret: it reads your logs, it belongs to no account, and it keeps working after you leave.
+            Send it as <span class="font-mono">Authorization: Bearer</span>.
+          </p>
+
+          {{-- Just issued: the only time the key is ever shown. --}}
+          <div :show="!!readKeyOnce()">
+            <div class="flex flex-wrap gap-2 items-center">
+              <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px]" :text="readKeyOnce()"></code>
+              <button @click="copyReadKey" class="btn-quiet btn-sm" :text="copiedReadKey() ? 'Copied' : 'Copy'">Copy</button>
+            </div>
+            <p class="mt-3.5 leading-relaxed text-warn text-xs">
+              Copy it now. It is not stored anywhere you can read it back, so leaving this page means issuing a new one.
+            </p>
+          </div>
+
+          {{-- Otherwise: whether one exists, and whether it is still in use. --}}
+          <div :show="!readKeyOnce()">
+            <div class="flex flex-wrap gap-2 items-center">
+              <span class="flex-1 min-w-[220px] text-sm" :class="hasReadKey() ? 'text-ink' : 'text-subtle'" :text="hasReadKey() ? `A read key is active, ${readKeyUsedLabel()}.` : 'No read key. Issue one to let a server read this project.'"></span>
+              <Button variant="ghost" @click="issueReadKey" :loading="readKeyBusy()" :label="hasReadKey() ? 'Replace' : 'Issue key'" className="btn-quiet btn-sm">Issue key</Button>
+              <span :show="hasReadKey()">
+                <Button variant="ghost" @click="revokeReadKey" :loading="readKeyBusy()" className="btn-danger btn-sm">Revoke</Button>
+              </span>
+            </div>
+            <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+              The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.
+            </p>
+          </div>
+
+          <span class="mt-2 text-ok text-xs" :show="!!readKeyNote()" :class="readKeyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ readKeyNote() }}</span>
         </div>
       </section>
 

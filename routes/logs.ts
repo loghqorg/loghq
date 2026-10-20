@@ -15,9 +15,9 @@ import { rateLimit } from '../app/Errors/limits'
 import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
-import { ownsLog, ownsProject } from '../app/Support/access'
+import { ownsProject } from '../app/Support/access'
 import { healthResponse } from '../app/Support/health'
-import { userFromRequest } from '../app/Support/request-auth'
+import { projectReadAccess } from '../app/Support/request-auth'
 
 // Ingest abuse bounds. The public key gate is not enough on its own — a script
 // with the key (readable from any bundle) could flood the ingest. Per-entry
@@ -137,11 +137,10 @@ const STREAM_COLS = 'id, level, message, channel, environment, release, framewor
 
 route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const projectId = request.params.projectId
-  const user = await userFromRequest(request)
-  if (!user)
-    return json({ error: 'unauthorized' }, 401)
-  if (!(await ownsProject(user, projectId)))
-    return json({ error: 'not found' }, 404)
+  // A person who owns the project, or a read key issued for it (#14).
+  const access = await projectReadAccess(request, projectId, ownsProject)
+  if (!access.ok)
+    return json({ error: access.error }, access.status)
 
   const q = request.query ?? {}
   const where: string[] = ['project_id = $1']
@@ -207,12 +206,16 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
 
 route.get('/api/logs/{logId}', async (request: any) => {
   const logId = request.params.logId
-  const user = await userFromRequest(request)
-  if (!user)
-    return json({ error: 'unauthorized' }, 401)
-  if (!(await ownsLog(user, logId)))
-    return json({ error: 'not found' }, 404)
+  // The entry is read before anyone is authorised, and returned only after.
+  // Authorising first would mean asking "may you read project X?" without
+  // knowing which project this entry is in; answering 404 for a missing entry
+  // before checking the caller would tell an unauthenticated one which log ids
+  // exist. So: fetch, authorise against the entry's project (an empty id when
+  // there is no entry, which no key and no user can read), then answer.
   const entry = (await db.unsafe('SELECT * FROM log_entries WHERE id = $1 LIMIT 1', [logId]))?.[0]
+  const access = await projectReadAccess(request, entry ? String(entry.project_id) : '', ownsProject)
+  if (!access.ok)
+    return json({ error: access.error }, access.status)
   if (!entry)
     return json({ error: 'not found' }, 404)
   return json({ entry })
