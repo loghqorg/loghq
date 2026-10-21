@@ -116,7 +116,7 @@ if (user) {
   try {
     // Owned projects only — settings is the owner's admin surface.
     __projectRows = (await __db.unsafe(
-      'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+      'SELECT id, name, platform, ingest_key, is_active, read_key, read_key_last_used_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
     )) ?? []
     if (__projectRows.length === 0)
@@ -158,8 +158,8 @@ if (user) {
 
 // Template-facing projections. `ingest_key` is dropped here and nowhere else:
 // the switcher needs a project's id, name and state, never its credential.
-const projects = __projectRows.map(({ ingest_key: _ignored, ...p }) => p)
-const activeProject = __activeRow ? (({ ingest_key: _ignored, ...p }) => p)(__activeRow) : null
+const projects = __projectRows.map(({ ingest_key: _ignored, read_key: _secret, ...p }) => p)
+const activeProject = __activeRow ? (({ ingest_key: _ignored, read_key: _secret, ...p }) => p)(__activeRow) : null
 const projectId = activeProject?.id || null
 
 // The connected repository, for the Repository section below. Loaded here
@@ -253,6 +253,12 @@ const inviteView = __inviteRows.map(i => ({ id: i.id, email: i.email, registered
 // named value, so publishing it stays a decision rather than a side effect.
 const keyFull = __activeRow ? String(__activeRow.ingest_key || '') : ''
 const keyMask = maskKey(keyFull)
+// The read key itself never reaches the page: it is a secret, shown once when
+// it is issued and never again (#14). Only whether one exists, and when it was
+// last used, so somebody can tell a live key from a forgotten one before
+// revoking it.
+const hasReadKeyInitial = !!(__activeRow && __activeRow.read_key)
+const readKeyUsedInitial = __activeRow && __activeRow.read_key_last_used_at ? String(__activeRow.read_key_last_used_at) : ''
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
@@ -539,6 +545,8 @@ defineClientPayload({
   codeText: guide.code,
   initialKeyFull: keyFull,
   initialKeyMask: keyMask,
+  hasReadKeyInitial,
+  readKeyUsedInitial,
 })
 
 useSeoMeta({
@@ -714,6 +722,14 @@ const repo = state<any>(repository || null)
 const repoRef = state('')
 const repoToken = state('')
 const repoBusy = state(false)
+/*
+ * Which repository button is working. `repoBusy` gates all three, which is right
+ * for :disabled -- none of them should be clickable while any runs -- and wrong
+ * for aria-busy, which names ONE element as updating. Verify and Disconnect sit
+ * in the same `:show="!!repo()"` block, so with the shared signal on both,
+ * verifying would announce Disconnect as busy too.
+ */
+const repoAction = state('')
 const repoNote = state('')
 const repoNoteOk = state(true)
 
@@ -725,10 +741,12 @@ async function connectRepo(): Promise<void> {
     return
   }
   repoBusy.set(true)
+  repoAction.set('connect')
   try {
     const res = await apiFetch(`${projUrl}/repository`, { method: 'POST', body: JSON.stringify({ repository: ref, token }) })
     const body = await readJson(res)
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       note(repoNote, repoNoteOk, body.error || 'Could not connect.', false)
       return
@@ -741,16 +759,19 @@ async function connectRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
 
 async function verifyRepo(): Promise<void> {
   repoBusy.set(true)
+  repoAction.set('verify')
   try {
     const res = await apiFetch(`${projUrl}/repository/verify`, { method: 'POST' })
     const body = await readJson(res)
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       note(repoNote, repoNoteOk, body.error || 'Verification failed.', false)
       return
@@ -760,6 +781,7 @@ async function verifyRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
@@ -771,9 +793,11 @@ async function disconnectRepo(): Promise<void> {
   if (!(await Promise.resolve(ask)))
     return
   repoBusy.set(true)
+  repoAction.set('disconnect')
   try {
     const res = await apiFetch(`${projUrl}/repository`, { method: 'DELETE' })
     repoBusy.set(false)
+    repoAction.set('')
     if (!res.ok) {
       const body = await readJson(res)
       note(repoNote, repoNoteOk, body.error || 'Could not disconnect.', false)
@@ -784,6 +808,7 @@ async function disconnectRepo(): Promise<void> {
   }
   catch {
     repoBusy.set(false)
+    repoAction.set('')
     note(repoNote, repoNoteOk, 'Network error. Try again.', false)
   }
 }
@@ -825,6 +850,88 @@ async function rotateKey(): Promise<void> {
   catch {
     rotating.set(false)
     note(keyNote, keyNoteOk, 'Network error.', false)
+  }
+}
+
+// ---- read key ----
+// Issued on demand, shown once, and revocable (#14). The key is held in a
+// signal only for as long as the page that issued it is open: it is never
+// rendered from the server and nothing stores it, so closing the page is the
+// end of the only copy the browser ever had.
+const hasReadKey = state(hasReadKeyInitial)
+const readKeyUsed = state(readKeyUsedInitial)
+const readKeyOnce = state('')
+const readKeyBusy = state(false)
+const readKeyNote = state('')
+const readKeyNoteOk = state(true)
+const copiedReadKey = state(false)
+
+/** "never", or the stamp as the browser's locale writes it. */
+const readKeyUsedLabel = (): string => {
+  const at = readKeyUsed()
+  if (!at)
+    return 'never used'
+  const when = new Date(at)
+  return Number.isNaN(when.getTime()) ? 'used recently' : `last used ${when.toLocaleString()}`
+}
+
+function copyReadKey(): void {
+  void copyText(readKeyOnce(), copiedReadKey)
+}
+
+async function issueReadKey(): Promise<void> {
+  // Replacing one is destructive in the same way rotating the ingest key is,
+  // so it asks — but only when there is something to break.
+  if (hasReadKey()) {
+    const ask = window.stxConfirm
+      ? window.stxConfirm('The current read key stops working immediately, and anything still using it will get 404 until you update it. Continue?', { title: 'Replace read key?', confirmText: 'Replace key', cancelText: 'Cancel', type: 'warning' })
+      : Promise.resolve(true)
+    if (!(await Promise.resolve(ask)))
+      return
+  }
+  readKeyBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/read-key`, { method: 'POST' })
+    const body = await readJson(res)
+    readKeyBusy.set(false)
+    if (!res.ok) {
+      note(readKeyNote, readKeyNoteOk, body.error || 'Could not issue a key.', false)
+      return
+    }
+    readKeyOnce.set(String(body.read_key || ''))
+    hasReadKey.set(true)
+    readKeyUsed.set('')
+    note(readKeyNote, readKeyNoteOk, 'Copy it now. This is the only time it is shown.', true)
+  }
+  catch {
+    readKeyBusy.set(false)
+    note(readKeyNote, readKeyNoteOk, 'Network error.', false)
+  }
+}
+
+async function revokeReadKey(): Promise<void> {
+  const ask = window.stxConfirm
+    ? window.stxConfirm('Anything using this key stops reading immediately. Continue?', { title: 'Revoke read key?', confirmText: 'Revoke', cancelText: 'Cancel', type: 'warning' })
+    : Promise.resolve(true)
+  if (!(await Promise.resolve(ask)))
+    return
+  readKeyBusy.set(true)
+  try {
+    const res = await apiFetch(`${projUrl}/read-key`, { method: 'DELETE' })
+    const body = await readJson(res)
+    readKeyBusy.set(false)
+    if (!res.ok) {
+      note(readKeyNote, readKeyNoteOk, body.error || 'Could not revoke.', false)
+      return
+    }
+    hasReadKey.set(false)
+    readKeyUsed.set('')
+    readKeyOnce.set('')
+    note(readKeyNote, readKeyNoteOk, 'Revoked.', true)
+  }
+  catch {
+    readKeyBusy.set(false)
+    note(readKeyNote, readKeyNoteOk, 'Network error.', false)
   }
 }
 
@@ -1225,7 +1332,7 @@ onMount(() => {
     @if (user && projectsUnavailable)
       <div class="py-24 text-center">
         <p class="text-muted text-sm"><span class="font-semibold text-ink">Can't reach your settings right now.</span> Make sure Postgres is provisioned.</p>
-        <p class="mt-2 text-subtle text-xs">Nothing has been changed — reload once the database is back.</p>
+        <p class="mt-2 text-subtle text-xs">Nothing has been changed. Reload once the database is back.</p>
       </div>
     @endif
 
@@ -1254,6 +1361,7 @@ onMount(() => {
       <nav class="flex flex-wrap gap-2 items-center mb-8 text-sm">
         <a href="#install" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Install</a>
         <a href="#keys" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Keys</a>
+        <a href="#read-key" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Read key</a>
         <a href="#repository" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Repository</a>
         <a href="#members" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Members</a>
         <a href="#alerts" class="px-3 py-1.5 font-medium text-muted hover:text-ink border border-line rounded-[999px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Alerts</a>
@@ -1276,12 +1384,12 @@ onMount(() => {
           @if (guide.install)
             <div class="relative mb-2">
               <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted bg-canvas border border-line rounded-[10px]">{{ guide.install }}</div>
-              <button type="button" @click="copyInstall" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
+              <button type="button" @click="copyInstall" class="btn-copy" :text="copiedInstall() ? 'Copied' : 'Copy'">Copy</button>
             </div>
           @endif
           <div class="relative">
             <div class="overflow-x-auto pl-4 pr-16 py-3 font-mono leading-[1.5] text-[12px] text-muted whitespace-pre bg-canvas border border-line rounded-[10px]">{{ guide.code }}</div>
-            <button type="button" @click="copyCode" class="absolute right-2 top-2 px-[9px] py-[5px] font-medium font-sans leading-none text-[11px] text-subtle hover:text-ink bg-panel border border-line rounded-[7px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
+            <button type="button" @click="copyCode" class="btn-copy" :text="copiedCode() ? 'Copied' : 'Copy'">Copy</button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
             @if (guide.native)
@@ -1301,18 +1409,57 @@ onMount(() => {
         <div class="px-5 py-5 app-panel">
           <p class="mb-4 text-sm text-subtle">
             This key authorizes log ingest for <span class="font-mono text-muted">{{ activeProject?.name }}</span>.
-            It's a public identifier (safe to ship in client code), not a secret — it says <em>which</em> project an entry belongs to, and grants no read access.
+            It's a public identifier (safe to ship in client code), not a secret: it says <em>which</em> project an entry belongs to, and grants no read access.
           </p>
           <div class="flex flex-wrap gap-2 items-center">
             <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" :text="keyShown()">{{ keyMask }}</code>
-            <button @click="keyRevealed.set(!keyRevealed())" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
-            <button @click="copyKey" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
-            <button @click="rotateKey" :disabled="rotating()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Rotate</button>
+            <button @click="keyRevealed.set(!keyRevealed())" class="btn-quiet btn-sm" :text="keyRevealed() ? 'Hide' : 'Reveal'">Reveal</button>
+            <button @click="copyKey" class="btn-quiet btn-sm" :text="copiedKey() ? 'Copied' : 'Copy'">Copy</button>
+            <Button variant="ghost" @click="rotateKey" :loading="rotating()" className="btn-danger btn-sm">Rotate</Button>
           </div>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
-            Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span> — anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
+            Rotating generates a new key and <span class="text-warn">invalidates the current one immediately</span>. Anything still sending the old key will get 401 until you update it (<span class="font-mono">X-LogHQ-Key</span>).
           </p>
           <span class="mt-2 text-ok text-xs" :show="!!keyNote()" :class="keyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ keyNote() }}</span>
+        </div>
+      </section>
+
+      {{-- ========================= READ KEY ========================= --}}
+      <section id="read-key" class="mb-10 scroll-mt-[84px]">
+        <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Read key</div>
+        <div class="px-5 py-5 app-panel">
+          <p class="mb-4 text-sm text-subtle">
+            Lets a server read this project's logs without signing in as you: a Stacks dashboard, or anything else reading the API machine-to-machine.
+            Unlike the API key above this one <em>is</em> a secret: it reads your logs, it belongs to no account, and it keeps working after you leave.
+            Send it as <span class="font-mono">Authorization: Bearer</span>.
+          </p>
+
+          {{-- Just issued: the only time the key is ever shown. --}}
+          <div :show="!!readKeyOnce()">
+            <div class="flex flex-wrap gap-2 items-center">
+              <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm tracking-[0.01em] truncate bg-canvas border border-line rounded-[10px]" :text="readKeyOnce()"></code>
+              <button @click="copyReadKey" class="btn-quiet btn-sm" :text="copiedReadKey() ? 'Copied' : 'Copy'">Copy</button>
+            </div>
+            <p class="mt-3.5 leading-relaxed text-warn text-xs">
+              Copy it now. It is not stored anywhere you can read it back, so leaving this page means issuing a new one.
+            </p>
+          </div>
+
+          {{-- Otherwise: whether one exists, and whether it is still in use. --}}
+          <div :show="!readKeyOnce()">
+            <div class="flex flex-wrap gap-2 items-center">
+              <span class="flex-1 min-w-[220px] text-sm" :class="hasReadKey() ? 'text-ink' : 'text-subtle'" :text="hasReadKey() ? `A read key is active, ${readKeyUsedLabel()}.` : 'No read key. Issue one to let a server read this project.'"></span>
+              <Button variant="ghost" @click="issueReadKey" :loading="readKeyBusy()" :label="hasReadKey() ? 'Replace' : 'Issue key'" className="btn-quiet btn-sm">Issue key</Button>
+              <span :show="hasReadKey()">
+                <Button variant="ghost" @click="revokeReadKey" :loading="readKeyBusy()" className="btn-danger btn-sm">Revoke</Button>
+              </span>
+            </div>
+            <p class="mt-3.5 leading-relaxed text-subtle text-xs">
+              The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.
+            </p>
+          </div>
+
+          <span class="mt-2 text-ok text-xs" :show="!!readKeyNote()" :class="readKeyNoteOk() ? 'mt-2 text-xs text-ok' : 'mt-2 text-xs text-accent'">{{ readKeyNote() }}</span>
         </div>
       </section>
 
@@ -1330,8 +1477,8 @@ onMount(() => {
           <div :show="!!repo()">
             <div class="flex flex-wrap gap-2 items-center mb-3.5">
               <code class="flex-1 px-3.5 py-2.5 min-w-[220px] font-mono text-ink text-sm truncate bg-canvas border border-line rounded-[10px]" :text="repo()?.full_name">.</code>
-              <button @click="verifyRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Verify</button>
-              <button @click="disconnectRepo" :disabled="repoBusy()" class="px-3 py-2 font-medium text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Disconnect</button>
+              <button @click="verifyRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'verify'" class="btn-quiet btn-sm">Verify</button>
+              <button @click="disconnectRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'disconnect'" class="btn-danger btn-sm">Disconnect</button>
             </div>
             <dl class="grid gap-y-1.5 grid-cols-2 sm:grid-cols-3 text-xs">
               <div><dt class="text-subtle">Default branch</dt><dd class="font-mono text-muted" :text="repo()?.default_branch || 'unknown'">.</dd></div>
@@ -1348,7 +1495,7 @@ onMount(() => {
             <label class="block mb-1.5 font-medium text-muted text-xs" for="repo-token">GitHub token</label>
             <input id="repo-token" :model="repoToken" type="password" autocomplete="off" placeholder="github_pat_..." class="mb-3 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none">
 
-            <button @click="connectRepo" :disabled="repoBusy()" class="px-3.5 py-2.5 font-semibold text-sm btn-solid">Connect repository</button>
+            <button @click="connectRepo" :disabled="repoBusy()" :aria-busy="repoAction() === 'connect'" class="btn-cta btn-solid">Connect repository</button>
 
             <p class="mt-3.5 leading-relaxed text-subtle text-xs">
               Use a <span class="text-muted">fine-grained</span> personal access token scoped to this one
@@ -1384,7 +1531,31 @@ onMount(() => {
                 <div class="mt-0.5 text-subtle text-xs">Can read the log stream</div>
               </div>
               <span class="px-[9px] py-0.5 font-semibold text-[11px] text-accent tracking-[0.02em] bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] rounded-[999px]">Member</span>
-              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
+              {{-- STILL A PLAIN BUTTON, and the reason is x-tooltip.
+
+                  This is one of four buttons in the file that hand-roll busy
+                  state and would otherwise take <Button> like the five that
+                  did: these two Removes, the channel Test and the channel
+                  Remove. An `x-tooltip` on a COMPONENT never reaches the DOM,
+                  so adopting here would delete the tooltip without any sign.
+
+                  Measured on the installed 0.2.532, not read off a changelog.
+                  `x-tooltip` IS in COMPONENT_PASSTHROUGH_X_ATTRS now, so it is
+                  no longer rewritten into a `:tooltip` signal binding -- that
+                  is the crash dashboard.stx documents, and it is fixed. What
+                  remains is quieter: processComponents emits the attribute only
+                  inside `data-stx-props`, while the tooltip runtime reads
+                  `el.getAttribute('x-tooltip')`. `title` and `aria-label` both
+                  forward to the concrete root correctly (stx#2063);
+                  `x-tooltip` falls in the gap between the two.
+
+                  `title` instead would work and would be a different tooltip --
+                  the browser's, not the app's. Not worth trading a consistent
+                  surface for a spinner. Filed as stacksjs/stx#2077; revisit
+                  when it lands.
+                  tests/unit/button-vocabulary.test.ts fails if a <Button> here
+                  ever gets an x-tooltip. --}}
+              <button @click="removeMember('{{ m.id }}')" :disabled="removingMember() === '{{ m.id }}'" :text="memberBtnLabel('{{ m.id }}')" :aria-busy="removingMember() === '{{ m.id }}'" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>
             </div>
           @endforeach
           @foreach (inviteView as i)
@@ -1392,11 +1563,11 @@ onMount(() => {
               <span class="grid place-items-center shrink-0 h-8 w-8 font-semibold text-subtle bg-[color-mix(in_srgb,var(--text-3)_12%,var(--panel))] rounded-lg">{{ (i.email || '?').charAt(0).toUpperCase() }}</span>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate">{{ i.email }}</div>
-                <div class="mt-0.5 text-subtle text-xs">{{ i.registered ? 'Has an account — pending accept' : 'Invite sent — awaiting sign-up' }}</div>
+                <div class="mt-0.5 text-subtle text-xs">{{ i.registered ? 'Has an account, pending accept' : 'Invite sent, awaiting sign-up' }}</div>
               </div>
-              <span class="px-[9px] py-0.5 font-semibold text-[11px] text-muted tracking-[0.02em] bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] rounded-[999px]" x-tooltip="Pending — becomes a member once they accept">Invited</span>
-              <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-muted text-xs hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" x-tooltip="Copy join link">Copy link</button>
-              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Revoke invite">Remove</button>
+              <span class="px-[9px] py-0.5 font-semibold text-[11px] text-muted tracking-[0.02em] bg-[color-mix(in_srgb,var(--text-3)_18%,var(--panel))] rounded-[999px]" x-tooltip="Pending: becomes a member once they accept">Invited</span>
+              <button @click="copyJoin('{{ i.id }}', '{{ i.join }}')" :text="joinBtnLabel('{{ i.id }}')" class="btn-quiet btn-xs" x-tooltip="Copy join link">Copy link</button>
+              <button @click="removeMember('{{ i.id }}')" :disabled="removingMember() === '{{ i.id }}'" :text="memberBtnLabel('{{ i.id }}')" :aria-busy="removingMember() === '{{ i.id }}'" class="btn-danger btn-xs" x-tooltip="Revoke invite">Remove</button>
             </div>
           @endforeach
         </div>
@@ -1404,7 +1575,7 @@ onMount(() => {
           <div class="mb-3 font-semibold text-sm">Invite a teammate</div>
           <div class="flex flex-wrap gap-2 items-center">
             <input :model="inviteEmail" type="email" aria-label="Invite a teammate by email" class="flex-1 px-3.5 py-2.5 min-w-[220px] text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="teammate@company.com" autocomplete="off">
-            <button @click="addInvite" :disabled="inviting()" class="px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="inviting() ? 'Inviting…' : 'Invite'">Invite</button>
+            <Button variant="ghost" @click="addInvite" :loading="inviting()" className="btn-cta btn-solid">Invite</Button>
           </div>
           <span class="mt-2.5 text-ok text-xs" :show="!!inviteNote()" :class="inviteNoteOk() ? 'mt-2.5 text-xs text-ok' : 'mt-2.5 text-xs text-accent'">{{ inviteNote() }}</span>
           <p class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1417,7 +1588,7 @@ onMount(() => {
       <section id="alerts" class="mb-10 scroll-mt-[84px]">
         <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Alerts</div>
         <p class="mb-4 text-sm text-subtle">
-          Add a Slack or Discord webhook and send a test to verify it. Automatic delivery isn't live yet —
+          Add a Slack or Discord webhook and send a test to verify it. Automatic delivery isn't live yet:
           channels you add here are saved and testable, but loghq won't fire on its own until log-based alert rules ship.
         </p>
         <div class="flex flex-col gap-2.5 mb-4">
@@ -1435,7 +1606,7 @@ onMount(() => {
                 <div class="font-medium text-sm truncate">{{ c.label }}</div>
                 <div class="mt-0.5 font-mono text-subtle text-xs truncate">{{ c.mask }}</div>
               </div>
-              <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-muted text-xs hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]" x-tooltip="Send a test message">Test</button>
+              <button @click="testChannel('{{ c.id }}')" :text="testLabel('{{ c.id }}')" class="btn-quiet btn-xs" x-tooltip="Send a test message">Test</button>
               {{-- A real <button>, not a <div role="switch">. As a div this had
                   no tabindex, no key handler and no accessible name: measured
                   in a browser it reported focusable:false and ariaLabel:null,
@@ -1452,7 +1623,7 @@ onMount(() => {
                   match the component instead of the product. The a11y gap was
                   the defect; the platform element closes it. --}}
               <button type="button" role="switch" aria-label="Enable {{ c.label }}" data-on="{{ c.enabled ? '1' : '0' }}" aria-checked="{{ c.enabled ? 'true' : 'false' }}" class="relative flex-none p-0 h-[22px] w-[38px] bg-line border-none rounded-[999px] appearance-none cursor-pointer [transition:background_0.15s_ease] tgl" @click="toggleChannel('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }})" :data-on="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? '1' : '0'" :aria-checked="isChannelOn('{{ c.id }}', {{ c.enabled ? 'true' : 'false' }}) ? 'true' : 'false'" x-tooltip="Enable / disable"></button>
-              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="px-2.5 py-1.5 font-medium text-warn text-xs hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]" x-tooltip="Remove">Remove</button>
+              <button @click="deleteChannel('{{ c.id }}')" :text="deleteLabel('{{ c.id }}')" class="btn-danger btn-xs" x-tooltip="Remove">Remove</button>
             </div>
           @empty
             <EmptyState title="No chat alerts yet" description="Add a Slack or Discord webhook below to start getting pinged." />
@@ -1465,9 +1636,9 @@ onMount(() => {
             <button type="button" @click="chType.set('discord')" data-sel="0" :data-sel="chType() === 'discord' ? '1' : '0'" class="px-3 py-2.5 font-medium text-muted text-sm bg-panel border border-line rounded-[10px] [transition:all_0.12s_ease] seg seg-discord">Discord</button>
           </div>
           <input :model="whUrl" :placeholder="whPlaceholder()" type="url" aria-label="Webhook URL" class="mb-2 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false">
-          <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional) — e.g. #alerts" maxlength="255">
+          <input :model="whLabel" type="text" aria-label="Channel label" class="mb-3 px-3.5 py-2.5 w-full text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" placeholder="Label (optional), e.g. #alerts" maxlength="255">
           <div class="flex gap-3 items-center">
-            <button @click="addChannel" :disabled="adding()" class="px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] disabled:opacity-55 disabled:cursor-default [transition:background_0.15s_ease,opacity_0.15s_ease]" :text="adding() ? 'Adding…' : 'Add channel'">Add channel</button>
+            <Button variant="ghost" @click="addChannel" :loading="adding()" className="btn-cta btn-solid">Add channel</Button>
             <span class="text-ok text-xs" :show="!!whNote()" :class="whNoteOk() ? 'text-xs text-ok' : 'text-xs text-accent'">{{ whNote() }}</span>
           </div>
           <p :text="whHelp()" class="mt-3.5 leading-relaxed text-subtle text-xs">
@@ -1557,10 +1728,10 @@ onMount(() => {
                 <p class="text-sm text-subtle"><span class="font-mono text-muted">{{ activeProject?.name }}</span> is archived and isn’t accepting new logs. Unarchiving resumes ingestion right away.</p>
               @else
                 <div class="mb-0.5 font-semibold text-sm">Archive this project</div>
-                <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject?.name }}</span> with a 403. Everything already stored is kept — you can unarchive anytime.</p>
+                <p class="text-sm text-subtle">Rejects new log entries for <span class="font-mono text-muted">{{ activeProject?.name }}</span> with a 403. Everything already stored is kept, and you can unarchive anytime.</p>
               @endif
             </div>
-            <button @click="openArchive" :disabled="archiving()" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</button>
+            <Button variant="ghost" @click="openArchive" :loading="archiving()" className="flex-none whitespace-nowrap btn-cta btn-danger">{{ activeProject?.is_active === false ? 'Unarchive' : 'Archive' }}</Button>
           </div>
           <div class="h-px bg-[color-mix(in_srgb,var(--warn)_20%,var(--border))]"></div>
           {{-- Delete --}}
@@ -1569,7 +1740,7 @@ onMount(() => {
               <div class="mb-0.5 font-semibold text-sm">Delete this project</div>
               <p class="text-sm text-subtle">Permanently deletes <span class="font-mono text-muted">{{ activeProject?.name }}</span> and all of its log entries, alert channels, members, and invites. This cannot be undone.</p>
             </div>
-            <button @click="openDelete" class="flex-none px-4 py-2.5 font-semibold text-sm text-warn whitespace-nowrap hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Delete</button>
+            <button @click="openDelete" class="flex-none whitespace-nowrap btn-cta btn-danger">Delete</button>
           </div>
         </div>
       </section>
@@ -1592,8 +1763,8 @@ onMount(() => {
           <label class="block mb-1.5 text-subtle text-xs">Type <span class="font-mono text-muted">{{ projectName }}</span> to confirm</label>
           <input :model="modalInput" type="text" :aria-label="modalTitle()" aria-label="Type the project name to confirm" class="mb-4 px-3.5 py-2.5 w-full font-mono text-ink text-sm bg-canvas border border-line rounded-[10px] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] focus:outline-none" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="flex gap-2 items-center justify-end">
-            <button @click="closeModal" type="button" class="px-4 py-2.5 font-medium text-muted text-sm hover:text-ink bg-panel border border-line rounded-[9px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:color_0.15s_ease,border-color_0.15s_ease]">Cancel</button>
-            <button @click="confirmModal" :disabled="!modalReady()" :text="modalConfirmLabel()" type="button" class="px-4 py-2.5 font-semibold text-sm text-warn hover:text-accent-ink bg-panel hover:bg-warn border border-[color-mix(in_srgb,var(--warn)_45%,var(--border))] rounded-[9px] hover:border-warn [transition:all_0.15s_ease]">Confirm</button>
+            <button @click="closeModal" type="button" class="btn-md btn-quiet">Cancel</button>
+            <Button type="button" variant="ghost" @click="confirmModal" :disabled="!modalReady()" :loading="modalBusy()" :label="modalConfirmLabel()" className="btn-cta btn-danger">Confirm</Button>
           </div>
           <span class="mt-2.5 text-accent text-xs" :show="!!modalNote()">{{ modalNote() }}</span>
         </div>

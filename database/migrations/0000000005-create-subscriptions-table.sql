@@ -3,8 +3,13 @@
 -- one (stacksjs/stacks#2346: it either keeps the postgres files or writes 80
 -- migrations for 78 framework models). Fixed upstream, unreleased. Regenerate
 -- and delete this note once it ships.
+--
+-- AUTOINCREMENT dropped, nothing else touched; see the fuller note in
+-- 0000000004-create-users-table.sql. In short: one sqlite-only keyword makes
+-- `buddy migrate` refuse the entire corpus, and bare `INTEGER PRIMARY KEY`
+-- parses in both dialects while still auto-assigning in sqlite.
 CREATE TABLE IF NOT EXISTS "subscriptions" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "id" INTEGER PRIMARY KEY,
   "type" text not null,
   "plan" varchar(100),
   "provider_id" varchar(255) not null,

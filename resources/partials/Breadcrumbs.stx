@@ -1,50 +1,29 @@
-{{-- Breadcrumb trail. Reads a `crumbs` array from the including page's server
-    block — @include does not accept inline data in this version (an
-    `['crumbs' => …]` argument leaves the variable undefined and the loop
-    reports "crumbs is not iterable"), and the page needs the array declared
-    anyway to drive its @structuredData BreadcrumbList from the same source.
+{{-- Breadcrumb trail, on the shared <Breadcrumb>.
 
-    Each crumb is { label, href?, url? }. The last has no href: it is the
-    current page.
+    Reads a `crumbs` array from the including page's server block. @include does
+    not accept inline data in this version (an `['crumbs' => …]` argument leaves
+    the variable undefined and the loop reports "crumbs is not iterable"), and
+    the page needs the array declared anyway to drive its @structuredData
+    BreadcrumbList from the same source. Each crumb is { label, href?, url? };
+    the last has no href because it is the current page. That is the component's
+    `items` shape, and the extra `url` the JSON-LD needs is ignored by it.
 
-    Still hand-written rather than the shipped <Breadcrumb>, but no longer
-    because the component is broken. It used to be: the component loops with
-    @foreach(item in displayItems), the parser accepted only the ` as ` form,
-    and the directive text shipped literally on all 22 pages.
+    Hand-written until now for a reason that is gone: the component loops with
+    @foreach(item in displayItems), the parser accepted only the ` as ` form, and
+    the directive text shipped literally on all 22 pages. Fixed as of 0.2.395.
 
-    That is fixed as of stx 0.2.395, checked by rendering rather than by
-    reading: `<Breadcrumb :items="…" />` emits a real
-    <nav aria-label="Breadcrumb"><ol>, the separator inside each <li> and
-    hidden from assistive tech, aria-current="page" on the last item, and
-    data-stx-link on the anchors so the SPA router still intercepts them.
-    That is the same markup this file writes by hand. analyticshq's own
-    partial already calls the component this way.
+    `shell subnav` stays, so the container is unchanged: public/marketing.css
+    owns the width, the 28px of top padding and the flex row, and all 22 pages
+    that include this extend the marketing layout, so that file is always
+    linked. The component's own utilities land on top and resolve to the same
+    values here - its links are `fg-muted` (--text-2, what `.subnav a` gave) and
+    its separators `fg-soft` (--text-3, what `.sep` gave).
 
-    What is left is a styling choice rather than a constraint: the component
-    brings its own utilities (flex, gap-2, text-sm, text-fg-muted) where this
-    trail is dressed by `shell subnav`. Worth doing deliberately, not as a
-    side effect of editing this file.
-
-    Ordered list, not a row of anchors: this is a sequence, the position is
-    meaningful, and assistive tech should say so. The separators are decorative
-    and hidden from it; the current page is marked aria-current.
-
-    StxLink rather than a bare anchor. It compiles to `<a href data-stx-link>`,
-    and the SPA router only intercepts elements carrying that attribute — a
-    plain `<a href="/projects">` does a native full page reload instead. This
-    was the last internal link in the app still doing that. Where a full load
-    IS wanted (the OAuth redirects in login/register), the anchor stays plain
-    and says so with data-no-router. --}}
-<nav class="shell subnav" aria-label="Breadcrumb">
-  <ol>
-    @foreach (crumbs as c)
-      <li>
-        @if ($loop.last)
-          <span aria-current="page">{{ c.label }}</span>
-        @else
-          <StxLink to="{{ c.href }}">{{ c.label }}</StxLink><span class="sep" aria-hidden="true">/</span>
-        @endif
-      </li>
-    @endforeach
-  </ol>
-</nav>
+    One thing does change, and it is the reason this was left for a deliberate
+    pass. The current crumb was a bare <span> with no class, so it inherited
+    `.subnav`'s own `color: var(--text-3)` and rendered QUIETER than the links
+    beside it - the one item telling you where you are was the faintest thing in
+    the row. That reads as an accident of inheritance rather than a choice. The
+    component gives it `text-fg font-medium`, so it is now the most prominent
+    crumb, which is what a trail is for. --}}
+<Breadcrumb className="shell subnav" :items="crumbs" />

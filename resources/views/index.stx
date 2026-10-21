@@ -203,7 +203,7 @@ async function subscribe() {
           required
           x-model="email"
         >
-        <button class="btn primary" type="submit" :disabled="subscribeMutation.loading()" :text="subscribeMutation.loading() ? 'Sending' : 'Keep me posted'">Keep me posted</button>
+        <button class="btn primary" type="submit" :disabled="subscribeMutation.loading()" :aria-busy="subscribeMutation.loading()" :text="subscribeMutation.loading() ? 'Sending' : 'Keep me posted'">Keep me posted</button>
       </form>
       <p class="sub-status" role="status" aria-live="polite" :data-state="failed() ? 'error' : ''" :text="status()"></p>
     </div>

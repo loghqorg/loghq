@@ -17,6 +17,7 @@ import { log } from '@stacksjs/logging'
 // Shared with the page action in resources/views/projects/new.stx, so the two
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
+import { newReadKey } from '../app/Support/read-key'
 import { utcNow } from '../app/Support/time'
 import { GitHubRequestError, verifyAccess } from '../app/Fix/github'
 import {
@@ -114,6 +115,9 @@ route.get('/api/projects', async (request: any) => {
     return json({ error: 'unauthorized' }, 401)
   const rows = await db.unsafe(
     `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.is_active, p.created_at,
+            -- Whether a read key exists and when it was last used, never the
+            -- key: it is a secret, and it is shown once when it is issued.
+            (p.read_key IS NOT NULL) AS has_read_key, p.read_key_last_used_at,
             (p.owner_id = $1) AS is_owner
     FROM projects p
     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
@@ -181,6 +185,44 @@ route.post('/api/projects/{projectId}/rotate-key', async (request: any) => {
   const key = newIngestKey()
   await db.unsafe('UPDATE projects SET ingest_key = $1, updated_at = $3 WHERE id = $2', [key, projectId, utcNow()])
   return json({ ingest_key: key })
+}).skipCsrf()
+
+// Issue (or replace) a project's read key. Owner-only.
+//
+// This is the credential a server presents to read the project's logs without
+// a person's account behind it (#14). It is returned here and nowhere else:
+// unlike the public ingest key, which the listing carries so it can be copied
+// into client code, this one is a secret, so it is shown once and the listing
+// afterwards says only that it exists. Losing it means issuing another, which
+// is the same call — and the previous key stops working the moment it lands.
+route.post('/api/projects/{projectId}/read-key', async (request: any) => {
+  const user = await currentUser(request)
+  if (!user)
+    return json({ error: 'unauthorized' }, 401)
+  const projectId = request.params.projectId
+  if (!(await ownsProject(user, projectId)))
+    return json({ error: 'not found' }, 404)
+
+  const key = newReadKey()
+  // The last-used stamp belongs to the key, so a new key starts with none:
+  // leaving the old one would read as "this key was used before it existed".
+  await db.unsafe('UPDATE projects SET read_key = $1, read_key_last_used_at = NULL, updated_at = $3 WHERE id = $2', [key, projectId, utcNow()])
+  return json({ read_key: key })
+}).skipCsrf()
+
+// Revoke a project's read key. Owner-only. Anything still presenting it gets a
+// 404 from the read API on the next request, the same answer an unknown
+// project gets.
+route.delete('/api/projects/{projectId}/read-key', async (request: any) => {
+  const user = await currentUser(request)
+  if (!user)
+    return json({ error: 'unauthorized' }, 401)
+  const projectId = request.params.projectId
+  if (!(await ownsProject(user, projectId)))
+    return json({ error: 'not found' }, 404)
+
+  await db.unsafe('UPDATE projects SET read_key = NULL, read_key_last_used_at = NULL, updated_at = $2 WHERE id = $1', [projectId, utcNow()])
+  return json({ revoked: true })
 }).skipCsrf()
 
 // Delete a project and everything under it. Owner-only. Removes children first

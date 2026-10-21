@@ -7,8 +7,13 @@
 -- (bounces, complaints, unsubscribes, manual blocks). The mail layer fails
 -- open when the table is missing on sqlite/mysql but not on postgres (its
 -- missing-table matcher doesn't know postgres phrasing), so ship the table.
+--
+-- AUTOINCREMENT dropped, nothing else touched; see the fuller note in
+-- 0000000004-create-users-table.sql. In short: one sqlite-only keyword makes
+-- `buddy migrate` refuse the entire corpus, and bare `INTEGER PRIMARY KEY`
+-- parses in both dialects while still auto-assigning in sqlite.
 CREATE TABLE IF NOT EXISTS "email_suppressions" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "id" INTEGER PRIMARY KEY,
   "email" varchar(255) NOT NULL,
   "type" varchar(32) NOT NULL,
   "reason" varchar(255),
