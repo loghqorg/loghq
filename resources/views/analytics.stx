@@ -243,9 +243,16 @@ onMounted(() => {
 <div class="grain" aria-hidden="true"></div>
 
 <div class="px-5 py-10 md:px-10 min-h-[100dvh] page-dashboard">
-  <StxLink class="chrome-upgrade" to="/pricing" :show="!pro()">Upgrade</StxLink>
-  <span class="chrome-pro chrome-upgrade" :show="pro()">Pro</span>
-  <button class="chrome-logout" @click="signOut">Log out</button>
+  {{-- The whole chrome belongs to a signed-in viewer. Ungated, a signed-out
+      visitor got a "Log out" button that logs nobody out and an "Upgrade" call
+      to action, floating over the "You're signed out" panel below. `user` is
+      resolved server-side from the auth-token cookie, so this is decided before
+      paint and there is no flash of the wrong chrome. --}}
+  @if (user)
+    <StxLink class="chrome-upgrade" to="/pricing" :show="!pro()">Upgrade</StxLink>
+    <span class="chrome-pro chrome-upgrade" :show="pro()">Pro</span>
+    <button class="chrome-logout" @click="signOut">Log out</button>
+  @endif
 
   <div class="mx-auto max-w-5xl">
 
