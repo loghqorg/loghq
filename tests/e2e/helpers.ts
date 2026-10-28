@@ -1,11 +1,9 @@
 /**
  * Shared plumbing for the end-to-end suite.
  *
- * These tests drive the app over HTTP against a running dev server. That is
- * possible at all because every form in the app handles its own POST now
- * (stx#1847, see resources/views/login.stx) — sign-in, sign-up, password reset
- * and project creation are ordinary form submissions, so a browser is not
- * needed to exercise them and this suite carries no browser dependency.
+ * These tests drive an explicitly opted-in, isolated local server over HTTP.
+ * See README.md for the disposable database requirement and the legacy auth
+ * expectations that still need migrating to the current JSON API.
  *
  * What that does NOT cover is anything whose behaviour only exists after
  * hydration: SPA navigation, the theme toggle, clipboard buttons, the delete
@@ -13,7 +11,10 @@
  * deliberately out of scope here rather than faked.
  */
 
-const BASE = Bun.env.E2E_BASE_URL || 'http://localhost:3000'
+import { cleanupE2EAccounts, e2eUrl, validateE2ETarget } from './safety'
+
+const target = validateE2ETarget(Bun.env)
+const createdEmails = new Set<string>()
 
 /** A password that satisfies the app's 8-character minimum. */
 export const TEST_PASSWORD = 'e2e-test-password'
@@ -21,14 +22,16 @@ export const TEST_PASSWORD = 'e2e-test-password'
 /**
  * Whether a server is reachable.
  *
- * The suite SKIPS rather than fails when nothing is listening, so `bun test`
+ * The suite SKIPS unless explicitly enabled, and when nothing is listening, so `bun test`
  * stays green on a machine that has not started the app. A failing E2E suite
  * should mean the app is broken, not that the developer did not run `bun run
  * dev` — otherwise the signal gets ignored, which is worse than not having it.
  */
 export async function serverIsUp(): Promise<boolean> {
+  if (!target)
+    return false
   try {
-    const res = await fetch(BASE, { signal: AbortSignal.timeout(3000) })
+    const res = await fetch(target.baseUrl, { redirect: 'manual', signal: AbortSignal.timeout(3000) })
     return res.ok
   }
   catch {
@@ -46,7 +49,7 @@ export async function serverIsUp(): Promise<boolean> {
 export const SERVER_UP: boolean = await serverIsUp()
 
 export function url(path: string): string {
-  return BASE + path
+  return e2eUrl(target, path)
 }
 
 /**
@@ -88,12 +91,13 @@ export function sessionCookie(res: Response): string {
 /**
  * An email nobody else is using.
  *
- * Unique per call so a rerun cannot collide with its own leftovers, and
- * prefixed so the cleanup below can find every account this suite ever made —
- * including from a run that crashed before its own teardown.
+ * Unique per call so a rerun cannot collide with its own leftovers. Track the
+ * exact address for this run's cleanup; the prefix is only a readable QA label.
  */
 export function freshEmail(label: string): string {
-  return `e2e-${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@loghq.test`
+  const email = `e2e-${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}@loghq.test`
+  createdEmails.add(email)
+  return email
 }
 
 /** Register through the real form and return the session cookie it mints. */
@@ -109,20 +113,11 @@ export async function registerAndSignIn(label: string): Promise<{ email: string,
 }
 
 /**
- * Remove every account this suite has ever created, and anything hanging off
- * one.
- *
- * Matches on the `e2e-%@loghq.test` prefix rather than tracking ids, so a run
- * that died before teardown is cleaned up by the next one. Deletes children
- * first — projects and tokens reference users.
+ * Remove only this process's generated accounts from the explicit disposable
+ * SQLite file. Never import the app's default database connection for cleanup.
+ * Failed-run leftovers remain confined to the disposable test database.
  */
 export async function cleanupTestAccounts(): Promise<void> {
-  const { db } = await import('@stacksjs/database')
-  await db.unsafe(
-    `DELETE FROM projects WHERE owner_id IN (SELECT id FROM users WHERE email LIKE 'e2e-%@loghq.test')`,
-  ).execute()
-  await db.unsafe(
-    `DELETE FROM oauth_access_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'e2e-%@loghq.test')`,
-  ).execute()
-  await db.unsafe(`DELETE FROM users WHERE email LIKE 'e2e-%@loghq.test'`).execute()
+  cleanupE2EAccounts(target, createdEmails)
+  createdEmails.clear()
 }
