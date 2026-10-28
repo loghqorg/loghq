@@ -31,9 +31,16 @@ export default {
    * - Objects: [{ email: 'chris', password: '...' }]
    */
   mailboxes: [
+    // The mailbox this app authenticates as. Until now loghq.org had no mailbox
+    // of any kind on the mail server, so MAIL_USERNAME named an account that did
+    // not exist and SMTP auth answered 535 on every send. DNS and config were
+    // both already correct; only the account was missing.
     'noreply',
-    'chris',
-    'hello',
+    // 'chris' and 'hello' were declared here and never existed either. They are
+    // left out rather than created: provisioning sets each declared mailbox's
+    // password from MAIL_PASSWORD_<LOCALPART>, so declaring an address nobody
+    // asked for mints a real, credentialed account for it. Add them back when
+    // somebody actually wants to read mail at them.
   ],
 
   url: env.APP_URL || 'https://stacksjs.com',
