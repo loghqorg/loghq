@@ -46,6 +46,8 @@ declare global {
     avatar: string | null
     provider: string | null
     created_at: string | null
+    /** Whether TOTP two-factor is on. Only this boolean crosses the wire; the secret stays server-side. */
+    two_factor_enabled?: boolean | null
   }
 
   /** Full GET /api/me body. `plan` is derived from `pro`, not stored. */
