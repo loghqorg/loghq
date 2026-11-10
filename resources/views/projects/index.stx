@@ -118,17 +118,18 @@ function logout(): void {
   <div class="mx-auto max-w-5xl">
 
     <header class="flex gap-4 items-center justify-between mb-9">
-      <div>
-        <h1 class="leading-none text-2xl md:text-[28px] wordmark">Your apps</h1>
-        {{-- The subtitle invites an action, so it only belongs to someone who can
-            take it. Signed out, the same line read "Pick an app to track, or
-            create a new one." above a panel saying the visitor was signed out. --}}
-        @if (user)
+      {{-- The title + action-inviting subtitle belong to someone who can act on
+          them. Signed out, this header becomes just the brand wordmark, so it
+          reads as a balanced top bar rather than a heading over an empty page;
+          the sign-in call to action lives in the centered hero below. --}}
+      @if (user)
+        <div>
+          <h1 class="leading-none text-2xl md:text-[28px] wordmark">Your apps</h1>
           <p class="mt-2 text-sm text-subtle">Pick an app to track, or create a new one.</p>
-        @else
-          <p class="mt-2 text-sm text-subtle">Sign in to see the apps you track.</p>
-        @endif
-      </div>
+        </div>
+      @else
+        <StxLink to="/" class="text-xl wordmark">loghq</StxLink>
+      @endif
       <div class="flex gap-2.5 items-center">
         <button class="inline-flex items-center justify-center h-9 w-9 text-subtle hover:text-ink bg-panel border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] cursor-pointer [transition:color_0.15s_ease,border-color_0.15s_ease] theme-btn" @click="toggleTheme" x-tooltip="Toggle theme" aria-label="Toggle theme">
           <Icon name="lucide:sun" size="18" class="h-[18px] w-[18px] ic-sun" />
@@ -149,9 +150,16 @@ function logout(): void {
         client pre-paint bounce (deleted with AuthGuard) the server renders a
         sign-in panel when the auth-token cookie resolved no user. --}}
     @if (!user)
-      <div class="py-24 text-center">
-        <p class="mb-4 text-sm text-subtle">You're signed out.</p>
-        <StxLink to="/login" class="inline-block px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px]">Sign in</StxLink>
+      <div class="flex flex-col items-center justify-center px-4 min-h-[62vh] text-center">
+        <span class="flex items-center justify-center mb-6 h-16 w-16 bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))] border border-line rounded-2xl">
+          <Icon name="lucide:layout-grid" size="28" class="h-7 w-7 text-accent" />
+        </span>
+        <h2 class="font-semibold text-2xl tracking-tight md:text-[28px]">Sign in to see your apps</h2>
+        <p class="mb-8 mt-3 max-w-sm leading-relaxed text-sm text-subtle">Every app you're streaming logs from, in one place. Sign in to pick up where you left off.</p>
+        <div class="flex flex-col gap-3 items-center sm:flex-row max-w-xs w-full sm:max-w-none">
+          <StxLink to="/login" class="px-5 py-2.5 w-full sm:w-auto font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px]">Sign in</StxLink>
+          <StxLink to="/register" class="px-5 py-2.5 w-full sm:w-auto font-medium text-ink text-sm bg-panel border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] [transition:border-color_0.15s_ease]">Create account</StxLink>
+        </div>
       </div>
     @endif
 
