@@ -372,7 +372,7 @@ onMount(() => {
             </div>
             <div class="flex gap-2.5 items-center">
               <button type="submit" :disabled="twoFaBusy()" :aria-busy="twoFaBusy()" class="px-4 py-2 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :text="twoFaBusy() ? 'Confirming...' : 'Confirm and enable'">Confirm and enable</button>
-              <button type="button" @click="cancelTwoFaSetup" :disabled="twoFaBusy()" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Cancel</button>
+              <button type="button" @click="cancelTwoFaSetup" :disabled="twoFaBusy()" :aria-busy="twoFaBusy()" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Cancel</button>
             </div>
           </form>
         </div>
