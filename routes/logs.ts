@@ -12,7 +12,9 @@ import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
-import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
+import { extractEntries, MAX_BATCH, normalizeBatch } from '../app/Logs/normalize'
+import { cursorAtHorizon, cursorOf, decodeCursor, encodeCursor, forwardQuery, newEntryId, pageLimit, receiveStamp, STREAM_COLS, streamFilters } from '../app/Logs/query'
+import { claimTail, SSE_HEADERS, tailStart, tailStream } from '../app/Logs/tail'
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
 import { ownsProject } from '../app/Support/access'
@@ -46,10 +48,6 @@ function clientIp(request: any): string {
     }
   }
   return direct
-}
-
-function randomId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
 const CORS = {
@@ -115,13 +113,20 @@ route.post('/logs', async (request: any) => {
   if (!projLimit.ok)
     return json({ error: 'rate limited' }, 429, { 'Retry-After': String(projLimit.retryAfter) })
 
-  const receivedAt = new Date().toISOString()
-  const { rows, dropped, skipped } = normalizeBatch(body, { projectId, receivedAt, newId: randomId })
+  const received = new Date()
+  const receivedAt = received.toISOString()
+  const { rows, dropped, skipped } = normalizeBatch(body, { projectId, receivedAt, newId: newEntryId })
+
+  // `created_at` is written here rather than left to the column default. The
+  // default is CURRENT_TIMESTAMP, which is whole seconds, and readers walking
+  // the stream forward order by this column (app/Logs/query.ts): a batch
+  // landing in a second a reader had already passed would be skipped.
+  const createdAt = receiveStamp(received)
 
   // One multi-row INSERT. Inserting per entry cost a round-trip each, so a full
   // 500-record batch serialized into 500 of them.
   if (rows.length)
-    await db.insertInto('log_entries').values(rows).execute()
+    await db.insertInto('log_entries').values(rows.map(row => ({ ...row, created_at: createdAt }))).execute()
 
   // `dropped` (over MAX_BATCH) and `skipped` (no usable message) are always
   // reported: a client that believes it delivered 600 entries has no other way
@@ -133,67 +138,61 @@ route.post('/logs', async (request: any) => {
 // Stream API (dashboard)
 // ---------------------------------------------------------------------------
 
-const STREAM_COLS = 'id, level, message, channel, environment, release, framework, host, timestamp, created_at, trace_id, request_id'
+// Reading is cross-origin too: a desktop app's webview is its own origin and
+// presents a read key or read token as a bearer. Allowing the header to any
+// origin is safe for the same reason it is for ingest: a bearer is not an
+// ambient credential, so a page can only send one it already holds, and the
+// wildcard origin means a browser will not attach the session cookie.
+const READ_CORS = {
+  ...CORS,
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Last-Event-ID',
+}
+const readPreflight = (): Response => new Response(null, { status: 204, headers: READ_CORS })
+
+route.options('/api/projects/{projectId}/logs', readPreflight)
+route.options('/api/projects/{projectId}/logs/tail', readPreflight)
+route.options('/api/logs/{logId}', readPreflight)
 
 route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const projectId = request.params.projectId
-  // A person who owns the project, or a read key issued for it (#14).
+  // A person who can see the project, a read key issued for it (#14), or a
+  // read token belonging to such a person.
   const access = await projectReadAccess(request, projectId, ownsProject)
   if (!access.ok)
-    return json({ error: access.error }, access.status)
+    return json({ error: access.error }, access.status, READ_CORS)
 
   const q = request.query ?? {}
-  const where: string[] = ['project_id = $1']
-  const params: any[] = [projectId]
+  const filters = streamFilters(projectId, q)
+  const limit = pageLimit(q.limit)
 
-  // Level filter: exact, or comma-separated set (e.g. ?level=error,critical).
-  // Expanded to individual placeholders (`IN ($n,$n+1,…)`) rather than a single
-  // array param — db.unsafe binds a JS array as a malformed Postgres array
-  // literal, so `= ANY($n)` fails.
-  if (q.level) {
-    const levels = String(q.level).split(',').map(s => s.trim().toLowerCase()).filter(l => LEVELS.has(l))
-    if (levels.length) {
-      const placeholders = levels.map((_, i) => `$${params.length + i + 1}`).join(',')
-      levels.forEach(l => params.push(l))
-      where.push(`level IN (${placeholders})`)
-    }
+  // Forward: entries that ARRIVED after the cursor, oldest first. This is the
+  // polling form of the live tail and shares its query, so a client can follow
+  // a project with either and get the same entries in the same order.
+  if (q.after != null && q.after !== '') {
+    if (q.before)
+      return json({ error: 'use either before or after, not both' }, 400, READ_CORS)
+    const cursor = decodeCursor(String(q.after))
+    if (!cursor)
+      return json({ error: 'invalid after cursor' }, 400, READ_CORS)
+    const forward = forwardQuery(filters, cursor, limit)
+    const logs = (await db.unsafe(forward.sql, forward.params)) ?? []
+    // Always a cursor, even for an empty page: the caller polls again with it.
+    const nextAfter = logs.length ? cursorOf(logs[logs.length - 1]) : String(q.after)
+    return json({ logs, nextAfter, hasMore: logs.length === limit }, 200, READ_CORS)
   }
-  if (q.channel) {
-    params.push(String(q.channel))
-    where.push(`channel = $${params.length}`)
-  }
-  if (q.environment) {
-    params.push(String(q.environment))
-    where.push(`environment = $${params.length}`)
-  }
-  // Correlation: "show me the rest of this trace / request". Both are backed by
-  // the partial indexes from migration 0000000010, so these stay cheap.
-  if (q.trace) {
-    params.push(String(q.trace).slice(0, MAX_CORRELATION))
-    where.push(`trace_id = $${params.length}`)
-  }
-  if (q.request) {
-    params.push(String(q.request).slice(0, MAX_CORRELATION))
-    where.push(`request_id = $${params.length}`)
-  }
-  // Full-text-ish search over the message.
-  //
-  // lower(...) LIKE lower(...), not ILIKE. ILIKE is Postgres-only and this app
-  // runs SQLite, where it is a parse error rather than a slow path: every
-  // search request through this endpoint threw. A bare LIKE would fix SQLite
-  // and quietly become case-sensitive the day this moves to Postgres, so both
-  // sides are folded instead. Same shape as the dashboard's own search.
-  if (q.q) {
-    params.push(`%${String(q.q).slice(0, 200).toLowerCase()}%`)
-    where.push(`lower(message) LIKE $${params.length}`)
-  }
+
+  const where = [...filters.where]
+  const params = [...filters.params]
   // Keyset pagination: fetch older than this timestamp cursor.
   if (q.before) {
     params.push(String(q.before))
     where.push(`timestamp < $${params.length}`)
   }
 
-  const limit = Math.min(200, Math.max(1, Number(q.limit) || 100))
+  // Taken before the read, so anything stored while the query runs is ahead of
+  // it rather than lost between this page and the first forward read.
+  const nextAfter = encodeCursor(cursorAtHorizon())
   const rows = await db.unsafe(
     `SELECT ${STREAM_COLS} FROM log_entries WHERE ${where.join(' AND ')} ORDER BY timestamp DESC LIMIT ${limit}`,
     params,
@@ -201,7 +200,42 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const logs = rows ?? []
   // Next cursor = the oldest timestamp in this page.
   const nextCursor = logs.length === limit ? logs[logs.length - 1].timestamp : null
-  return json({ logs, nextCursor })
+  return json({ logs, nextCursor, nextAfter }, 200, READ_CORS)
+})
+
+// Live tail (Server-Sent Events). Same credentials and filters as the page
+// above. Starts at `Last-Event-ID` when a client is reconnecting, else `after`,
+// else the present. See app/Logs/tail.ts for the events and the limits.
+route.get('/api/projects/{projectId}/logs/tail', async (request: any) => {
+  const projectId = request.params.projectId
+  const access = await projectReadAccess(request, projectId, ownsProject)
+  if (!access.ok)
+    return json({ error: access.error }, access.status, READ_CORS)
+
+  const q = request.query ?? {}
+  const start = tailStart(request.headers?.get?.('last-event-id'), q.after)
+  if (!start.ok)
+    return json({ error: 'invalid after cursor' }, 400, READ_CORS)
+
+  const release = claimTail(projectId)
+  if (!release)
+    return json({ error: 'too many open tails' }, 429, { ...READ_CORS, 'Retry-After': '30' })
+
+  const filters = streamFilters(projectId, q)
+  const body = tailStream({
+    start: start.cursor ?? cursorAtHorizon(),
+    fetchAfter: async (cursor, limit) => {
+      const forward = forwardQuery(filters, cursor, limit)
+      return (await db.unsafe(forward.sql, forward.params)) ?? []
+    },
+    // The credential is checked again while the stream is open: a revoked key,
+    // a revoked token or a removed member stops receiving entries within
+    // REAUTHORIZE_MS instead of at the next reconnect.
+    authorize: async () => (await projectReadAccess(request, projectId, ownsProject)).ok,
+    onClose: release,
+    signal: request.signal,
+  })
+  return new Response(body, { status: 200, headers: { ...READ_CORS, ...SSE_HEADERS } })
 })
 
 route.get('/api/logs/{logId}', async (request: any) => {
@@ -215,10 +249,10 @@ route.get('/api/logs/{logId}', async (request: any) => {
   const entry = (await db.unsafe('SELECT * FROM log_entries WHERE id = $1 LIMIT 1', [logId]))?.[0]
   const access = await projectReadAccess(request, entry ? String(entry.project_id) : '', ownsProject)
   if (!access.ok)
-    return json({ error: access.error }, access.status)
+    return json({ error: access.error }, access.status, READ_CORS)
   if (!entry)
     return json({ error: 'not found' }, 404)
-  return json({ entry })
+  return json({ entry }, 200, READ_CORS)
 })
 
 // ---------------------------------------------------------------------------

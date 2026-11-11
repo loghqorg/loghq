@@ -114,6 +114,8 @@ Dashboard endpoints, authenticated with a bearer token rather than the ingest ke
 
 ```
 GET /api/projects/{projectId}/logs?level=&channel=&environment=&q=&trace=&request=&before=&limit=
+GET /api/projects/{projectId}/logs?after=<cursor>          # read forward, oldest first
+GET /api/projects/{projectId}/logs/tail                    # live tail (Server-Sent Events)
 GET /api/logs/{logId}
 ```
 

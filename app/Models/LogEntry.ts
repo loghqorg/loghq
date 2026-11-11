@@ -35,6 +35,9 @@ export default defineModel({
     // indexing those nulls doubles the index for no lookup benefit.
     { name: 'le_project_trace', columns: ['project_id', 'trace_id'] },
     { name: 'le_project_request', columns: ['project_id', 'request_id'] },
+    // Arrival order, for readers walking the stream forward (`after`, the live
+    // tail). See the forward cursor in app/Logs/query.ts.
+    { name: 'le_project_created', columns: ['project_id', 'created_at', 'id'] },
   ],
 
   attributes: {
