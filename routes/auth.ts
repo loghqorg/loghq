@@ -27,6 +27,23 @@ route.post('/api/auth/verify-two-factor-login', 'Actions/Auth/VerifyTwoFactorLog
 route.post('/logout', 'Actions/Auth/LogoutAction').skipCsrf()
 route.get('/api/me', 'Actions/MeAction').skipCsrf()
 
+// Two-factor enrolment for the account page. These resolve to the framework's
+// own JSON actions in @stacksjs/defaults (Actions/Auth/*), the same string
+// resolution the login/register actions use. generate makes a fresh secret,
+// stashes it server-side with a short TTL and returns the otpauth URI + secret
+// for the authenticator app; enable verifies the 6-digit code against that stash
+// and only then persists users.two_factor_secret, so the server never trusts a
+// client-supplied secret; disable re-confirms the account password first,
+// because turning a second factor off is the first thing a session thief tries.
+//
+// Unlike /api/me these carry `.middleware('auth')`: the default actions read
+// request.user(), which the auth middleware populates from the same HttpOnly
+// `auth-token` cookie. skipCsrf stays for the same reason as the rest (SameSite
+// cookie, no double-submit token on these same-origin fetches).
+route.post('/api/auth/generate-two-factor-secret', 'Actions/Auth/GenerateTwoFactorSecretAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+route.post('/api/auth/enable-two-factor', 'Actions/Auth/EnableTwoFactorAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+route.post('/api/auth/disable-two-factor', 'Actions/Auth/DisableTwoFactorAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+
 // Password reset. The send side uses the framework's passwordResets helper
 // directly: it is anti-enumeration by design (unknown emails are a silent
 // no-op), so this endpoint always answers with the same message and never
