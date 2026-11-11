@@ -1,3 +1,4 @@
+import type { Request } from '@stacksjs/router'
 import { Auth } from '@stacksjs/auth'
 import { config } from '@stacksjs/config'
 import { HttpError } from '@stacksjs/error-handling'
@@ -7,7 +8,7 @@ import { Middleware } from '@stacksjs/router'
 export default new Middleware({
   name: 'Auth',
   priority: 1,
-  async handle(request) {
+  async handle(request: Request): Promise<void> {
     // Check bearer token first (API auth)
     const bearerToken = request.bearerToken()
 
@@ -26,7 +27,7 @@ export default new Middleware({
       const user = await Auth.getUserFromToken(bearerToken)
       if (user) {
         Auth.setUser(user)
-        ;(request as { _authenticatedUser?: unknown })._authenticatedUser = user
+        request._authenticatedUser = user
       }
 
       log.debug(`[middleware:auth] Bearer token valid`)
@@ -52,7 +53,7 @@ export default new Middleware({
         throw new HttpError(401, 'Unauthorized. Invalid or expired session.')
 
       Auth.setUser(user)
-      ;(request as { _authenticatedUser?: unknown })._authenticatedUser = user
+      request._authenticatedUser = user
 
       log.debug(`[middleware:auth] Login cookie valid`)
       return
@@ -72,7 +73,7 @@ export default new Middleware({
       const user = await sessionUser(sessionId)
       if (user) {
         Auth.setUser(user)
-        ;(request as { _authenticatedUser?: unknown })._authenticatedUser = user
+        request._authenticatedUser = user
       }
 
       log.debug(`[middleware:auth] Session valid`)
