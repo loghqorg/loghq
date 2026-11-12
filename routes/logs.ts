@@ -10,14 +10,19 @@
 
 import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
+import { USAGE_HEADER } from '@stacksjs/hq/meter'
+import { admitLines, usageCounter } from '../app/Billing/meter'
+import { isPro } from '../app/Billing/pro'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
+import { fireLogAlerts } from '../app/Errors/log-alerts'
 import { extractEntries, MAX_BATCH, normalizeBatch } from '../app/Logs/normalize'
 import { cursorAtHorizon, cursorOf, decodeCursor, encodeCursor, forwardQuery, newEntryId, pageLimit, receiveStamp, STREAM_COLS, streamFilters } from '../app/Logs/query'
 import { claimTail, SSE_HEADERS, tailStart, tailStream } from '../app/Logs/tail'
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
 import { ownsProject } from '../app/Support/access'
+import { clientIp } from '../app/Support/client-ip'
 import { healthResponse } from '../app/Support/health'
 import { projectReadAccess } from '../app/Support/request-auth'
 
@@ -33,28 +38,14 @@ const PROJECT_LIMIT = 2000
 const IP_LIMIT = 4000
 const RATE_WINDOW_MS = 10_000
 
-const TRUSTED_PROXY_HOPS = Math.max(0, Number(process.env.TRUSTED_PROXY_HOPS ?? 1))
-
-function clientIp(request: any): string {
-  const direct = request.headers?.get('x-real-ip') || request.ip || 'unknown'
-  if (TRUSTED_PROXY_HOPS === 0)
-    return direct
-  const xff = request.headers?.get('x-forwarded-for')
-  if (xff) {
-    const hops = String(xff).split(',').map((s: string) => s.trim()).filter(Boolean)
-    if (hops.length) {
-      const idx = hops.length - TRUSTED_PROXY_HOPS
-      return hops[idx >= 0 ? idx : 0]
-    }
-  }
-  return direct
-}
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-LogHQ-Key',
   'Access-Control-Max-Age': '86400',
+  // Without this a browser SDK cannot read where its account stands: a
+  // cross-origin response only exposes the safelisted headers by default.
+  'Access-Control-Expose-Headers': USAGE_HEADER,
 }
 
 function json(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -94,10 +85,10 @@ route.post('/logs', async (request: any) => {
   const requestedProject = body.project ?? body.p ?? null
   let project = null
   if (requestedProject) {
-    project = (await db.unsafe('SELECT id, ingest_key, is_active FROM projects WHERE id = $1 LIMIT 1', [String(requestedProject)]))?.[0] ?? null
+    project = (await db.unsafe('SELECT id, ingest_key, is_active, owner_id FROM projects WHERE id = $1 LIMIT 1', [String(requestedProject)]))?.[0] ?? null
   }
   else if (providedKey) {
-    project = (await db.unsafe('SELECT id, ingest_key, is_active FROM projects WHERE ingest_key = $1 LIMIT 1', [String(providedKey)]))?.[0] ?? null
+    project = (await db.unsafe('SELECT id, ingest_key, is_active, owner_id FROM projects WHERE ingest_key = $1 LIMIT 1', [String(providedKey)]))?.[0] ?? null
   }
   const auth = authorizeIngest(project, providedKey)
   if (!auth.ok)
@@ -123,15 +114,27 @@ route.post('/logs', async (request: any) => {
   // landing in a second a reader had already passed would be skipped.
   const createdAt = receiveStamp(received)
 
+  // The monthly allowance (app/Billing/plans.ts), counted per LINE and per
+  // account. Past it nothing is refused: lines are stored in full to 120%,
+  // then one in ten, and the response says so in `X-HQ-Usage`. The 429s above
+  // are abuse bounds on a public key, not this, and they are the only reason
+  // this endpoint ever tells an SDK to back off.
+  const ownerId = project.owner_id == null ? null : Number(project.owner_id)
+  const verdict = admitLines(usageCounter, ownerId, await isPro(ownerId), rows.length)
+  const kept = verdict.sampled ? rows.filter((_, i) => verdict.keep[i]) : rows
+
   // One multi-row INSERT. Inserting per entry cost a round-trip each, so a full
   // 500-record batch serialized into 500 of them.
-  if (rows.length)
-    await db.insertInto('log_entries').values(rows.map(row => ({ ...row, created_at: createdAt }))).execute()
+  if (kept.length) {
+    await db.insertInto('log_entries').values(kept.map(row => ({ ...row, created_at: createdAt }))).execute()
+    // Not awaited: a slow webhook or mail server must never hold up ingest.
+    void fireLogAlerts(projectId, kept)
+  }
 
-  // `dropped` (over MAX_BATCH) and `skipped` (no usable message) are always
-  // reported: a client that believes it delivered 600 entries has no other way
-  // to notice that 100 never landed.
-  return json({ ok: true, stored: rows.length, dropped, skipped }, 201)
+  // `dropped` (over MAX_BATCH), `skipped` (no usable message) and `sampled`
+  // (over the plan's allowance) are always reported: a client that believes it
+  // delivered 600 entries has no other way to notice that 100 never landed.
+  return json({ ok: true, stored: kept.length, dropped, skipped, sampled: verdict.sampled }, 201, verdict.headers)
 }).skipCsrf() // public ingest: SDKs POST cross-origin with no CSRF cookie
 
 // ---------------------------------------------------------------------------

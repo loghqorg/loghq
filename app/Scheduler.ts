@@ -34,6 +34,16 @@ export default function () {
     .setTimeZone('UTC')
     .withoutOverlapping(120)
 
+  // Enforce the Free plan's retention window (app/Billing/plans.ts) on installs
+  // where the archive above is off, which is when nothing else removes an old
+  // line. Half an hour after the archive so the two never start together.
+  schedule
+    .job('PruneFreeRetention')
+    .daily()
+    .at('03:40')
+    .setTimeZone('UTC')
+    .withoutOverlapping(60)
+
   // Run a custom action every five minutes
   // schedule.action('CleanupTempFiles').everyFiveMinutes()
 
