@@ -105,11 +105,11 @@ editing the default export changes nothing about a deploy.
 | Branch | Environment | Flag passed to `buddy deploy` |
 |---|---|---|
 | `main` | production | `--prod` |
-| `stage` | staging | `--staging` |
-| `dev` | development | `--dev` |
 
-`workflow_dispatch` can pick an environment manually. Concurrency is grouped per
-branch and does not cancel in progress, so two pushes queue rather than race.
+A push to `main` deploys production. There is no staging or development box, so
+no other branch deploys. `workflow_dispatch` re-runs the deploy and is refused on
+any ref but `main`. Concurrency does not cancel in progress, so two pushes queue
+rather than race.
 
 ## Before the first deploy
 

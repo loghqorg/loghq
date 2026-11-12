@@ -1,16 +1,12 @@
 name: Deploy
 
-# Push-to-deploy from the `production` branch, and only that branch.
+# Push-to-deploy from `main`, the standard Stacks flow: a push to main runs
+# `buddy deploy --prod`, the same as BugHQ and the other apps.
 #
-# main is where work lands; production is what is live. Promoting is a push to
-# production, which makes "what is deployed" a thing you can read off a ref
-# instead of inferring from the last green run on main.
-#
-# There is exactly one environment. The staging and development branches this
-# used to map are gone: no box was ever provisioned for either, and
-# DOTENV_PRIVATE_KEY_STAGING / _DEVELOPMENT are not set, so a push to those
-# branches could only ever fail at env resolution. Re-add the mapping alongside
-# a real box if that changes.
+# There is exactly one environment. No staging or development box was ever
+# provisioned and DOTENV_PRIVATE_KEY_STAGING / _DEVELOPMENT are not set, so
+# `stage` and `dev` are not mapped here: a push to them could only fail at env
+# resolution. Add the mapping alongside a real box if that changes.
 #
 # This app is ATTACHED to the box owned by the `uptime-status` project
 # (config/cloud.ts sets `cloud.attachTo`), so the deploy provisions no server of
@@ -19,7 +15,7 @@ name: Deploy
 # covers every attached project.
 on:
   push:
-    branches: [production]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -27,22 +23,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Nothing reaches production without passing the same checks CI runs.
+  # Nothing reaches production without passing the checks CI runs.
   #
-  # CI runs on main and on pull requests, so a push straight to production is
-  # not covered by it. This gate is what checks the code actually being
-  # promoted, and it costs about a minute. Without it a promotion carrying a
-  # broken commit deploys, and nothing ever says so.
+  # CI runs on the same push, but beside this workflow, not before it: without
+  # this gate a commit that fails its tests would deploy while CI was still
+  # turning red. It costs about a minute.
   #
   gate:
     runs-on: ubuntu-latest
     steps:
       # workflow_dispatch runs against whatever ref you pick, so without this a
-      # dispatch from main would quietly deploy main's code as production.
-      - name: Refuse to deploy anything but the production branch
+      # dispatch from a feature branch would deploy unreviewed code as production.
+      - name: Refuse to deploy anything but main
         run: |
-          test "${{ github.ref_name }}" = "production" \
-            || { echo "::error::Deploy runs from the production branch only, got ${{ github.ref_name }}"; exit 1; }
+          test "${{ github.ref_name }}" = "main" \
+            || { echo "::error::Deploy runs from main only, got ${{ github.ref_name }}"; exit 1; }
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
