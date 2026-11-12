@@ -9,7 +9,7 @@ import { hqServiceContract } from '@stacksjs/hq/testing'
 import { admitLines } from '../../app/Billing/meter'
 import { LOG_LINES_METER } from '../../app/Billing/plans'
 import { createLoghqAdapter } from '../../app/Hq/adapter'
-import { sqlDialect } from '../../app/Support/sql-dialect'
+import { deferredStore, detectDialect, sqlDialect } from '../../app/Support/sql-dialect'
 
 /**
  * The `@stacksjs/hq` SQL stores against the tables this repository's own
@@ -51,17 +51,18 @@ describe('the migration files are valid on PostgreSQL too', () => {
   const ddl = (table: string) => file(table).split('\n').filter(line => !line.startsWith('--')).join('\n')
 
   test('no SQLite-only keyword, which would make `buddy migrate` refuse the corpus', () => {
-    for (const table of ['usage_counters', 'hq_connect_codes'])
+    for (const table of ['usage_counters', 'hq_connect_codes', 'log_alert_states'])
       expect(ddl(table)).not.toMatch(/AUTOINCREMENT|WITHOUT ROWID|DATETIME/i)
   })
 
   test('epoch milliseconds and line counts are 64-bit', () => {
     expect(ddl('hq_connect_codes')).toMatch(/"expires_at" BIGINT/i)
     expect(ddl('usage_counters')).toMatch(/"used" bigint/i)
+    expect(ddl('log_alert_states')).toMatch(/"alerted_at" bigint/i)
   })
 
   test('no comment carries a semicolon, which the migration runner splits on', () => {
-    for (const table of ['usage_counters', 'hq_connect_codes'])
+    for (const table of ['usage_counters', 'hq_connect_codes', 'log_alert_states'])
       expect(file(table).split('\n').filter(line => line.startsWith('--')).join('\n')).not.toContain(';')
   })
 
@@ -71,13 +72,68 @@ describe('the migration files are valid on PostgreSQL too', () => {
   })
 })
 
-describe('sqlDialect', () => {
-  test('follows DB_CONNECTION and defaults to sqlite', () => {
-    expect(sqlDialect('postgres')).toBe('postgres')
-    expect(sqlDialect('mysql')).toBe('mysql')
-    expect(sqlDialect('sqlite')).toBe('sqlite')
-    expect(sqlDialect(undefined)).toBe('sqlite')
-    expect(sqlDialect('')).toBe('sqlite')
+describe('which dialect the stores speak', () => {
+  const answering = (row: Record<string, unknown> | Error): SqlClient => ({
+    unsafe: async () => {
+      if (row instanceof Error)
+        throw row
+      return [row]
+    },
+  })
+
+  test('the database is asked, and a real SQLite says sqlite', async () => {
+    const { client } = migrated('usage_counters')
+    expect(await detectDialect(client, 'postgres')).toBe('sqlite')
+  })
+
+  test('PostgreSQL and MySQL are told apart by how they answer the same statement', async () => {
+    // What each driver hands back for `SELECT (1 = '1') AS loose, ('a' = 'A') AS ci`.
+    expect(await detectDialect(answering({ loose: true, ci: false }), 'sqlite')).toBe('postgres')
+    expect(await detectDialect(answering({ loose: 't', ci: 'f' }), 'sqlite')).toBe('postgres')
+    expect(await detectDialect(answering({ loose: 1, ci: 1 }), 'sqlite')).toBe('mysql')
+    expect(await detectDialect(answering({ loose: 0, ci: 0 }), 'postgres')).toBe('sqlite')
+  })
+
+  test('what the database says wins over DB_CONNECTION', async () => {
+    expect(await detectDialect(answering({ loose: true, ci: false }), sqlDialect('sqlite'))).toBe('postgres')
+  })
+
+  test('only when it cannot be asked does configuration decide', async () => {
+    expect(await detectDialect(answering(new Error('connection refused')), 'postgres')).toBe('postgres')
+    expect(await detectDialect({ unsafe: async () => [] }, 'postgres')).toBe('postgres')
+    expect(await detectDialect({ unsafe: async () => [{ other: 1 }] }, 'mysql')).toBe('mysql')
+  })
+
+  test('DB_CONNECTION is read loosely, and defaults to sqlite', () => {
+    for (const name of ['postgres', 'postgresql', 'Postgres', ' postgres ', 'pg', 'pgsql', 'postgres-pooled'])
+      expect(sqlDialect(name)).toBe('postgres')
+    for (const name of ['mysql', 'mariadb', 'singlestore', 'MySQL'])
+      expect(sqlDialect(name)).toBe('mysql')
+    for (const name of ['sqlite', undefined, '', 'something-else'])
+      expect(sqlDialect(name)).toBe('sqlite')
+  })
+
+  test('a deferred store is built once, on first use, and retries a failed build', async () => {
+    let builds = 0
+    let fail = true
+    const store = deferredStore(async () => {
+      builds++
+      if (fail)
+        throw new Error('not ready')
+      return { read: async (n: number) => n * 2 }
+    })
+    expect(builds).toBe(0)
+    await expect(store.read(2)).rejects.toThrow('not ready')
+    fail = false
+    expect(await store.read(2)).toBe(4)
+    expect(await store.read(3)).toBe(6)
+    expect(builds).toBe(2)
+  })
+
+  test('the counter and the code store detect instead of trusting configuration', () => {
+    const read = (path: string) => readFileSync(join(import.meta.dir, '..', '..', path), 'utf8')
+    expect(read('app/Billing/meter.ts')).toContain('sqlCounterStore(db, { dialect: await detectDialect(db) })')
+    expect(read('app/Hq/service.ts')).toContain('sqlConnectCodeStore(db, { dialect: await detectDialect(db) })')
   })
 })
 

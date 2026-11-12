@@ -1,7 +1,7 @@
 /**
  * loghq: the HQ connect and usage endpoints (`@stacksjs/hq/service`).
  *
- *   POST /api/cli/connect                 -> { code, approveUrl }
+ *   POST /api/cli/connect                 -> { code, approveUrl, confirmCode }
  *   GET  /api/cli/connect/{code}          -> pending | approved + keys (once) | expired
  *   GET  /api/v1/usage      (read key)    -> [{ meter, used, limit, period, state, upgradeUrl }]
  *   POST /api/cli/connect/{code}/approve  -> the approve page's action (signed-in user)
@@ -16,6 +16,7 @@ import type { HqRequest } from '@stacksjs/hq/service'
 import { route } from '@stacksjs/router'
 import { rateLimit } from '../app/Errors/limits'
 import { ConnectRefusedError } from '../app/Hq/adapter'
+import { confirmationCode, confirmationMatches } from '../app/Hq/confirm'
 import { hq } from '../app/Hq/service'
 import { clientIp } from '../app/Support/client-ip'
 import { sameOrigin } from '../app/Support/origin'
@@ -55,7 +56,15 @@ route.post('/api/cli/connect', async (request: any) => {
   const limit = await rateLimit(`hq-connect:${clientIp(request)}`, START_LIMIT, START_WINDOW_MS)
   if (!limit.ok)
     return json({ error: 'rate limited' }, 429, { 'Retry-After': String(limit.retryAfter) })
-  return hq.startConnect(hqRequest(request))
+  // The package answers `{ code, approveUrl }`. `confirmCode` is added here:
+  // the CLI prints it, and the approve page will not approve until the person
+  // has typed it (app/Hq/confirm.ts). It goes ONLY to the caller that asked
+  // for the code, never into the approve URL.
+  const started = await hq.startConnect(hqRequest(request))
+  if (started.status !== 201)
+    return started
+  const body = await started.json() as { code: string, approveUrl: string }
+  return json({ ...body, confirmCode: confirmationCode(body.code) }, 201)
 }).skipCsrf() // called by a CLI: no browser, no cookie, nothing to forge
 
 route.get('/api/cli/connect/{code}', async (request: any) => {
@@ -71,6 +80,15 @@ route.get('/api/v1/usage', (request: any) => hq.usage(hqRequest(request)))
 // approving hands a project's keys to whoever holds the code, which is exactly
 // what a forged cross-site POST would want. A read key or a read token is not
 // a session (userFromRequest refuses both), so neither can approve.
+//
+// It also needs the confirmation code from the terminal that started the
+// connect. Enforced here and not only in the page, so there is no request
+// that approves without it. Wrong guesses are limited per person: the code is
+// six characters, and ten tries a minute makes guessing it within the ten
+// minutes a connect lives a one in several million chance.
+const APPROVE_LIMIT = 10
+const APPROVE_WINDOW_MS = 60_000
+
 route.post('/api/cli/connect/{code}/approve', async (request: any) => {
   if (!sameOrigin(request))
     return json({ error: 'forbidden' }, 403)
@@ -78,8 +96,20 @@ route.post('/api/cli/connect/{code}/approve', async (request: any) => {
   if (!user)
     return json({ error: 'unauthorized' }, 401)
 
+  const limit = await rateLimit(`hq-approve:${Number(user.id)}`, APPROVE_LIMIT, APPROVE_WINDOW_MS)
+  if (!limit.ok)
+    return json({ error: 'Too many attempts. Wait a minute and try again.' }, 429, { 'Retry-After': String(limit.retryAfter) })
+
+  const code = String(request.params?.code ?? '')
+  if (!confirmationMatches(code, request.jsonBody?.confirm)) {
+    return json({
+      error: 'That code does not match. Enter the confirmation code your terminal is showing.',
+      reason: 'confirmation_mismatch',
+    }, 422)
+  }
+
   try {
-    const result = await hq.approveConnect(String(request.params?.code ?? ''), { id: Number(user.id) })
+    const result = await hq.approveConnect(code, { id: Number(user.id) })
     if (!result.ok) {
       return json({
         error: result.reason === 'already_approved'

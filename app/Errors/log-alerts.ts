@@ -1,7 +1,11 @@
 import type { LogRow } from '../Logs/normalize'
+import type { SeenStore } from './alert-state'
 import type { AlertIssue } from './alerts'
+import process from 'node:process'
+import { db } from '@stacksjs/database'
 import { fingerprintOf } from '../Fix/fingerprint'
 import { appUrl } from '../Support/urls'
+import { sqlSeenStore } from './alert-state'
 import { dispatchAlerts } from './alerts'
 import { allowAlert } from './limits'
 
@@ -15,23 +19,32 @@ import { allowAlert } from './limits'
  * An alert fires the first time a fingerprint at `error` or above is stored
  * for a project, and then not again for that fingerprint for a day.
  *
+ * **Off unless `LOG_ALERTS_ENABLED=true`.** Alert channels and owner emails
+ * existed long before anything called them, so switching delivery on is the
+ * moment every existing project owner starts receiving mail. That is a
+ * decision for a person to make, not a side effect of a deploy.
+ *
+ * Which fingerprints have alerted is kept in `log_alert_states`
+ * (app/Errors/alert-state.ts), so a restart or a deploy does not re-send.
+ *
  * Bounded three ways, because the ingest key is public and anything on this
  * path can be driven by a script:
  * - at most `MAX_ALERTS_PER_BATCH` distinct fingerprints are considered per
  *   request;
- * - the memory of what has been seen is capped, oldest dropped first;
- * - `allowAlert` caps deliveries per project per hour, whatever got this far.
- *
- * The memory is per process. After a restart, or on a second instance, an
- * error that is still happening alerts once more. That is the price of
- * storing no grouping state, and the hourly cap bounds it.
+ * - `allowAlert` caps deliveries per project per hour, whatever got this far;
+ * - once a project hits that cap, it is not looked at again for a minute, so
+ *   a flood of distinct errors cannot turn into a statement per request.
  */
+
+/** `LOG_ALERTS_ENABLED`: only `true` (or `1`, `on`, `yes`) sends anything. */
+export function alertsEnabled(value: unknown = process.env.LOG_ALERTS_ENABLED): boolean {
+  return ['true', '1', 'on', 'yes'].includes(String(value ?? '').trim().toLowerCase())
+}
 
 export const ALERT_LEVELS: ReadonlySet<string> = new Set(['error', 'critical', 'alert', 'emergency'])
 export const MAX_ALERTS_PER_BATCH = 3
-/** How long a fingerprint stays quiet after it alerts. */
-export const QUIET_MS = 24 * 60 * 60 * 1000
-const MAX_REMEMBERED = 20_000
+/** How long a project is left alone after it hits the hourly cap. */
+export const CAPPED_BACKOFF_MS = 60_000
 const MAX_TITLE = 200
 
 export interface AlertCandidate {
@@ -74,38 +87,8 @@ export function alertCandidates(projectId: string, rows: LogRow[], base: string 
   return [...found.values()]
 }
 
-export interface SeenStore {
-  /** True the first time a key is offered inside the quiet window, false after. */
-  firstSeen: (key: string, at: number) => boolean
-  /** Undo a `firstSeen` whose alert was never delivered. */
-  forget: (key: string) => void
-}
-
-/** A capped, per-process memory of which fingerprints alerted recently. */
-export function createSeenStore(quietMs: number = QUIET_MS, max: number = MAX_REMEMBERED): SeenStore {
-  const until = new Map<string, number>()
-  return {
-    firstSeen(key, at) {
-      const expiry = until.get(key)
-      if (expiry !== undefined && at < expiry)
-        return false
-      // Re-inserting moves the key to the end, so eviction is oldest first.
-      until.delete(key)
-      until.set(key, at + quietMs)
-      if (until.size > max) {
-        const oldest = until.keys().next().value
-        if (oldest !== undefined)
-          until.delete(oldest)
-      }
-      return true
-    },
-    forget(key) {
-      until.delete(key)
-    },
-  }
-}
-
 export interface LogAlertDeps {
+  enabled: () => boolean
   seen: SeenStore
   /** The per-project hourly cap. */
   allow: (projectId: string) => Promise<boolean>
@@ -114,10 +97,14 @@ export interface LogAlertDeps {
 }
 
 const defaults: LogAlertDeps = {
-  seen: createSeenStore(),
+  enabled: alertsEnabled,
+  seen: sqlSeenStore(db),
   allow: allowAlert,
   dispatch: dispatchAlerts,
 }
+
+/** Projects over the hourly cap, and until when to leave them alone. */
+const capped = new Map<string, number>()
 
 /**
  * Alert on what is new in a batch that was just stored. Answers how many
@@ -127,16 +114,25 @@ const defaults: LogAlertDeps = {
 export async function fireLogAlerts(projectId: string, rows: LogRow[], deps: LogAlertDeps = defaults): Promise<number> {
   let sent = 0
   try {
+    if (!deps.enabled())
+      return 0
     const at = (deps.now ?? Date.now)()
+    const backoff = capped.get(projectId)
+    if (backoff !== undefined) {
+      if (at < backoff)
+        return 0
+      capped.delete(projectId)
+    }
+
     for (const candidate of alertCandidates(projectId, rows)) {
-      const key = `${projectId}\u0000${candidate.fingerprint}`
-      if (!deps.seen.firstSeen(key, at))
+      if (!(await deps.seen.claim(projectId, candidate.fingerprint, at)))
         continue
       // Over the hourly cap: nothing later in this batch will pass either.
       // The fingerprint is released so it can alert once the cap lifts,
       // instead of staying quiet for a day over an alert nobody received.
       if (!(await deps.allow(projectId))) {
-        deps.seen.forget(key)
+        await deps.seen.release(projectId, candidate.fingerprint)
+        capped.set(projectId, at + CAPPED_BACKOFF_MS)
         break
       }
       await deps.dispatch(projectId, candidate.issue, 'new')

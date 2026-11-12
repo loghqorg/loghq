@@ -1,5 +1,4 @@
 import { db } from '@stacksjs/database'
-import { utcNow } from '../Support/time'
 
 /**
  * "Is this account Pro", answerable from a user id alone and cheap enough to
@@ -13,8 +12,8 @@ import { utcNow } from '../Support/time'
  * When the lookup fails the last known plan answers, and with none known the
  * account is Free. Free still ingests, so the cost of being wrong is sampling
  * past the allowance, never a refused request. Anything destructive must not
- * rely on that default: the retention prune asks `known`, which answers
- * `null` instead of guessing.
+ * rely on that default: the retention prune asks `planForPrune`, which
+ * answers `null` instead of guessing.
  */
 
 const PRO_TTL_MS = 60_000
@@ -34,8 +33,6 @@ export interface PlanResolverOptions {
 export interface PlanResolver {
   /** Cached. A project with no owner has nobody to bill and is never limited. */
   isPro: (userId: number | null | undefined) => Promise<boolean>
-  /** Uncached and strict: `null` when the lookup failed or there is no owner. */
-  known: (userId: number | null | undefined) => Promise<boolean | null>
   forget: (userId: number | null | undefined) => void
 }
 
@@ -95,21 +92,6 @@ export function createPlanResolver(options: PlanResolverOptions): PlanResolver {
     }
   }
 
-  async function known(userId: number | null | undefined): Promise<boolean | null> {
-    const id = idOf(userId)
-    if (id === null)
-      return null
-    try {
-      const pro = await options.lookup(id)
-      remember(id, pro)
-      return pro
-    }
-    catch (error) {
-      onError(error)
-      return null
-    }
-  }
-
   function forget(userId: number | null | undefined): void {
     const id = idOf(userId)
     if (id === null)
@@ -118,37 +100,115 @@ export function createPlanResolver(options: PlanResolverOptions): PlanResolver {
     lastKnown.delete(id)
   }
 
-  return { isPro, known, forget }
+  return { isPro, forget }
 }
 
 /**
- * The same rule `Payment.hasActiveSubscription(user, 'default')` applies (an
- * active or trialing `default` subscription), asked as one query that needs
- * only the id. `ends_at` is honoured so cancelling mid-period does not cut off
- * time that has been paid for. The timestamp is bound rather than `NOW()`,
- * which SQLite does not have (app/Support/time.ts).
+ * The statuses that entitle an account to Pro. The same two
+ * `@stacksjs/payments` calls `ENTITLING_STATUSES`, and the only rule in this
+ * app: the ingest, `/api/me`, the archive and the retention prune all ask
+ * `hasLiveSubscription`.
+ *
+ * Status only, deliberately. `ends_at` is NOT consulted. Stripe keeps a
+ * subscription `active` until the period it was cancelled in has run out, and
+ * the webhook copies that status, so the status already says whether the time
+ * is paid for. An `ends_at` in the past on an `active` row is stale data, not
+ * a lapsed customer, and reading it as lapsed would take Pro away from
+ * somebody who is paying.
+ */
+export const ENTITLING_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing'])
+
+/** Statuses that can only mean the subscription is over. Everything else is "maybe". */
+const ENDED_STATUSES: ReadonlySet<string> = new Set(['canceled', 'cancelled', 'incomplete_expired'])
+
+/**
+ * Whether this account has a live `default` subscription. Throws when it
+ * cannot tell. One query, answerable from an id alone, and unlike
+ * `Payment.hasActiveSubscription` it does not depend on WHICH row comes back
+ * first when an account has more than one (cancel, then resubscribe).
  */
 export async function hasLiveSubscription(userId: number): Promise<boolean> {
   const row = (await db.unsafe(
     `SELECT 1 AS live FROM subscriptions
       WHERE user_id = $1 AND type = 'default'
         AND provider_status IN ('active', 'trialing')
-        AND (ends_at IS NULL OR ends_at > $2)
       LIMIT 1`,
-    [userId, utcNow()],
+    [userId],
   ))?.[0]
   return !!row
+}
+
+export interface SubscriptionRow {
+  type?: unknown
+  provider_status?: unknown
+  ends_at?: unknown
+}
+
+/**
+ * The plan as the retention prune needs it: `true` Pro, `false` Free, and
+ * `null` for anything in between. Pure.
+ *
+ * `false` here means "nothing in this account's billing history could be read
+ * as paying": no subscription at all, or only ones that have unambiguously
+ * ended. Anything else that is not plainly Pro answers `null`, and the prune
+ * skips on `null`. That covers every way the entitlement rule above and a
+ * different reading of the same rows could disagree:
+ *
+ * - a status that is neither entitling nor ended (`past_due`, `unpaid`,
+ *   `paused`, `incomplete`, or one this code has never seen);
+ * - an ended subscription whose `ends_at` is still in the future, or cannot
+ *   be parsed: the period may still be paid for;
+ * - an entitling subscription of a type other than `default`.
+ */
+export function pruneVerdict(subscriptions: SubscriptionRow[], now: Date = new Date()): boolean | null {
+  let ambiguous = false
+  for (const subscription of subscriptions) {
+    const status = String(subscription.provider_status ?? '').trim().toLowerCase()
+    const isDefault = String(subscription.type ?? 'default') === 'default'
+    if (ENTITLING_STATUSES.has(status)) {
+      if (isDefault)
+        return true
+      ambiguous = true
+      continue
+    }
+    if (!ENDED_STATUSES.has(status)) {
+      ambiguous = true
+      continue
+    }
+    if (subscription.ends_at != null && subscription.ends_at !== '') {
+      const raw = subscription.ends_at
+      const text = raw instanceof Date ? raw.toISOString() : String(raw)
+      // Stored as `YYYY-MM-DD HH:MM:SS` in UTC (app/Support/time.ts).
+      const ends = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`)
+      if (Number.isNaN(ends) || ends > now.getTime())
+        ambiguous = true
+    }
+  }
+  return ambiguous ? null : false
+}
+
+/**
+ * `pruneVerdict` over this account's subscriptions. `null` when they cannot
+ * be read, when there is no owner, or when the verdict is ambiguous.
+ */
+export async function planForPrune(userId: number | null | undefined): Promise<boolean | null> {
+  const id = idOf(userId)
+  if (id === null)
+    return null
+  try {
+    const found = await db.unsafe('SELECT type, provider_status, ends_at FROM subscriptions WHERE user_id = $1', [id])
+    return pruneVerdict(Array.isArray(found) ? found : [])
+  }
+  catch (error) {
+    console.error('[billing] subscriptions could not be read for the retention prune:', error instanceof Error ? error.message : error)
+    return null
+  }
 }
 
 const resolver = createPlanResolver({ lookup: hasLiveSubscription })
 
 export function isPro(userId: number | null | undefined): Promise<boolean> {
   return resolver.isPro(userId)
-}
-
-/** Strict: `null` when the plan could not be determined. */
-export function knownPlan(userId: number | null | undefined): Promise<boolean | null> {
-  return resolver.known(userId)
 }
 
 /** Drop what is cached about an account, so a plan change applies at once. */

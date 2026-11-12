@@ -11,7 +11,7 @@
 import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
 import { USAGE_HEADER } from '@stacksjs/hq/meter'
-import { admitLines, usageCounter } from '../app/Billing/meter'
+import { admitLines, primeLines, usageCounter } from '../app/Billing/meter'
 import { isPro } from '../app/Billing/pro'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
@@ -120,7 +120,10 @@ route.post('/logs', async (request: any) => {
   // are abuse bounds on a public key, not this, and they are the only reason
   // this endpoint ever tells an SDK to back off.
   const ownerId = project.owner_id == null ? null : Number(project.owner_id)
-  const verdict = admitLines(usageCounter, ownerId, await isPro(ownerId), rows.length)
+  const pro = await isPro(ownerId)
+  // A read the first time this process sees the account, nothing after.
+  await primeLines(usageCounter, ownerId)
+  const verdict = admitLines(usageCounter, ownerId, pro, rows.length)
   const kept = verdict.sampled ? rows.filter((_, i) => verdict.keep[i]) : rows
 
   // One multi-row INSERT. Inserting per entry cost a round-trip each, so a full

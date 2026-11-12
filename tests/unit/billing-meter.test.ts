@@ -1,7 +1,7 @@
 import type { UsageCounter } from '@stacksjs/hq/meter'
 import { describe, expect, test } from 'bun:test'
 import { createCounter, createMemoryCounterStore, droppedMeter, parseUsageHeader, USAGE_HEADER } from '@stacksjs/hq/meter'
-import { admitLines } from '../../app/Billing/meter'
+import { admitLines, primeLines } from '../../app/Billing/meter'
 import { FREE_LOG_LINES_PER_MONTH, LOG_LINES_METER } from '../../app/Billing/plans'
 
 const UPGRADE = 'https://loghq.test/pricing'
@@ -153,5 +153,43 @@ describe('the response header', () => {
       expect(parseUsageHeader(value)).not.toBeNull()
       expect(value).toContain(`upgrade=${encodeURIComponent(UPGRADE)}`)
     }
+  })
+})
+
+describe('after a restart', () => {
+  test('a primed counter decides the first batch from the stored total, not from zero', async () => {
+    const { counter: before, store } = meter()
+    free(before, CEILING)
+    free(before, 100)
+    await before.flush()
+
+    // A new process over the same store.
+    const after = createCounter({ store, flushMs: 0, now: () => new Date('2026-03-10T12:00:00Z') })
+    await primeLines(after, 1)
+    const verdict = free(after, 100)
+    expect(verdict).toMatchObject({ stored: 10, sampled: 90 })
+    expect(header(verdict)).toMatchObject({ used: CEILING + 20, state: 'sampled' })
+  })
+
+  test('without priming the whole first batch would be stored, which is why the route primes', async () => {
+    const { counter: before, store } = meter()
+    free(before, CEILING + 100)
+    await before.flush()
+    const after = createCounter({ store, flushMs: 0, now: () => new Date('2026-03-10T12:00:00Z') })
+    expect(free(after, 100).stored).toBe(100)
+  })
+
+  test('priming an unowned project or a failing store never rejects', async () => {
+    const { counter } = meter()
+    await primeLines(counter, null)
+    const broken = createCounter({ store: { add: async () => null, read: async () => { throw new Error('down') } }, flushMs: 0, onError: () => {} })
+    await primeLines(broken, 1)
+    expect(free(broken, 3).stored).toBe(3)
+  })
+
+  test('the ingest primes before it admits', () => {
+    const route = require('node:fs').readFileSync(require('node:path').join(import.meta.dir, '..', '..', 'routes/logs.ts'), 'utf8')
+    expect(route.indexOf('await primeLines(usageCounter, ownerId)')).toBeGreaterThan(0)
+    expect(route.indexOf('await primeLines(usageCounter, ownerId)')).toBeLessThan(route.indexOf('admitLines(usageCounter, ownerId, pro, rows.length)'))
   })
 })
