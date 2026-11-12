@@ -36,6 +36,7 @@ import { getRepository } from '../../app/Fix/repository'
 import { archiveConfig } from '../../app/Archive/config'
 import { projectPlan } from '../../app/Archive/plan'
 import { archiveSummary } from '../../app/Archive/query'
+import { alertsEnabled } from '../../app/Errors/log-alerts'
 // APP_BASE is the web app (join links); INGEST_BASE is where /logs is served
 // (a separate host in local dev). Both are absolute and env-driven, falling
 // back to the local servers. See app/Support/urls.ts.
@@ -184,6 +185,9 @@ if (projectId) {
 // everything else on this page, and behind its own try/catch for the same
 // reason the repository lookup is: archive_partitions arrived in a later
 // migration, and a box that has not run it must still be able to open settings.
+// Whether automatic alert delivery is switched on (LOG_ALERTS_ENABLED). The
+// Alerts section says which, so it never promises mail that is not sent.
+const alertsLive = alertsEnabled()
 const __archiveCfg = archiveConfig()
 const retention = {
   plan: 'free',
@@ -1588,8 +1592,13 @@ onMount(() => {
       <section id="alerts" class="mb-10 scroll-mt-[84px]">
         <div class="mb-3 font-semibold text-[13px] text-subtle tracking-[0.04em] uppercase">Alerts</div>
         <p class="mb-4 text-sm text-subtle">
-          Add a Slack or Discord webhook and send a test to verify it. loghq alerts the project owner by email and every
-          enabled channel here the first time a new error-level line is logged. Repeats of the same error stay quiet for 24 hours.
+          @if (alertsLive)
+            Add a Slack or Discord webhook and send a test to verify it. loghq alerts the project owner by email and every
+            enabled channel here the first time a new error-level line is logged. Repeats of the same error stay quiet for 24 hours.
+          @else
+            Add a Slack or Discord webhook and send a test to verify it. Automatic alerts are switched off on this
+            installation, so channels you add here are saved and testable but nothing is sent on its own yet.
+          @endif
         </p>
         <div class="flex flex-col gap-2.5 mb-4">
           @forelse (channelView as c)

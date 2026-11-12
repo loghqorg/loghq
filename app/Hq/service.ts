@@ -5,7 +5,7 @@ import { usageCounter } from '../Billing/meter'
 import { LOG_LINES_METER } from '../Billing/plans'
 import { isPro } from '../Billing/pro'
 import { shouldRecordUse } from '../Support/read-key'
-import { sqlDialect } from '../Support/sql-dialect'
+import { deferredStore, detectDialect } from '../Support/sql-dialect'
 import { utcNow } from '../Support/time'
 import { appUrl } from '../Support/urls'
 import { createLoghqAdapter } from './adapter'
@@ -83,10 +83,36 @@ export const sqlProjectStore: ProjectStore = {
 
 export const loghqAdapter = createLoghqAdapter({
   projects: sqlProjectStore,
-  codes: sqlConnectCodeStore(db, { dialect: sqlDialect() }),
+  codes: deferredStore(async () => sqlConnectCodeStore(db, { dialect: await detectDialect(db) })),
   origin: appUrl,
   isPro,
   linesUsed: ownerId => usageCounter.read(ownerId, LOG_LINES_METER),
 })
 
 export const hq = createHqService(loghqAdapter)
+
+export interface PendingApproval {
+  /** The app name the caller asked to connect. Chosen by the caller, not by this account. */
+  app: string
+  /**
+   * The signed-in person's existing project of that name, if they have one.
+   * Approving reuses it and hands over the keys it ALREADY has, so the page
+   * has to say so in as many words.
+   */
+  existing: { id: string, name: string, active: boolean } | null
+}
+
+/**
+ * What the approve page shows a signed-in person about a pending code. `null`
+ * for an unknown, expired or already approved one.
+ */
+export async function describeApproval(code: string, userId: number): Promise<PendingApproval | null> {
+  const described = await hq.describeConnect(code)
+  if (!described)
+    return null
+  const project = await sqlProjectStore.findOwnedByName(userId, described.app)
+  return {
+    app: described.app,
+    existing: project ? { id: project.id, name: project.name, active: project.isActive } : null,
+  }
+}

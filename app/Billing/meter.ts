@@ -1,7 +1,7 @@
 import type { Admission, UsageCounter } from '@stacksjs/hq/meter'
 import { db } from '@stacksjs/database'
-import { createCounter, evaluate, formatUsageHeader, sqlCounterStore, USAGE_HEADER } from '@stacksjs/hq/meter'
-import { sqlDialect } from '../Support/sql-dialect'
+import { createCounter, droppedMeter, evaluate, formatUsageHeader, sqlCounterStore, USAGE_HEADER } from '@stacksjs/hq/meter'
+import { deferredStore, detectDialect } from '../Support/sql-dialect'
 import { appUrl } from '../Support/urls'
 import { LOG_LINES_METER, logLinesPerMonth } from './plans'
 
@@ -24,8 +24,31 @@ export function upgradeUrl(): string {
 }
 
 export const usageCounter: UsageCounter = createCounter({
-  store: sqlCounterStore(db, { dialect: sqlDialect() }),
+  // The dialect is asked of the database itself on the first flush, not read
+  // from configuration: see app/Support/sql-dialect.ts.
+  store: deferredStore(async () => sqlCounterStore(db, { dialect: await detectDialect(db) })),
 })
+
+/**
+ * Load an account's stored totals before its first batch is decided.
+ *
+ * `admit` never waits: the first time a process sees an account it decides
+ * from zero and loads the real total behind the request. For a service that
+ * admits one event per request that is one event. Here a request is a batch,
+ * and every line of it would be decided before the total arrived, so after
+ * each restart an account past its allowance would get up to 500 lines stored
+ * in full and a header reporting a count of a few hundred.
+ *
+ * So the route awaits this first. It costs two reads the first time a process
+ * sees an account in a month and nothing after that, and it never rejects: a
+ * failed read is logged by the counter and the batch is decided from zero, as
+ * before.
+ */
+export async function primeLines(counter: UsageCounter, ownerId: number | string | null | undefined): Promise<void> {
+  if (ownerId == null)
+    return
+  await Promise.all([counter.prime(ownerId, LOG_LINES_METER), counter.prime(ownerId, droppedMeter(LOG_LINES_METER))])
+}
 
 export interface LinesAdmission {
   /** One verdict per line, in the order given: whether to store it. */

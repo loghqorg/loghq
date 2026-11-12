@@ -1,8 +1,7 @@
 <script server>
-// Static imports, as in projects/new.stx. `hq as __hq` because it is an
-// object: without the prefix it is a server-to-client bridge candidate.
+// Static imports, as in projects/new.stx.
 import { Auth } from '@stacksjs/auth'
-import { hq as __hq } from '../../../app/Hq/service'
+import { describeApproval as __describeApproval } from '../../../app/Hq/service'
 
 useSeoMeta({
   title: 'Connect an app - loghq',
@@ -14,6 +13,11 @@ useSeoMeta({
 // URL with the code it was issued, a signed-in person confirms, and the CLI
 // collects that project's keys on its next poll. Loading the page creates
 // nothing: only the button does.
+//
+// The confirmation code is deliberately NOT rendered here. The person types
+// what their own terminal shows, and the server checks it (app/Hq/confirm.ts).
+// A page that displayed it could be agreed with by somebody who was sent the
+// link and has no terminal at all.
 const code = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '').get('code') || ''
 
 const token = (typeof cookies !== 'undefined' && cookies['auth-token']) || ''
@@ -29,12 +33,25 @@ const signedIn = !!user
 // page says the same thing for all three so it cannot be used to test codes.
 let appName = ''
 let pending = false
+// The viewer's own project of that name, if there is one. Approving reuses it
+// and shares the keys it already has, which is the thing this page must not
+// leave anyone to infer.
+let reuses = false
+let existingId = ''
+let existingName = ''
+let archived = false
 if (signedIn && code) {
   try {
-    const described = await __hq.describeConnect(code)
-    if (described) {
-      appName = described.app
+    const approval = await __describeApproval(code, Number(user.id))
+    if (approval) {
+      appName = approval.app
       pending = true
+      if (approval.existing) {
+        reuses = true
+        existingId = approval.existing.id
+        existingName = approval.existing.name
+        archived = !approval.existing.active
+      }
     }
   }
   catch { pending = false }
@@ -42,15 +59,22 @@ if (signedIn && code) {
 </script>
 
 <script client>
-// The code is read from the URL rather than handed over from the server
-// script, so no server value crosses into client code.
+// The connect code is read from the URL rather than handed over from the
+// server script, so no server value crosses into client code.
 const error = state('')
 const loading = state(false)
 const connected = state('')
+const confirm = state('')
 
-async function approve(): Promise<void> {
+async function approve(e: Event): Promise<void> {
+  e.preventDefault()
   if (loading())
     return
+  const typed = confirm().trim()
+  if (!typed) {
+    error.set('Enter the confirmation code your terminal is showing.')
+    return
+  }
   const code = new URLSearchParams(useRoute().query).get('code') || ''
   loading.set(true)
   error.set('')
@@ -59,7 +83,7 @@ async function approve(): Promise<void> {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: '{}',
+      body: JSON.stringify({ confirm: typed }),
     })
     let data: any = {}
     try { data = await res.json() }
@@ -109,20 +133,41 @@ async function approve(): Promise<void> {
       </div>
     @endif
 
-    @if (signedIn && pending)
+    @if (signedIn && pending && archived)
+      <div class="text-center">
+        <h1 class="font-semibold text-xl tracking-tight">{{ existingName }} is archived</h1>
+        <p class="mt-2 text-sm text-subtle">You already have an app called {{ existingName }}, and it is archived, so its keys are refused. Restore it in Settings, then run the connect command again.</p>
+      </div>
+    @endif
+
+    @if (signedIn && pending && !archived)
       <div :show="!!connected()" class="text-center" role="status">
         <h1 class="font-semibold text-xl tracking-tight">Connected</h1>
         <p class="mt-2 text-sm text-subtle"><span :text="connected()"></span> is connected to loghq. You can close this tab and return to your terminal.</p>
       </div>
-      <div :show="!connected()">
-        <div class="mb-6 text-center">
+      <form :show="!connected()" action="/api/cli/connect" method="POST" @submit="approve">
+        <div class="mb-5 text-center">
           <h1 class="font-semibold text-xl tracking-tight">Connect {{ appName }} to loghq?</h1>
-          <p class="mt-2 text-sm text-subtle">This creates an app called {{ appName }} in your account, or reuses the one you already have, and sends its keys to the terminal that asked.</p>
+          <p class="mt-2 text-sm text-subtle">A terminal asked to connect an app called {{ appName }} to your account.</p>
         </div>
+
+        @if (reuses)
+          <div role="note" class="mb-5 px-4 py-3 text-sm notice-box">
+            <p class="font-semibold text-ink">This shares the keys of an app you already have.</p>
+            <p class="mt-1 text-subtle">You already have an app called <span class="font-semibold text-ink">{{ existingName }}</span> (<span class="font-mono text-xs">{{ existingId }}</span>). Approving sends its existing ingest key and its read key to the terminal that asked. Whoever holds the read key can read every log line in that app.</p>
+          </div>
+        @else
+          <div role="note" class="mb-5 px-4 py-3 text-sm notice-box">
+            <p class="text-subtle">Approving creates a new app called <span class="font-semibold text-ink">{{ appName }}</span> in your account and sends its new keys to the terminal that asked.</p>
+          </div>
+        @endif
+
+        <label for="connect-confirm" class="block mb-1.5 font-medium text-muted text-xs">Confirmation code from your terminal</label>
+        <input id="connect-confirm" name="confirm" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="ABC-DEF" :model="confirm" class="mb-4 px-3.5 py-2.5 w-full font-mono text-center text-sm tracking-[0.2em] uppercase field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'connect-error' : 'connect-confirm-help'">
         <div id="connect-error" role="alert" :show="!!error()" :text="error()" class="mb-4 py-2 err-box notice-box"></div>
-        <Button type="button" size="sm" fullWidth @click="approve" :loading="loading()" :label="loading() ? 'Connecting…' : 'Approve connection'" className="auth-submit">Approve connection</Button>
-        <p class="mt-4 text-center text-subtle text-xs">Only approve this if you just ran the connect command yourself.</p>
-      </div>
+        <Button type="submit" size="sm" fullWidth :loading="loading()" :label="loading() ? 'Connecting…' : 'Approve connection'" className="auth-submit">Approve connection</Button>
+        <p id="connect-confirm-help" class="mt-4 text-center text-subtle text-xs">The command you ran printed this code. If you did not just run a connect command yourself, or you were sent this link, close this page.</p>
+      </form>
     @endif
   </div>
 </div>

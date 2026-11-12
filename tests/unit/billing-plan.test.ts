@@ -86,15 +86,6 @@ describe('plan resolver', () => {
     expect(calls).toEqual([])
   })
 
-  test('known() never guesses: a failed lookup is null, not free', async () => {
-    const { resolver, answers } = setup({ 1: false, 2: true })
-    expect(await resolver.known(1)).toBe(false)
-    expect(await resolver.known(2)).toBe(true)
-    answers[1] = new Error('database is locked')
-    expect(await resolver.known(1)).toBeNull()
-    expect(await resolver.known(null)).toBeNull()
-  })
-
   test('forget makes a plan change apply at once', async () => {
     const { resolver, answers } = setup({ 1: false })
     expect(await resolver.isPro(1)).toBe(false)

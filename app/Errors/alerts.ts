@@ -5,7 +5,8 @@ import { notifyChannels } from './channels'
 
 /**
  * Alert delivery. Fired by the ingest (app/Errors/log-alerts.ts) the first
- * time a given error-level line is seen on a project. Repeats of the same
+ * time a given error-level line is seen on a project, and only when
+ * `LOG_ALERTS_ENABLED=true`. Repeats of the same
  * line inside the quiet window never alert, so an error storm produces one
  * message, not one per line.
  *

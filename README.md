@@ -25,7 +25,7 @@ loghq is open source log management. Ship structured logs from anything that can
 - Correlates entries by `trace_id` and `request_id`, so one line expands into everything that happened around it.
 - Provides a project dashboard with level, channel, environment, and message filters over a keyset-paginated stream.
 - Bounds every field before storage and reports exactly what it dropped, so a client can reconcile what it sent.
-- Alerts the project owner by email, and any Slack or Discord channel on the project, the first time a new error-level line is logged. Repeats of the same error stay quiet for 24 hours.
+- Alerts the project owner by email, and any Slack or Discord channel on the project, the first time a new error-level line is logged, when `LOG_ALERTS_ENABLED=true`. Repeats of the same error stay quiet for 24 hours, across restarts.
 - Meters log lines per account against the plan's monthly allowance, and reports where the account stands on every ingest response.
 - Supports project members, invitations, key rotation, archiving, and deletion.
 - Runs as a hosted service or on infrastructure you control.
@@ -135,19 +135,19 @@ X-HQ-Usage: log_lines;9120;10000;warn;upgrade=https%3A%2F%2Floghq.org%2Fpricing
 
 `meter;used;limit;state;upgrade=<url>`, where `state` is `ok`, `warn` (from 80%), `over` (past the allowance, still stored) or `sampled` (past 120%). The body's `sampled` count is how many lines of that request were not stored. A project's read key reads the same standing from `GET /api/v1/usage`.
 
-Free projects' lines older than the retention window are removed nightly (`PruneFreeRetention` in `app/Scheduler.ts`, or the archive run when object storage is configured).
+Free projects' lines stored longer ago than the retention window are removed nightly by `PruneFreeRetention` (`app/Scheduler.ts`), or by the archive run when object storage is configured. The prune is off until `RETENTION_PRUNE_ENABLED` is set: `dry-run` logs what it would delete per project and deletes nothing, `true` deletes. Age is the time the server stored the line, never the timestamp the client sent, and a project whose owner's plan is unknown or ambiguous is skipped.
 
 ### Connecting an app from the CLI
 
 `buddy hq:connect` uses three endpoints from `@stacksjs/hq/service`, mounted in `routes/hq.ts`:
 
 ```
-POST /api/cli/connect            -> 201 { code, approveUrl }
+POST /api/cli/connect            -> 201 { code, approveUrl, confirmCode }
 GET  /api/cli/connect/{code}     -> 200 { status: "pending" } | 200 { status: "approved", project, ingestKey, readKey, dashboardUrl } once | 404 { status: "expired" }
 GET  /api/v1/usage               -> 200 [{ meter, used, limit, period, state, upgradeUrl }]   (Authorization: Bearer <read key>)
 ```
 
-The person approves on `/cli/connect?code=...` while signed in. Approving creates a project named after the app, or reuses the one the account already has by that name, with its existing keys.
+The person approves on `/cli/connect?code=...` while signed in, by typing the `confirmCode` their terminal printed. The page never displays that code, so a link that reaches somebody without the terminal cannot be approved by clicking through. Approving creates a project named after the app, or reuses the one the account already has by that name with its existing keys, and the page says which before the person approves.
 
 **[docs/reference/ingest.md](./docs/reference/ingest.md) is the full wire contract**: every field, every limit, the retry semantics for each status code, and what a client library is expected to handle. It is written to be implementable from scratch in any language.
 
@@ -176,6 +176,7 @@ Start with `.env.example`. These are the settings most installations need to rev
 | Queue | `QUEUE_DRIVER`, `QUEUE_CONCURRENCY`, `QUEUE_WORKER_CONCURRENCY` |
 | Billing | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | Ingest quotas | `TRUSTED_PROXY_HOPS`, plus Redis settings if you want quotas shared across instances |
+| Plan enforcement | `RETENTION_PRUNE_ENABLED` (`dry-run` or `true`), `LOG_ALERTS_ENABLED` |
 
 Do not commit plaintext environment secrets. The deployment workflow reconstructs `.env.keys` from GitHub environment secrets and uses the committed encrypted environment files.
 
