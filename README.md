@@ -25,6 +25,8 @@ loghq is open source log management. Ship structured logs from anything that can
 - Correlates entries by `trace_id` and `request_id`, so one line expands into everything that happened around it.
 - Provides a project dashboard with level, channel, environment, and message filters over a keyset-paginated stream.
 - Bounds every field before storage and reports exactly what it dropped, so a client can reconcile what it sent.
+- Alerts the project owner by email, and any Slack or Discord channel on the project, the first time a new error-level line is logged. Repeats of the same error stay quiet for 24 hours.
+- Meters log lines per account against the plan's monthly allowance, and reports where the account stands on every ingest response.
 - Supports project members, invitations, key rotation, archiving, and deletion.
 - Runs as a hosted service or on infrastructure you control.
 
@@ -32,8 +34,7 @@ loghq is open source log management. Ship structured logs from anything that can
 
 Honest about the gaps, because the alternative wastes your time:
 
-- **No client SDKs.** Ingest is plain HTTP today — see [Send a log](#send-a-log). The install snippets on the project settings page reference packages that are not published yet.
-- **Alert delivery is unwired.** Alert channels can be configured and stored, and `app/Errors/alerts.ts` implements delivery, but nothing calls it.
+- **One published SDK.** [`@loghq/stacks`](https://www.npmjs.com/package/@loghq/stacks) streams a Stacks application's `log` facade here, and `@stacksjs/logging` registers it when `LOGHQ_KEY` is set. Everything else speaks plain HTTP: see [Send a log](#send-a-log). The PHP and Laravel snippets on the project settings page reference packages that are not published yet.
 - **No grouping or fingerprinting.** loghq is a stream, not an issue tracker. Correlation ids are join keys, deliberately not grouping keys.
 
 ## How it works
@@ -104,7 +105,49 @@ await fetch('http://localhost:3108/logs', {
 })
 ```
 
-A `201` returns `{ ok, stored, dropped, skipped }`. Check those counts — a `201` does not mean every entry landed, and this is the only signal that some did not.
+From a Stacks application, use the SDK instead. Set `LOGHQ_KEY` and the framework's logging config registers the transport, or declare it yourself:
+
+```ts
+// config/logging.ts
+import { loghqTransport } from '@loghq/stacks'
+
+export default {
+  transports: [loghqTransport({ key: process.env.LOGHQ_KEY, environment: process.env.APP_ENV })],
+}
+```
+
+A `201` returns `{ ok, stored, dropped, skipped, sampled }`. Check those counts: a `201` does not mean every entry landed, and this is the only signal that some did not.
+
+## Plans and usage
+
+The limits live in one file, [`app/Billing/plans.ts`](./app/Billing/plans.ts). The pricing page prints them and the ingest and the retention prune enforce them, so the copy and the behaviour cannot drift.
+
+| | Free | Pro |
+| --- | --- | --- |
+| Log lines per month | 10,000 | Unlimited |
+| Retention | 30 days | Full |
+
+The unit is the log line, counted per account across its projects: a batch of 50 lines is 50. Going over the allowance never fails a request, because an SDK would only retry it. Lines are stored in full up to 120% of the allowance, then one line in ten is kept until the month (UTC) rolls over. Every ingest response says where the account stands:
+
+```text
+X-HQ-Usage: log_lines;9120;10000;warn;upgrade=https%3A%2F%2Floghq.org%2Fpricing
+```
+
+`meter;used;limit;state;upgrade=<url>`, where `state` is `ok`, `warn` (from 80%), `over` (past the allowance, still stored) or `sampled` (past 120%). The body's `sampled` count is how many lines of that request were not stored. A project's read key reads the same standing from `GET /api/v1/usage`.
+
+Free projects' lines older than the retention window are removed nightly (`PruneFreeRetention` in `app/Scheduler.ts`, or the archive run when object storage is configured).
+
+### Connecting an app from the CLI
+
+`buddy hq:connect` uses three endpoints from `@stacksjs/hq/service`, mounted in `routes/hq.ts`:
+
+```
+POST /api/cli/connect            -> 201 { code, approveUrl }
+GET  /api/cli/connect/{code}     -> 200 { status: "pending" } | 200 { status: "approved", project, ingestKey, readKey, dashboardUrl } once | 404 { status: "expired" }
+GET  /api/v1/usage               -> 200 [{ meter, used, limit, period, state, upgradeUrl }]   (Authorization: Bearer <read key>)
+```
+
+The person approves on `/cli/connect?code=...` while signed in. Approving creates a project named after the app, or reuses the one the account already has by that name, with its existing keys.
 
 **[docs/reference/ingest.md](./docs/reference/ingest.md) is the full wire contract**: every field, every limit, the retry semantics for each status code, and what a client library is expected to handle. It is written to be implementable from scratch in any language.
 
@@ -158,7 +201,9 @@ Tests live in `tests/` and use Bun's test runner. The focused unit suite covers 
 | Path | Responsibility |
 | --- | --- |
 | `app/Logs/` | Storage shaping: field bounds, batch accounting, level normalization |
-| `app/Errors/` | Ingest authorization, rate limits, and alert channel delivery |
+| `app/Errors/` | Ingest authorization, rate limits, and alert delivery |
+| `app/Billing/` | Plan limits, usage metering, and the Free retention prune |
+| `app/Hq/` | The `@stacksjs/hq` connect and usage adapter |
 | `app/Models/` | Project, log entry, subscription, user, and alert channel models |
 | `routes/` | Ingest, log stream, project, auth, and billing endpoints |
 | `resources/views/` | stx marketing pages and authenticated application views |

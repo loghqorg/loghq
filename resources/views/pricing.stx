@@ -1,4 +1,12 @@
 <script server>
+// The allowance is read from the limits file the ingest enforces
+// (app/Billing/plans.ts), so this page cannot promise a number the meter does
+// not keep. Strings, so nothing but text crosses into the template.
+import { formatAllowance, FREE_LOG_LINES_PER_MONTH, FREE_RETENTION_DAYS } from '../../app/Billing/plans'
+
+const freeLines = formatAllowance(FREE_LOG_LINES_PER_MONTH)
+const freeRetention = String(FREE_RETENTION_DAYS)
+
 useSeoMeta({
   title: 'Pricing - loghq',
   description: 'Start free and upgrade when you outgrow it, or self-host loghq for free forever on your own Postgres.',
@@ -102,8 +110,8 @@ async function upgrade(): Promise<void> {
         <p class="mt-2 text-muted text-sm">Everything you need to get started.</p>
         <ul class="mt-6 space-y-2.5 text-sm">
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> 1 project</li>
-          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> 5k errors / mo</li>
-          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> 30-day retention</li>
+          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> {{ freeLines }} log lines / mo</li>
+          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> {{ freeRetention }}-day retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Community support</li>
         </ul>
         <StxLink to="/register" class="block mt-7 py-2.5 w-full font-semibold text-center text-muted text-sm border border-line rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease]">Get started</StxLink>
@@ -121,7 +129,7 @@ async function upgrade(): Promise<void> {
         <p class="mt-2 text-muted text-sm">For teams and sites that are growing.</p>
         <ul class="mt-6 space-y-2.5 text-sm">
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Unlimited projects</li>
-          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Unlimited errors</li>
+          <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Unlimited log lines</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Full retention</li>
           <li class="flex gap-2 items-center"><span class="text-accent">✓</span> Priority support</li>
         </ul>

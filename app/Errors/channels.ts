@@ -4,9 +4,9 @@ import { appUrl } from '../Support/urls'
 /**
  * Chat alert delivery: Slack and Discord incoming webhooks.
  *
- * A project owner adds a webhook URL in settings; when an issue opens for the
- * first time or a resolved one regresses, the ingest fans the same alert out to
- * every enabled channel (alongside the owner email). Delivery is best-effort —
+ * A project owner adds a webhook URL in settings; the first time a given
+ * error-level line is logged (app/Errors/log-alerts.ts), the ingest fans the
+ * same alert out to every enabled channel (alongside the owner email). Delivery is best-effort —
  * callers fire-and-forget so a slow or failing webhook never touches the ingest
  * path — and gated by the per-project alert throttle upstream, so a flood can't
  * turn into a chat-spam bomb.
@@ -24,6 +24,8 @@ export interface ChannelIssue {
   level?: string | null
   environment?: string | null
   count?: number
+  /** Where "open" leads. Defaults to the dashboard. */
+  url?: string
 }
 
 // SSRF guard. These webhook URLs are POSTed server-side, so an attacker who
@@ -70,22 +72,20 @@ export function validateWebhook(type: string, rawUrl: string): { ok: boolean, er
 const COLOR_NEW = 0xE11D48
 const COLOR_REGRESSION = 0xF59E0B
 
-function issueUrl(id: string): string {
-  // 'test' is the sentinel id used by sendTestAlert; there's no real issue to
-  // open, so send the reader to the dashboard rather than a dead link.
-  if (!id || id === 'test')
-    return `${DASHBOARD_BASE}/dashboard`
-  return `${DASHBOARD_BASE}/issue/${id}`
+function issueUrl(issue: ChannelIssue): string {
+  // The caller knows which project the line belongs to and passes the link.
+  // sendTestAlert has no line to open, so it lands on the dashboard.
+  return issue.url || `${DASHBOARD_BASE}/dashboard`
 }
 
 function heading(kind: AlertKind): string {
-  return kind === 'regression' ? 'Regression' : 'New issue'
+  return kind === 'regression' ? 'Regression' : 'New error'
 }
 
 function intro(kind: AlertKind): string {
   return kind === 'regression'
-    ? 'An issue you resolved is happening again.'
-    : 'A new issue was just captured.'
+    ? 'An error that had gone quiet is happening again.'
+    : 'A new error was just logged.'
 }
 
 function factList(projectName: string, issue: ChannelIssue, kind: AlertKind): Array<[string, string]> {
@@ -103,7 +103,7 @@ function factList(projectName: string, issue: ChannelIssue, kind: AlertKind): Ar
 }
 
 function slackPayload(projectName: string, issue: ChannelIssue, kind: AlertKind): unknown {
-  const url = issueUrl(issue.id)
+  const url = issueUrl(issue)
   const facts = factList(projectName, issue, kind)
   return {
     // Fallback text drives the notification/preview; blocks render the card.
@@ -122,7 +122,7 @@ function discordPayload(projectName: string, issue: ChannelIssue, kind: AlertKin
   return {
     embeds: [{
       title: truncate(issue.title, 240),
-      url: issueUrl(issue.id),
+      url: issueUrl(issue),
       description: intro(kind),
       color: kind === 'regression' ? COLOR_REGRESSION : COLOR_NEW,
       fields: facts.map(([name, value]) => ({ name, value: truncate(value, 1000) || '—', inline: name !== 'Where' })),
@@ -190,7 +190,7 @@ export async function notifyChannels(projectId: string, issue: ChannelIssue, kin
 export async function sendTestAlert(type: ChannelType, webhookUrl: string, projectName: string): Promise<boolean> {
   const sample: ChannelIssue = {
     id: 'test',
-    title: 'loghq test alert — your integration works 🎉',
+    title: 'loghq test alert: your integration works 🎉',
     culprit: 'settings › alerts',
     level: 'info',
     environment: 'test',
