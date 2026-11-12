@@ -1,9 +1,8 @@
 name: CI
 
-# Checks only. Deploying is deploy.yml, which triggers on the production branch
-# alone. The comments here used to claim main deployed to prod, PRs deployed to
-# dev and beta tags went to stage; none of that was true, and there is no dev or
-# stage box to deploy to.
+# Checks only. Deploying is deploy.yml, which runs on the same push to main and
+# gates itself on these checks. PRs and tags deploy nothing, and there is no dev
+# or stage box to deploy to.
 on:
   push:
     branches:
