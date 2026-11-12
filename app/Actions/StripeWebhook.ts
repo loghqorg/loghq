@@ -17,7 +17,7 @@ import { response } from '@stacksjs/router'
 
 /**
  * Upsert the local subscription row from a Stripe subscription event so
- * `Payment.hasActiveSubscription(user, 'default')` reflects Pro access. The
+ * `hasLiveSubscription` (app/Billing/pro.ts) reflects Pro access. The
  * subscription's `customer` maps back to the local user via `users.stripe_id`
  * (set during checkout).
  */

@@ -38,6 +38,7 @@ const config: BunPressOptions = {
         ] },
         { text: 'Reference', items: [
           { text: 'Ingest API', link: '/reference/ingest' },
+          { text: 'Read API', link: '/reference/read' },
           { text: 'Dashboard API', link: '/reference/api' },
           { text: 'CLI', link: '/reference/cli' },
         ] },

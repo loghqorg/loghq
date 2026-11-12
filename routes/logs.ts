@@ -10,12 +10,19 @@
 
 import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
+import { USAGE_HEADER } from '@stacksjs/hq/meter'
+import { admitLines, primeLines, usageCounter } from '../app/Billing/meter'
+import { isPro } from '../app/Billing/pro'
 import { authorizeIngest } from '../app/Errors/ingest'
 import { rateLimit } from '../app/Errors/limits'
-import { extractEntries, LEVELS, MAX_BATCH, MAX_CORRELATION, normalizeBatch } from '../app/Logs/normalize'
+import { fireLogAlerts } from '../app/Errors/log-alerts'
+import { extractEntries, MAX_BATCH, normalizeBatch } from '../app/Logs/normalize'
+import { cursorAtHorizon, cursorOf, decodeCursor, encodeCursor, forwardQuery, newEntryId, pageLimit, receiveStamp, STREAM_COLS, streamFilters } from '../app/Logs/query'
+import { claimTail, SSE_HEADERS, tailStart, tailStream } from '../app/Logs/tail'
 // The owner/member predicate lives in one file so these routes and the pages
 // that render the same data cannot drift on it. See app/Support/access.ts.
 import { ownsProject } from '../app/Support/access'
+import { clientIp } from '../app/Support/client-ip'
 import { healthResponse } from '../app/Support/health'
 import { projectReadAccess } from '../app/Support/request-auth'
 
@@ -31,32 +38,14 @@ const PROJECT_LIMIT = 2000
 const IP_LIMIT = 4000
 const RATE_WINDOW_MS = 10_000
 
-const TRUSTED_PROXY_HOPS = Math.max(0, Number(process.env.TRUSTED_PROXY_HOPS ?? 1))
-
-function clientIp(request: any): string {
-  const direct = request.headers?.get('x-real-ip') || request.ip || 'unknown'
-  if (TRUSTED_PROXY_HOPS === 0)
-    return direct
-  const xff = request.headers?.get('x-forwarded-for')
-  if (xff) {
-    const hops = String(xff).split(',').map((s: string) => s.trim()).filter(Boolean)
-    if (hops.length) {
-      const idx = hops.length - TRUSTED_PROXY_HOPS
-      return hops[idx >= 0 ? idx : 0]
-    }
-  }
-  return direct
-}
-
-function randomId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-}
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-LogHQ-Key',
   'Access-Control-Max-Age': '86400',
+  // Without this a browser SDK cannot read where its account stands: a
+  // cross-origin response only exposes the safelisted headers by default.
+  'Access-Control-Expose-Headers': USAGE_HEADER,
 }
 
 function json(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -96,10 +85,10 @@ route.post('/logs', async (request: any) => {
   const requestedProject = body.project ?? body.p ?? null
   let project = null
   if (requestedProject) {
-    project = (await db.unsafe('SELECT id, ingest_key, is_active FROM projects WHERE id = $1 LIMIT 1', [String(requestedProject)]))?.[0] ?? null
+    project = (await db.unsafe('SELECT id, ingest_key, is_active, owner_id FROM projects WHERE id = $1 LIMIT 1', [String(requestedProject)]))?.[0] ?? null
   }
   else if (providedKey) {
-    project = (await db.unsafe('SELECT id, ingest_key, is_active FROM projects WHERE ingest_key = $1 LIMIT 1', [String(providedKey)]))?.[0] ?? null
+    project = (await db.unsafe('SELECT id, ingest_key, is_active, owner_id FROM projects WHERE ingest_key = $1 LIMIT 1', [String(providedKey)]))?.[0] ?? null
   }
   const auth = authorizeIngest(project, providedKey)
   if (!auth.ok)
@@ -115,85 +104,101 @@ route.post('/logs', async (request: any) => {
   if (!projLimit.ok)
     return json({ error: 'rate limited' }, 429, { 'Retry-After': String(projLimit.retryAfter) })
 
-  const receivedAt = new Date().toISOString()
-  const { rows, dropped, skipped } = normalizeBatch(body, { projectId, receivedAt, newId: randomId })
+  const received = new Date()
+  const receivedAt = received.toISOString()
+  const { rows, dropped, skipped } = normalizeBatch(body, { projectId, receivedAt, newId: newEntryId })
+
+  // `created_at` is written here rather than left to the column default. The
+  // default is CURRENT_TIMESTAMP, which is whole seconds, and readers walking
+  // the stream forward order by this column (app/Logs/query.ts): a batch
+  // landing in a second a reader had already passed would be skipped.
+  const createdAt = receiveStamp(received)
+
+  // The monthly allowance (app/Billing/plans.ts), counted per LINE and per
+  // account. Past it nothing is refused: lines are stored in full to 120%,
+  // then one in ten, and the response says so in `X-HQ-Usage`. The 429s above
+  // are abuse bounds on a public key, not this, and they are the only reason
+  // this endpoint ever tells an SDK to back off.
+  const ownerId = project.owner_id == null ? null : Number(project.owner_id)
+  const pro = await isPro(ownerId)
+  // A read the first time this process sees the account, nothing after.
+  await primeLines(usageCounter, ownerId)
+  const verdict = admitLines(usageCounter, ownerId, pro, rows.length)
+  const kept = verdict.sampled ? rows.filter((_, i) => verdict.keep[i]) : rows
 
   // One multi-row INSERT. Inserting per entry cost a round-trip each, so a full
   // 500-record batch serialized into 500 of them.
-  if (rows.length)
-    await db.insertInto('log_entries').values(rows).execute()
+  if (kept.length) {
+    await db.insertInto('log_entries').values(kept.map(row => ({ ...row, created_at: createdAt }))).execute()
+    // Not awaited: a slow webhook or mail server must never hold up ingest.
+    void fireLogAlerts(projectId, kept)
+  }
 
-  // `dropped` (over MAX_BATCH) and `skipped` (no usable message) are always
-  // reported: a client that believes it delivered 600 entries has no other way
-  // to notice that 100 never landed.
-  return json({ ok: true, stored: rows.length, dropped, skipped }, 201)
+  // `dropped` (over MAX_BATCH), `skipped` (no usable message) and `sampled`
+  // (over the plan's allowance) are always reported: a client that believes it
+  // delivered 600 entries has no other way to notice that 100 never landed.
+  return json({ ok: true, stored: kept.length, dropped, skipped, sampled: verdict.sampled }, 201, verdict.headers)
 }).skipCsrf() // public ingest: SDKs POST cross-origin with no CSRF cookie
 
 // ---------------------------------------------------------------------------
 // Stream API (dashboard)
 // ---------------------------------------------------------------------------
 
-const STREAM_COLS = 'id, level, message, channel, environment, release, framework, host, timestamp, created_at, trace_id, request_id'
+// Reading is cross-origin too: a desktop app's webview is its own origin and
+// presents a read key or read token as a bearer. Allowing the header to any
+// origin is safe for the same reason it is for ingest: a bearer is not an
+// ambient credential, so a page can only send one it already holds, and the
+// wildcard origin means a browser will not attach the session cookie.
+const READ_CORS = {
+  ...CORS,
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Last-Event-ID',
+}
+const readPreflight = (): Response => new Response(null, { status: 204, headers: READ_CORS })
+
+route.options('/api/projects/{projectId}/logs', readPreflight)
+route.options('/api/projects/{projectId}/logs/tail', readPreflight)
+route.options('/api/logs/{logId}', readPreflight)
 
 route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const projectId = request.params.projectId
-  // A person who owns the project, or a read key issued for it (#14).
+  // A person who can see the project, a read key issued for it (#14), or a
+  // read token belonging to such a person.
   const access = await projectReadAccess(request, projectId, ownsProject)
   if (!access.ok)
-    return json({ error: access.error }, access.status)
+    return json({ error: access.error }, access.status, READ_CORS)
 
   const q = request.query ?? {}
-  const where: string[] = ['project_id = $1']
-  const params: any[] = [projectId]
+  const filters = streamFilters(projectId, q)
+  const limit = pageLimit(q.limit)
 
-  // Level filter: exact, or comma-separated set (e.g. ?level=error,critical).
-  // Expanded to individual placeholders (`IN ($n,$n+1,…)`) rather than a single
-  // array param — db.unsafe binds a JS array as a malformed Postgres array
-  // literal, so `= ANY($n)` fails.
-  if (q.level) {
-    const levels = String(q.level).split(',').map(s => s.trim().toLowerCase()).filter(l => LEVELS.has(l))
-    if (levels.length) {
-      const placeholders = levels.map((_, i) => `$${params.length + i + 1}`).join(',')
-      levels.forEach(l => params.push(l))
-      where.push(`level IN (${placeholders})`)
-    }
+  // Forward: entries that ARRIVED after the cursor, oldest first. This is the
+  // polling form of the live tail and shares its query, so a client can follow
+  // a project with either and get the same entries in the same order.
+  if (q.after != null && q.after !== '') {
+    if (q.before)
+      return json({ error: 'use either before or after, not both' }, 400, READ_CORS)
+    const cursor = decodeCursor(String(q.after))
+    if (!cursor)
+      return json({ error: 'invalid after cursor' }, 400, READ_CORS)
+    const forward = forwardQuery(filters, cursor, limit)
+    const logs = (await db.unsafe(forward.sql, forward.params)) ?? []
+    // Always a cursor, even for an empty page: the caller polls again with it.
+    const nextAfter = logs.length ? cursorOf(logs[logs.length - 1]) : String(q.after)
+    return json({ logs, nextAfter, hasMore: logs.length === limit }, 200, READ_CORS)
   }
-  if (q.channel) {
-    params.push(String(q.channel))
-    where.push(`channel = $${params.length}`)
-  }
-  if (q.environment) {
-    params.push(String(q.environment))
-    where.push(`environment = $${params.length}`)
-  }
-  // Correlation: "show me the rest of this trace / request". Both are backed by
-  // the partial indexes from migration 0000000010, so these stay cheap.
-  if (q.trace) {
-    params.push(String(q.trace).slice(0, MAX_CORRELATION))
-    where.push(`trace_id = $${params.length}`)
-  }
-  if (q.request) {
-    params.push(String(q.request).slice(0, MAX_CORRELATION))
-    where.push(`request_id = $${params.length}`)
-  }
-  // Full-text-ish search over the message.
-  //
-  // lower(...) LIKE lower(...), not ILIKE. ILIKE is Postgres-only and this app
-  // runs SQLite, where it is a parse error rather than a slow path: every
-  // search request through this endpoint threw. A bare LIKE would fix SQLite
-  // and quietly become case-sensitive the day this moves to Postgres, so both
-  // sides are folded instead. Same shape as the dashboard's own search.
-  if (q.q) {
-    params.push(`%${String(q.q).slice(0, 200).toLowerCase()}%`)
-    where.push(`lower(message) LIKE $${params.length}`)
-  }
+
+  const where = [...filters.where]
+  const params = [...filters.params]
   // Keyset pagination: fetch older than this timestamp cursor.
   if (q.before) {
     params.push(String(q.before))
     where.push(`timestamp < $${params.length}`)
   }
 
-  const limit = Math.min(200, Math.max(1, Number(q.limit) || 100))
+  // Taken before the read, so anything stored while the query runs is ahead of
+  // it rather than lost between this page and the first forward read.
+  const nextAfter = encodeCursor(cursorAtHorizon())
   const rows = await db.unsafe(
     `SELECT ${STREAM_COLS} FROM log_entries WHERE ${where.join(' AND ')} ORDER BY timestamp DESC LIMIT ${limit}`,
     params,
@@ -201,7 +206,42 @@ route.get('/api/projects/{projectId}/logs', async (request: any) => {
   const logs = rows ?? []
   // Next cursor = the oldest timestamp in this page.
   const nextCursor = logs.length === limit ? logs[logs.length - 1].timestamp : null
-  return json({ logs, nextCursor })
+  return json({ logs, nextCursor, nextAfter }, 200, READ_CORS)
+})
+
+// Live tail (Server-Sent Events). Same credentials and filters as the page
+// above. Starts at `Last-Event-ID` when a client is reconnecting, else `after`,
+// else the present. See app/Logs/tail.ts for the events and the limits.
+route.get('/api/projects/{projectId}/logs/tail', async (request: any) => {
+  const projectId = request.params.projectId
+  const access = await projectReadAccess(request, projectId, ownsProject)
+  if (!access.ok)
+    return json({ error: access.error }, access.status, READ_CORS)
+
+  const q = request.query ?? {}
+  const start = tailStart(request.headers?.get?.('last-event-id'), q.after)
+  if (!start.ok)
+    return json({ error: 'invalid after cursor' }, 400, READ_CORS)
+
+  const release = claimTail(projectId)
+  if (!release)
+    return json({ error: 'too many open tails' }, 429, { ...READ_CORS, 'Retry-After': '30' })
+
+  const filters = streamFilters(projectId, q)
+  const body = tailStream({
+    start: start.cursor ?? cursorAtHorizon(),
+    fetchAfter: async (cursor, limit) => {
+      const forward = forwardQuery(filters, cursor, limit)
+      return (await db.unsafe(forward.sql, forward.params)) ?? []
+    },
+    // The credential is checked again while the stream is open: a revoked key,
+    // a revoked token or a removed member stops receiving entries within
+    // REAUTHORIZE_MS instead of at the next reconnect.
+    authorize: async () => (await projectReadAccess(request, projectId, ownsProject)).ok,
+    onClose: release,
+    signal: request.signal,
+  })
+  return new Response(body, { status: 200, headers: { ...READ_CORS, ...SSE_HEADERS } })
 })
 
 route.get('/api/logs/{logId}', async (request: any) => {
@@ -215,10 +255,10 @@ route.get('/api/logs/{logId}', async (request: any) => {
   const entry = (await db.unsafe('SELECT * FROM log_entries WHERE id = $1 LIMIT 1', [logId]))?.[0]
   const access = await projectReadAccess(request, entry ? String(entry.project_id) : '', ownsProject)
   if (!access.ok)
-    return json({ error: access.error }, access.status)
+    return json({ error: access.error }, access.status, READ_CORS)
   if (!entry)
     return json({ error: 'not found' }, 404)
-  return json({ entry })
+  return json({ entry }, 200, READ_CORS)
 })
 
 // ---------------------------------------------------------------------------

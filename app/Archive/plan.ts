@@ -12,23 +12,21 @@
  */
 import { db } from '@stacksjs/database'
 import { log } from '@stacksjs/logging'
-import { Payment } from '@stacksjs/payments'
+import { hasLiveSubscription } from '../Billing/pro'
 
 export type ProjectPlan = 'pro' | 'free'
 
 /**
  * True when the project's owner holds an active or trialing subscription.
  *
- * Failure means free, never an exception. `hasActiveSubscription` reaches Stripe
- * config on the way in, and a billing outage must not stop the nightly run: the
- * cost of guessing wrong for one night is that a day's logs stay in the hot
- * database and get archived tomorrow, which is strictly better than the
- * scheduler dying. The same try/catch shape guards the call in
- * app/Actions/MeAction.ts.
+ * Failure means free, never an exception. A billing lookup that fails must not
+ * stop the nightly run: the cost of guessing wrong for one night is that a
+ * day's logs stay in the hot database and get archived tomorrow, which is
+ * strictly better than the scheduler dying. The same try/catch shape guards
+ * the call in app/Actions/MeAction.ts.
  *
- * Only `user.id` is read downstream (manageSubscription.isValid queries
- * subscriptions by user_id), so the owner row is passed as-is rather than being
- * rehydrated into a User model.
+ * The rule itself is `hasLiveSubscription` in app/Billing/pro.ts, the one
+ * definition of Pro in this app.
  */
 export async function projectOwnerIsPro(projectId: string): Promise<boolean> {
   const project = (await db.unsafe(
@@ -41,7 +39,8 @@ export async function projectOwnerIsPro(projectId: string): Promise<boolean> {
     return false
 
   try {
-    return await Payment.hasActiveSubscription({ id: ownerId } as any, 'default')
+    // The one entitlement rule in the app: app/Billing/pro.ts.
+    return await hasLiveSubscription(Number(ownerId))
   }
   catch (error) {
     log.warn(`[archive] plan lookup failed for project ${projectId}, treating as free: ${error}`)

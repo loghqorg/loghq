@@ -125,7 +125,7 @@ The project quota is charged per *entry*, so one fat batch cannot dodge it.
 ### `201` - accepted
 
 ```json
-{ "ok": true, "stored": 498, "dropped": 0, "skipped": 2 }
+{ "ok": true, "stored": 498, "dropped": 0, "skipped": 2, "sampled": 0 }
 ```
 
 | Field | Meaning |
@@ -133,10 +133,36 @@ The project quota is charged per *entry*, so one fat batch cannot dodge it.
 | `stored` | Rows written |
 | `dropped` | Entries past the 500 cap - **never examined**. Resend them |
 | `skipped` | Entries examined and rejected as unusable (null, or no `message`). Resending will not help; fix the payload |
+| `sampled` | Entries not stored because the account is past its plan's monthly allowance. **Do not resend them** |
 
-`stored + dropped + skipped` equals the number of entries you sent. **Check
+`stored + dropped + skipped + sampled` equals the number of entries you sent. **Check
 these.** A `201` does not mean everything landed, and this is the only signal
 that some of it did not.
+
+### Plan allowance: `X-HQ-Usage`
+
+Every `201` carries the account's standing against its monthly log line
+allowance:
+
+```text
+X-HQ-Usage: log_lines;9120;10000;warn;upgrade=https%3A%2F%2Floghq.org%2Fpricing
+```
+
+`meter;used;limit;state;upgrade=<percent-encoded url>`. `limit` is `unlimited`
+on a paid plan. `state` is one of:
+
+| State | Meaning |
+|---|---|
+| `ok` | Under 80% of the allowance |
+| `warn` | 80% or more, still inside it |
+| `over` | Past the allowance, inside the 20% grace. Everything is still stored |
+| `sampled` | Past 120%. One entry in ten is stored, the rest are counted in `sampled` |
+
+The allowance is counted per entry and per account, across all of the
+account's projects, and resets on the first of the month (UTC). **Going over
+it is never an error status.** A `429` from this endpoint is always one of the
+abuse limits above, never the plan. The header is exposed to browsers
+(`Access-Control-Expose-Headers`).
 
 ### Errors
 
@@ -160,7 +186,9 @@ An SDK implementing this should:
 - **Split on 413**, and drop a single entry that still fails alone.
 - **Clip client-side** to the limits above, so the server is not silently
   truncating data you could have summarized better.
-- **Reconcile `stored`/`dropped`/`skipped`** and surface a warning locally.
+- **Reconcile `stored`/`dropped`/`skipped`/`sampled`** and surface a warning locally.
+- **Read `X-HQ-Usage`** and tell the developer once when `state` is `over` or
+  `sampled`. Never retry or queue sampled entries.
 - **Never let transport failures re-enter your own logger** - that recurses.
 - **Send `sdk: { name, version }`.** It is the only version signal loghq gets,
   and the only way to attribute a bad payload shape to a client release.

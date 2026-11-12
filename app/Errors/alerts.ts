@@ -4,15 +4,16 @@ import { appUrl } from '../Support/urls'
 import { notifyChannels } from './channels'
 
 /**
- * Issue alerts. Fired by the ingest for the two moments worth a human's
- * attention: an issue's FIRST occurrence, and a resolved issue coming back
- * (regression). Repeat occurrences only bump the counter and never alert, so
- * an error storm produces exactly one message.
+ * Alert delivery. Fired by the ingest (app/Errors/log-alerts.ts) the first
+ * time a given error-level line is seen on a project, and only when
+ * `LOG_ALERTS_ENABLED=true`. Repeats of the same
+ * line inside the quiet window never alert, so an error storm produces one
+ * message, not one per line.
  *
- * `dispatchAlerts` fans a single alert out to every destination — the owner
- * email plus any Slack/Discord channels on the project. Alerts are best-effort:
- * callers fire-and-forget so a slow or failing transport can never delay or
- * break the ingest path.
+ * `dispatchAlerts` fans a single alert out to every destination: the owner
+ * email plus any Slack/Discord channels on the project. Alerts are
+ * best-effort: callers fire-and-forget so a slow or failing transport can
+ * never delay or break the ingest path.
  */
 
 const DASHBOARD_BASE = appUrl()
@@ -26,6 +27,8 @@ export interface AlertIssue {
   level?: string | null
   environment?: string | null
   count?: number
+  /** Where "open" leads. Defaults to the project's stream. */
+  url?: string
 }
 
 export async function notifyIssueOpened(projectId: string, issue: AlertIssue, kind: AlertKind): Promise<void> {
@@ -37,8 +40,8 @@ export async function notifyIssueOpened(projectId: string, issue: AlertIssue, ki
     return
 
   const projectName = owner.project_name || projectId
-  const url = `${DASHBOARD_BASE}/issue/${issue.id}`
-  const heading = kind === 'regression' ? 'Regression' : 'New issue'
+  const url = issue.url ?? `${DASHBOARD_BASE}/dashboard?project=${encodeURIComponent(projectId)}`
+  const heading = kind === 'regression' ? 'Regression' : 'New error'
   const subject = `[loghq] ${heading} in ${projectName}: ${issue.title}`
 
   const facts: Array<[string, string]> = [
@@ -53,8 +56,8 @@ export async function notifyIssueOpened(projectId: string, issue: AlertIssue, ki
     facts.push(['Occurrences', String(issue.count)])
 
   const intro = kind === 'regression'
-    ? 'An issue you resolved is happening again.'
-    : 'A new issue was just captured.'
+    ? 'An error that had gone quiet is happening again.'
+    : 'A new error was just logged.'
 
   const text = [
     intro,
@@ -74,7 +77,7 @@ export async function notifyIssueOpened(projectId: string, issue: AlertIssue, ki
   <p style="margin:0 0 16px;font-size:16px;font-weight:600">${escapeHtml(issue.title)}</p>
   <table style="border-collapse:collapse;font-size:13px;margin-bottom:20px">${rows}</table>
   <a href="${url}" style="display:inline-block;background:#e11d48;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px">Open in loghq</a>
-  <p style="margin:20px 0 0;font-size:12px;color:#97a1b2">You get this because you own ${escapeHtml(projectName)} on loghq. Repeat occurrences of the same issue will not email you again.</p>
+  <p style="margin:20px 0 0;font-size:12px;color:#97a1b2">You get this because you own ${escapeHtml(projectName)} on loghq. Repeats of the same error will not alert you again for 24 hours.</p>
 </div>`
 
   await mail.send({ to: String(owner.email), subject, text, html })

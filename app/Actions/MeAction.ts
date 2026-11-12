@@ -2,8 +2,8 @@ import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
 import { getTwoFactorState } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
-import { Payment } from '@stacksjs/payments'
 import { response } from '@stacksjs/router'
+import { hasLiveSubscription } from '../Billing/pro'
 import { userFromRequest } from '../Support/request-auth'
 
 /**
@@ -26,7 +26,8 @@ export default new Action({
 
     let pro = false
     try {
-      pro = await Payment.hasActiveSubscription(user as any, 'default')
+      // The one entitlement rule in the app: app/Billing/pro.ts.
+      pro = await hasLiveSubscription(Number((user as any).id))
     }
     catch {
       pro = false

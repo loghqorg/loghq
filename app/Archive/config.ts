@@ -12,6 +12,7 @@
  * Storage, Cloudflare R2, MinIO, or AWS with nothing but different env values.
  */
 import { env } from '@stacksjs/env'
+import { FREE_RETENTION_DAYS } from '../Billing/plans'
 
 export interface ArchiveConfig {
   /** Master switch. False means the nightly job logs and returns, touching nothing. */
@@ -60,7 +61,9 @@ export function archiveConfig(): ArchiveConfig {
     useSsl: env.ARCHIVE_S3_USE_SSL !== false,
     urlStyle: env.ARCHIVE_S3_URL_STYLE === 'vhost' ? 'vhost' : 'path',
     prefix: String(env.ARCHIVE_S3_PREFIX ?? 'logs').replace(/^\/+|\/+$/g, ''),
-    hotWindowDays: num(env.ARCHIVE_HOT_WINDOW_DAYS, 30),
+    // Defaults to the retention the Free plan is sold with, so the hot window
+    // and the pricing page move together (app/Billing/plans.ts).
+    hotWindowDays: num(env.ARCHIVE_HOT_WINDOW_DAYS, FREE_RETENTION_DAYS),
     deleteAfterVerify: env.ARCHIVE_DELETE_AFTER_VERIFY !== false,
     freePruneGraceDays: num(env.ARCHIVE_FREE_PRUNE_GRACE_DAYS, 7),
     caCertFile: String(env.ARCHIVE_S3_CA_CERT_FILE ?? ''),

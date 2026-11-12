@@ -229,6 +229,110 @@ onMount(() => {
     })
   })
 })
+
+// Read tokens: one read-only credential for every project this person can see,
+// so a desktop app following several projects holds one secret instead of a
+// read key per project (app/Support/read-token.ts). The token itself comes
+// back once, from the create call, and is held in `newToken` only until the
+// page is left; the list afterwards carries a name and the last four characters.
+interface ReadTokenRow { id: string, name: string, token_hint: string | null, last_used_at: string | null, expires_at: string | null, created_at: string | null }
+
+const readTokens = state<ReadTokenRow[]>([])
+const tokenName = state('')
+const tokenBusy = state(false)
+const tokenError = state('')
+const newToken = state('')
+const tokenCopied = state(false)
+const revokingToken = state('')
+
+const hasTokens = (): boolean => readTokens().length > 0
+
+function tokenMeta(t: ReadTokenRow): string {
+  const used = t.last_used_at ? `last used ${fmtDate(`${t.last_used_at.replace(' ', 'T')}Z`)}` : 'never used'
+  return `ends in ${t.token_hint || '....'}, ${used}`
+}
+
+const revokeLabel = (t: ReadTokenRow): string => (revokingToken() === t.id ? 'Revoking...' : 'Revoke')
+
+async function loadReadTokens(): Promise<void> {
+  try {
+    const res = await fetch('/api/read-tokens', { credentials: 'same-origin' })
+    if (!res.ok)
+      return
+    const body = await res.json().catch(() => ({})) as { tokens?: ReadTokenRow[] }
+    readTokens.set(body.tokens ?? [])
+  }
+  catch {}
+}
+
+async function createReadToken(e: SubmitEvent): Promise<void> {
+  e.preventDefault()
+  if (tokenBusy())
+    return
+  tokenBusy.set(true)
+  tokenError.set('')
+  try {
+    const res = await fetch('/api/read-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name: tokenName() }),
+    })
+    const body = await res.json().catch(() => ({})) as { token?: string, error?: string }
+    if (!res.ok || !body.token) {
+      tokenError.set(body.error || 'Could not create a token. Please try again.')
+      return
+    }
+    newToken.set(body.token)
+    tokenCopied.set(false)
+    tokenName.set('')
+    await loadReadTokens()
+  }
+  catch {
+    tokenError.set('Could not reach the server. Check your connection and try again.')
+  }
+  finally {
+    tokenBusy.set(false)
+  }
+}
+
+async function copyNewToken(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(newToken())
+    tokenCopied.set(true)
+  }
+  catch {
+    tokenError.set('Could not copy. Select the token and copy it by hand.')
+  }
+}
+
+async function revokeReadToken(t: ReadTokenRow): Promise<void> {
+  if (revokingToken())
+    return
+  if (!(await stxConfirm(`Revoke "${t.name}"? Anything using it stops reading at once.`)))
+    return
+  revokingToken.set(t.id)
+  tokenError.set('')
+  try {
+    const res = await fetch(`/api/read-tokens/${encodeURIComponent(t.id)}`, { method: 'DELETE', credentials: 'same-origin' })
+    if (!res.ok) {
+      tokenError.set('Could not revoke that token. Please try again.')
+      return
+    }
+    newToken.set('')
+    await loadReadTokens()
+  }
+  catch {
+    tokenError.set('Could not reach the server. Check your connection and try again.')
+  }
+  finally {
+    revokingToken.set('')
+  }
+}
+
+onMount(() => {
+  void loadReadTokens()
+})
 </script>
 {{-- Explicit layout binding — ch.3.4. See login.stx for why the implicit
     path is not relied on. --}}
@@ -385,6 +489,43 @@ onMount(() => {
             <input id="twofa-off-password" name="password" type="password" autocomplete="current-password" required placeholder="Confirm your password" :model="twoFaPassword" class="px-3.5 py-2.5 max-w-sm w-full text-sm field">
           </div>
           <button type="submit" :disabled="twoFaBusy()" :aria-busy="twoFaBusy()" class="px-4 py-2 font-semibold text-danger text-sm border border-line rounded-[10px] hover:border-danger active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :text="twoFaBusy() ? 'Turning off...' : 'Turn off two-factor'">Turn off two-factor</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="read-tokens" class="mb-5 bg-panel border border-line rounded-[14px]" :show="signedIn()">
+      <div class="px-6 py-4">
+        <div class="font-mono text-subtle text-xs tracking-wide uppercase">Read tokens</div>
+        <p class="mt-2 text-muted text-sm">A read token lets an app on your machine read the logs of every project you can see. It cannot change anything, and revoking it here stops it at once.</p>
+
+        <div role="alert" :show="!!tokenError()" :text="tokenError()" class="mt-3 py-2 err-box notice-box"></div>
+
+        {{-- Shown once, straight after creating. Only a hash is stored, so
+            there is no "show again": a lost token is revoked and replaced. --}}
+        <div class="mt-3" :show="!!newToken()">
+          <p class="mb-1 font-mono text-subtle text-xs tracking-wide uppercase">New token (copy it now, it is not shown again)</p>
+          <div class="flex flex-wrap gap-2 items-center">
+            <code class="flex-1 px-3 py-2 min-w-[220px] break-all font-mono text-sm bg-[color-mix(in_srgb,var(--text-3)_8%,transparent)] border border-line rounded-[10px]" :text="newToken()"></code>
+            <button type="button" @click="copyNewToken" class="px-4 py-2 font-semibold text-ink text-sm border border-line rounded-[10px] hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :text="tokenCopied() ? 'Copied' : 'Copy'">Copy</button>
+          </div>
+        </div>
+
+        <ul class="mt-3" :show="hasTokens()">
+          <li x-for="t in readTokens()" class="flex gap-3 items-center justify-between py-2.5 [border-top:1px_solid_var(--border)]">
+            <span class="min-w-0">
+              <span class="block font-semibold text-sm truncate" x-text="t.name"></span>
+              <span class="block mt-0.5 font-mono text-subtle text-xs" x-text="tokenMeta(t)"></span>
+            </span>
+            <button type="button" @click="revokeReadToken(t)" :disabled="revokingToken() === t.id" x-text="revokeLabel(t)" class="px-3 py-1.5 font-semibold text-danger text-xs border border-line rounded-[10px] hover:border-danger active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]">Revoke</button>
+          </li>
+        </ul>
+
+        <form @submit="createReadToken" class="flex flex-wrap gap-2.5 items-end mt-4">
+          <div class="flex-1 min-w-[200px]">
+            <label for="read-token-name" class="block mb-1.5 font-medium text-muted text-xs">Name</label>
+            <input id="read-token-name" name="name" type="text" maxlength="80" autocomplete="off" placeholder="Work laptop" :model="tokenName" class="px-3.5 py-2.5 w-full text-sm field">
+          </div>
+          <button type="submit" :disabled="tokenBusy()" :aria-busy="tokenBusy()" class="px-4 py-2.5 font-semibold text-accent-ink text-sm bg-accent hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] rounded-[10px] active:translate-y-px [transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease]" :text="tokenBusy() ? 'Creating...' : 'Create token'">Create token</button>
         </form>
       </div>
     </section>
