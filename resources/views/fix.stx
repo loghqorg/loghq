@@ -12,7 +12,7 @@
 // `__`-prefixed where the binding is an object, per ch.5.8: every top-level
 // binding is a server-to-client bridge candidate and publishes into the page
 // source as soon as its name appears anywhere in a client block.
-import { Auth } from '@stacksjs/auth'
+import { sessionUser } from '../../app/Support/request-auth'
 import { analyzeEntry, fixableLevel, fixConfigured, fixEnabled, latestRunFor, parseAnalysis } from '../../app/Fix/analyze'
 import { fingerprintOf } from '../../app/Fix/fingerprint'
 import { logEntryFor } from '../../app/Support/access'
@@ -30,7 +30,7 @@ const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') :
 let __user: any = null
 if (__token) {
   try {
-    __user = await Auth.getUserFromToken(__token)
+    __user = await sessionUser(__token)
   }
   catch (err) {
     // Fail closed but leave a trace, matching dashboard.stx: a database blip
@@ -136,7 +136,7 @@ const action = async ({ form, cookies: reqCookies }: { form: Record<string, stri
   // Re-authenticated from the request the action was handed. A POST is its own
   // request and the session can expire between drawing the button and pressing
   // it.
-  const actor = token ? await Auth.getUserFromToken(token) : null
+  const actor = token ? await sessionUser(token) : null
   if (!actor)
     return { redirect: '/login' }
 

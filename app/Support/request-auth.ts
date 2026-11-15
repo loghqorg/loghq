@@ -12,36 +12,62 @@
  * and the HttpOnly `auth-token` cookie (config.auth.defaultTokenName), which is
  * what the dashboard has after signing in.
  */
-import { Auth } from '@stacksjs/auth'
+import { Auth, findToken } from '@stacksjs/auth'
 import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { authorizeRead, looksLikeReadKey, shouldRecordUse } from './read-key'
-import { hashReadToken, looksLikeReadToken, readTokenUsable } from './read-token'
+import { READ_SCOPE } from './read-token'
 
-export async function userFromRequest(request: any): Promise<any | null> {
-  const authHeader = request.headers?.get?.('authorization') ?? ''
-  let token = request.bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
+/** What a sign-in is issued, and what a read token never carries. */
+const FULL_ACCESS = '*'
 
-  if (!token) {
-    const cookie = request.headers?.get?.('cookie') ?? ''
-    const name = (config.auth?.defaultTokenName || 'auth-token').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const m = cookie.match(new RegExp(`(?:^|;)\\s*${name}=([^;]+)`))
-    if (m)
-      token = decodeURIComponent(m[1])
-  }
+/**
+ * Whether these scopes are a full session rather than a read token.
+ *
+ * Every sign-in is issued `*` (config.auth.defaultAbilities) and a read token
+ * is created with `logs:read` alone, so `*` is what separates "this is the
+ * person" from "this may read on their behalf".
+ */
+export function isFullSession(scopes: readonly string[]): boolean {
+  return scopes.includes(FULL_ACCESS)
+}
 
-  // A read key or a read token is never a session, whichever header or cookie
-  // carried it. Refusing them here, rather than letting the lookup fail, is
-  // what keeps every route that asks for a signed-in user closed to both.
-  if (!token || looksLikeReadKey(token) || looksLikeReadToken(token))
+/** The user a token belongs to and the scopes it carries, or null. */
+async function tokenHolder(token: string): Promise<{ user: any, scopes: readonly string[] } | null> {
+  // A read key authorises one project, not a person, and is never a token.
+  if (!token || looksLikeReadKey(token))
     return null
-
   try {
-    return await Auth.getUserFromToken(token)
+    // The native lookup: it answers only for a live token (not revoked, not
+    // expired, not issued before the last password change).
+    const access = await findToken(token)
+    if (!access || (access.subjectType ?? 'users') !== 'users')
+      return null
+    const user = await Auth.getUserFromToken(token)
+    return user ? { user, scopes: access.scopes } : null
   }
   catch {
     return null
   }
+}
+
+/**
+ * The person signed in behind this token, and only a full session.
+ *
+ * This is the one place a token becomes "the user" for everything a signed-in
+ * person can do. A read token is refused here, so it cannot be put in an
+ * `auth-token` cookie or a bearer header and used as its owner. Routes, the
+ * auth middleware and the views call this rather than
+ * `Auth.getUserFromToken`, which answers for any valid token whatever its
+ * scopes (tests/unit/read-token.test.ts holds that).
+ */
+export async function sessionUser(token: string | null | undefined): Promise<any | null> {
+  const holder = await tokenHolder(String(token ?? ''))
+  return holder && isFullSession(holder.scopes) ? holder.user : null
+}
+
+export async function userFromRequest(request: any): Promise<any | null> {
+  return sessionUser(bearerFrom(request))
 }
 
 /**
@@ -65,35 +91,21 @@ function bearerFrom(request: any): string {
 /**
  * The person behind a read token, or null.
  *
- * Null covers every way a token can be no good: not shaped like one, never
- * issued, revoked, expired, or left behind by a deleted account. The caller
- * answers all of them the same way, so a guess learns nothing about which.
+ * Null covers every way a token can be no good: never issued, revoked,
+ * expired, left behind by a deleted account, or simply not a read token. The
+ * caller answers all of them the same way, so a guess learns nothing about
+ * which. A full session is not a read token and answers null here too: it is
+ * resolved by `userFromRequest`.
  *
  * Returns only the id and email, which is all `ownsProject` reads. This is
  * deliberately not a full user: nothing downstream should be able to mistake a
  * read token's bearer for a signed-in session.
  */
 export async function userFromReadToken(request: any): Promise<{ id: number, email: string } | null> {
-  const presented = bearerFrom(request)
-  if (!looksLikeReadToken(presented))
+  const holder = await tokenHolder(bearerFrom(request))
+  if (!holder || isFullSession(holder.scopes) || !holder.scopes.includes(READ_SCOPE))
     return null
-  const found = (await db.unsafe(
-    `SELECT t.id, t.user_id, t.expires_at, t.last_used_at, u.email
-    FROM read_tokens t JOIN users u ON u.id = t.user_id
-    WHERE t.token_hash = $1 LIMIT 1`,
-    [hashReadToken(presented)],
-  ))?.[0]
-  const row = found
-    ? { id: String(found.id), user_id: Number(found.user_id), expires_at: found.expires_at == null ? null : String(found.expires_at) }
-    : null
-  if (!readTokenUsable(row))
-    return null
-  const now = new Date()
-  // Same once-a-minute stamp as a read key, for the same reason: it is there so
-  // somebody can see whether a token is still in use before revoking it.
-  if (shouldRecordUse(found.last_used_at == null ? null : String(found.last_used_at), now))
-    await stamp('UPDATE read_tokens SET last_used_at = $1 WHERE id = $2', [now.toISOString().slice(0, 19).replace('T', ' '), row.id])
-  return { id: row.user_id, email: String(found.email ?? '') }
+  return { id: Number(holder.user.id), email: String(holder.user.email ?? '') }
 }
 
 export type ProjectReadAccess =
@@ -148,10 +160,8 @@ export async function projectReadAccess(request: any, projectId: string, ownsPro
   // A person's read token: whatever its owner can read right now. Membership
   // is checked on every request, exactly as it is for a session, so leaving a
   // project ends the token's access to it without the token changing.
-  if (looksLikeReadToken(presented)) {
-    const reader = await userFromReadToken(request)
-    if (!reader)
-      return { ok: false, status: 401, error: 'unauthorized' }
+  const reader = await userFromReadToken(request)
+  if (reader) {
     if (!(await ownsProject(reader, projectId)))
       return { ok: false, status: 404, error: 'not found' }
     return { ok: true, as: 'token', user: reader }

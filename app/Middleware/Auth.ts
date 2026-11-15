@@ -3,6 +3,7 @@ import { Auth } from '@stacksjs/auth'
 import { config } from '@stacksjs/config'
 import { HttpError } from '@stacksjs/error-handling'
 import { log } from '@stacksjs/logging'
+import { sessionUser } from '../Support/request-auth'
 import { Middleware } from '@stacksjs/router'
 
 export default new Middleware({
@@ -14,8 +15,11 @@ export default new Middleware({
 
     if (bearerToken) {
       log.debug(`[middleware:auth] Validating bearer token`)
-      const isValid = await Auth.validateToken(bearerToken)
-      if (!isValid)
+      // A full session, not merely a valid token. `Auth.validateToken` answers
+      // for any live token whatever its scopes, so a read token would
+      // otherwise pass every auth-guarded route as its owner.
+      const user = await sessionUser(bearerToken)
+      if (!user)
         throw new HttpError(401, 'Unauthorized. Invalid token.')
 
       // Stamp the resolved user like the cookie branch below and the
@@ -24,11 +28,8 @@ export default new Middleware({
       // `.middleware('auth')` that reads `await request.user()` (e.g.
       // CreateCheckoutAction) saw undefined even after a valid bearer passed
       // here. Do NOT overwrite `request.user` itself — it is the accessor.
-      const user = await Auth.getUserFromToken(bearerToken)
-      if (user) {
-        Auth.setUser(user)
-        request._authenticatedUser = user
-      }
+      Auth.setUser(user)
+      request._authenticatedUser = user
 
       log.debug(`[middleware:auth] Bearer token valid`)
       return
@@ -48,7 +49,7 @@ export default new Middleware({
 
     if (cookieToken) {
       log.debug(`[middleware:auth] Validating login cookie`)
-      const user = await Auth.getUserFromToken(cookieToken)
+      const user = await sessionUser(cookieToken)
       if (!user)
         throw new HttpError(401, 'Unauthorized. Invalid or expired session.')
 

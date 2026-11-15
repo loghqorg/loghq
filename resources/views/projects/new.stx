@@ -2,7 +2,7 @@
 // Static imports — see login.stx for why a dynamic one inside the action loads
 // a sibling project's package. `db as __db` per ch.5.8: it is an object, so
 // without the prefix it is a server→client bridge candidate.
-import { Auth } from '@stacksjs/auth'
+import { sessionUser } from '../../../app/Support/request-auth'
 import { db as __db } from '@stacksjs/database'
 // Shared with routes/projects.ts so the two callers cannot drift on how an id
 // or an ingest key is minted.
@@ -29,7 +29,7 @@ let values: { name?: string, platform?: string } = {}
 // between drawing the form and submitting it.
 const action = async ({ form, cookies: reqCookies }: { form: Record<string, string | string[]>, cookies: Record<string, string> }) => {
   const token = reqCookies['auth-token'] || ''
-  const user = token ? await Auth.getUserFromToken(token) : null
+  const user = token ? await sessionUser(token) : null
   if (!user)
     return { redirect: '/login' }
 

@@ -7,7 +7,7 @@
 // app/Archive/query.ts so this page and the API cannot answer the same question
 // differently. The `__` prefixes and the static-import rules are load-bearing
 // for the same reasons documented at length there.
-import { Auth } from '@stacksjs/auth'
+import { sessionUser } from '../../app/Support/request-auth'
 import { db as __db } from '@stacksjs/database'
 import { archiveConfig } from '../../app/Archive/config'
 import { projectPlan } from '../../app/Archive/plan'
@@ -55,10 +55,10 @@ const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') :
 let user: AuthUser | null = null
 if (__token) {
   try {
-    user = await Auth.getUserFromToken(__token)
+    user = await sessionUser(__token)
   }
   catch (err) {
-    console.error('[auth] getUserFromToken failed:', err instanceof Error ? err.message : err)
+    console.error('[auth] sessionUser failed:', err instanceof Error ? err.message : err)
     user = null
   }
 }

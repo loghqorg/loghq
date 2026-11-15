@@ -234,8 +234,9 @@ onMount(() => {
 // so a desktop app following several projects holds one secret instead of a
 // read key per project (app/Support/read-token.ts). The token itself comes
 // back once, from the create call, and is held in `newToken` only until the
-// page is left; the list afterwards carries a name and the last four characters.
-interface ReadTokenRow { id: string, name: string, token_hint: string | null, last_used_at: string | null, expires_at: string | null, created_at: string | null }
+// page is left; the list afterwards carries its name and when it was last used.
+// It is a Stacks personal access token, so only a hash of it is stored.
+interface ReadTokenRow { id: string, name: string, last_used_at: string | null, expires_at: string | null, created_at: string | null }
 
 const readTokens = state<ReadTokenRow[]>([])
 const tokenName = state('')
@@ -249,7 +250,8 @@ const hasTokens = (): boolean => readTokens().length > 0
 
 function tokenMeta(t: ReadTokenRow): string {
   const used = t.last_used_at ? `last used ${fmtDate(`${t.last_used_at.replace(' ', 'T')}Z`)}` : 'never used'
-  return `ends in ${t.token_hint || '....'}, ${used}`
+  const until = t.expires_at ? `expires ${fmtDate(`${t.expires_at.replace(' ', 'T')}Z`)}` : 'no expiry'
+  return `${used}, ${until}`
 }
 
 const revokeLabel = (t: ReadTokenRow): string => (revokingToken() === t.id ? 'Revoking...' : 'Revoke')

@@ -7,9 +7,10 @@
  * localStorage. Each new project gets its own public `ingest_key`.
  */
 
+import { createToken, revokeTokenById, tokens } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { route } from '@stacksjs/router'
-import { userFromReadToken, userFromRequest } from '../app/Support/request-auth'
+import { isFullSession, userFromReadToken, userFromRequest } from '../app/Support/request-auth'
 import { type ChannelType, sendTestAlert, validateWebhook } from '../app/Errors/channels'
 import { joinUrl, newInviteToken, sendInviteEmail } from '../app/Invites/invites'
 import { purgeProject } from '../app/Archive/exporter'
@@ -18,7 +19,7 @@ import { log } from '@stacksjs/logging'
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
 import { newReadKey } from '../app/Support/read-key'
-import { hashReadToken, MAX_READ_TOKENS_PER_USER, newReadToken, newReadTokenId, readTokenExpiry, readTokenHint, readTokenName } from '../app/Support/read-token'
+import { MAX_READ_TOKENS_PER_USER, READ_SCOPE, readTokenExpiry, readTokenName } from '../app/Support/read-token'
 import { utcNow } from '../app/Support/time'
 import { GitHubRequestError, verifyAccess } from '../app/Fix/github'
 import {
@@ -243,19 +244,44 @@ route.delete('/api/projects/{projectId}/read-key', async (request: any) => {
 // mint or revoke read tokens: `currentUser` never resolves one to a user, so a
 // leaked token cannot be used to issue itself a successor.
 
+/** A read token as the account page lists it. Never the token itself. */
+function readTokenView(token: { id: number, name: string, createdAt: Date, updatedAt: Date, expiresAt: Date | null }): Record<string, unknown> {
+  const at = (date: Date): string => date.toISOString().slice(0, 19).replace('T', ' ')
+  // The framework stamps a token as it is used, so a token never used still
+  // reads its creation time: report that as "never used", not as a use.
+  const used = token.updatedAt.getTime() - token.createdAt.getTime() > 1000
+  return {
+    id: String(token.id),
+    name: token.name,
+    last_used_at: used ? at(token.updatedAt) : null,
+    expires_at: token.expiresAt ? at(token.expiresAt) : null,
+    created_at: at(token.createdAt),
+  }
+}
+
+/**
+ * This person's live read tokens.
+ *
+ * `tokens()` answers every unrevoked token an account holds, the browser
+ * sessions among them. Those carry `*` and are left out, so this list can
+ * never be used to revoke the session that is looking at it.
+ */
+async function readTokensOf(userId: number): Promise<Awaited<ReturnType<typeof tokens>>> {
+  const now = Date.now()
+  return (await tokens(userId))
+    .filter(token => !isFullSession(token.scopes) && token.scopes.includes(READ_SCOPE))
+    .filter(token => token.expiresAt == null || token.expiresAt.getTime() > now)
+}
+
 route.get('/api/read-tokens', async (request: any) => {
   const user = await currentUser(request)
   if (!user)
     return json({ error: 'unauthorized' }, 401)
-  const rows = await db.unsafe(
-    'SELECT id, name, token_hint, last_used_at, expires_at, created_at FROM read_tokens WHERE user_id = $1 ORDER BY created_at DESC, id',
-    [Number(user.id)],
-  )
-  return json({ tokens: rows ?? [] })
+  return json({ tokens: (await readTokensOf(Number(user.id))).map(readTokenView) })
 })
 
-// Issue a token. The token is in this response and nowhere afterwards: only
-// its hash is stored, so a lost one is replaced, not recovered.
+// Issue a token. The token is in this response and nowhere afterwards: the
+// framework stores only its hash, so a lost one is replaced, not recovered.
 route.post('/api/read-tokens', async (request: any) => {
   const user = await currentUser(request)
   if (!user)
@@ -266,32 +292,31 @@ route.post('/api/read-tokens', async (request: any) => {
   if (!expiry.ok)
     return json({ error: 'expires_in_days must be a positive number of days' }, 400)
 
-  const held = (await db.unsafe('SELECT COUNT(*) AS n FROM read_tokens WHERE user_id = $1', [Number(user.id)]))?.[0]
-  if (Number(held?.n ?? 0) >= MAX_READ_TOKENS_PER_USER)
+  const userId = Number(user.id)
+  if ((await readTokensOf(userId)).length >= MAX_READ_TOKENS_PER_USER)
     return json({ error: `You can hold ${MAX_READ_TOKENS_PER_USER} read tokens. Revoke one first.` }, 409)
 
-  const token = newReadToken()
-  const id = newReadTokenId()
+  // One scope, and no refresh token: a read token is replaced by creating
+  // another, and a refresh credential would be a second secret nobody uses.
   const name = readTokenName(body.name)
-  const now = utcNow()
-  await db.unsafe(
-    'INSERT INTO read_tokens (id, user_id, name, token_hash, token_hint, expires_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)',
-    [id, Number(user.id), name, hashReadToken(token), readTokenHint(token), expiry.expiresAt, now],
-  )
-  return json({ id, name, token, token_hint: readTokenHint(token), expires_at: expiry.expiresAt, created_at: now }, 201)
+  const created = await createToken(userId, name, [READ_SCOPE], { expiresAt: expiry.expiresAt, withRefreshToken: false })
+  return json({ ...readTokenView({ ...created.accessToken, name }), token: created.plainTextToken }, 201)
 }).skipCsrf()
 
-// Revoke a token. Scoped to its owner in the statement itself, so somebody
-// else's id answers the same 404 as one that never existed.
+// Revoke a token. The id is looked up in the caller's own read tokens rather
+// than trusted, so somebody else's id, or a session's, answers the same 404 as
+// one that never existed.
 route.delete('/api/read-tokens/{tokenId}', async (request: any) => {
   const user = await currentUser(request)
   if (!user)
     return json({ error: 'unauthorized' }, 401)
-  const tokenId = String(request.params.tokenId)
-  const found = (await db.unsafe('SELECT id FROM read_tokens WHERE id = $1 AND user_id = $2 LIMIT 1', [tokenId, Number(user.id)]))?.[0]
-  if (!found)
+  const tokenId = Number(request.params.tokenId)
+  const owned = Number.isSafeInteger(tokenId)
+    ? (await readTokensOf(Number(user.id))).find(token => token.id === tokenId)
+    : undefined
+  if (!owned)
     return json({ error: 'not found' }, 404)
-  await db.unsafe('DELETE FROM read_tokens WHERE id = $1 AND user_id = $2', [tokenId, Number(user.id)])
+  await revokeTokenById(owned.id)
   return json({ revoked: true })
 }).skipCsrf()
 

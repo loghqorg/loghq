@@ -1,6 +1,6 @@
 <script server>
 // Static imports, as in projects/new.stx.
-import { Auth } from '@stacksjs/auth'
+import { sessionUser } from '../../../app/Support/request-auth'
 import { describeApproval as __describeApproval } from '../../../app/Hq/service'
 
 useSeoMeta({
@@ -23,7 +23,7 @@ const code = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stx
 const token = (typeof cookies !== 'undefined' && cookies['auth-token']) || ''
 let user = null
 if (token) {
-  try { user = await Auth.getUserFromToken(token) }
+  try { user = await sessionUser(token) }
   catch { user = null }
 }
 const signedIn = !!user

@@ -21,7 +21,7 @@
 //
 // The catch below would have hidden that: an import failure becomes
 // `user = null`, which renders as signed-out rather than as an error.
-import { Auth } from '@stacksjs/auth'
+import { sessionUser } from '../../app/Support/request-auth'
 import { db as __db } from '@stacksjs/database'
 // Config-only, deliberately not app/Fix/analyze: this page renders a hundred
 // rows and calls no model, so it must not pull `@stacksjs/ai` in behind a
@@ -140,13 +140,13 @@ const __token = typeof cookies !== 'undefined' ? (cookies['auth-token'] ?? '') :
 let user: AuthUser | null = null
 if (__token) {
   try {
-    user = await Auth.getUserFromToken(__token)
+    user = await sessionUser(__token)
   }
   catch (err) {
     // Fail closed, but leave a trace. This used to be a bare `catch {}`, so a
     // database blip and a genuinely signed-out visitor were indistinguishable
     // both on the page and in the log.
-    console.error('[auth] getUserFromToken failed:', err instanceof Error ? err.message : err)
+    console.error('[auth] sessionUser failed:', err instanceof Error ? err.message : err)
     user = null
   }
 }
