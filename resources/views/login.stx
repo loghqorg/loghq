@@ -133,7 +133,10 @@ async function onVerify(e: Event): Promise<void> {
 <div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
   <div class="max-w-sm w-full">
     <div class="mb-8 text-center">
-      <StxLink to="/" class="text-2xl wordmark">loghq</StxLink>
+      <StxLink to="/" class="inline-flex flex-col gap-3 items-center no-underline" aria-label="loghq home">
+        <span class="auth-mark" aria-hidden="true">l</span>
+        <span class="text-2xl wordmark">loghq</span>
+      </StxLink>
       <p class="mt-2 text-sm text-subtle">Sign in to your account</p>
     </div>
 
@@ -143,7 +146,7 @@ async function onVerify(e: Event): Promise<void> {
 
     {{-- Step 1: credentials. A same-origin fetch, not a native POST — the
         submit is intercepted so the browser never navigates to /login itself. --}}
-    <form :show="mode() === 'credentials'" action="/api/auth/login" method="POST" @submit="onLogin" class="space-y-4">
+    <form :show="mode() === 'credentials'" action="/api/auth/login" method="POST" @submit="onLogin" class="flex flex-col gap-4">
       <div>
         <label for="login-email" class="block mb-1.5 font-medium text-muted text-xs">Email</label>
         <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" :model="email" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
@@ -167,7 +170,7 @@ async function onVerify(e: Event): Promise<void> {
     </form>
 
     {{-- Step 2: TOTP, shown only when the account has 2FA enabled. --}}
-    <form :show="mode() === 'twofa'" action="/api/auth/verify-two-factor-login" method="POST" @submit="onVerify" class="space-y-4">
+    <form :show="mode() === 'twofa'" action="/api/auth/verify-two-factor-login" method="POST" @submit="onVerify" class="flex flex-col gap-4">
       <p class="text-sm text-subtle">Enter the 6-digit code from your authenticator app.</p>
       <div>
         <label for="login-code" class="block mb-1.5 font-medium text-muted text-xs">Authentication code</label>

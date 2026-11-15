@@ -1506,6 +1506,9 @@ export default {
    */
   shortcuts: {
     'wordmark': 'font-bold tracking-[-0.03em]',
+    // The logo on the signed-out pages: the marketing nav's outlined tile and
+    // letter (.brand-mark there), sized up to sit above the wordmark.
+    'auth-mark': 'flex items-center justify-center w-11 h-11 rounded-[12px] border border-[color-mix(in_srgb,var(--accent)_36%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] text-[var(--accent)] text-[24px] font-mono font-bold leading-none select-none',
 
     'field': 'bg-canvas border border-line rounded-[10px] text-ink '
       + 'focus:outline-none focus:border-accent '
