@@ -1,57 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hashConnectCode } from '@stacksjs/hq/service'
-import { confirmationCode, confirmationMatches } from '../../app/Hq/confirm'
 
+// The code itself (its shape, how it is derived and compared) is the
+// package's, and tested there: `@stacksjs/hq` confirm. What is LogHQ's own is
+// where the code travels, which is what this covers.
 const ROOT = join(import.meta.dir, '..', '..')
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')
-const CODE = '6rKvL4SxrZnDT3j-VwO8wdaIPibVc9gtrHoujMoDHdc'
-const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-
-describe('the confirmation code', () => {
-  test('is short, readable, and the same every time for one connect code', () => {
-    const code = confirmationCode(CODE)
-    expect(code).toMatch(/^[A-HJKMNP-Z2-9]{3}-[A-HJKMNP-Z2-9]{3}$/)
-    expect(confirmationCode(CODE)).toBe(code)
-  })
-
-  test('differs between connect codes', () => {
-    const codes = new Set(Array.from({ length: 200 }, (_, i) => confirmationCode(`${CODE}${i}`)))
-    expect(codes.size).toBeGreaterThan(195)
-    expect(confirmationCode(OTHER)).not.toBe(confirmationCode(CODE))
-  })
-
-  test('is not the hash the store keeps, nor a piece of the connect code', async () => {
-    const confirm = confirmationCode(CODE).replace('-', '').toLowerCase()
-    expect((await hashConnectCode(CODE)).startsWith(confirm)).toBe(false)
-    expect(CODE.toLowerCase()).not.toContain(confirm)
-  })
-
-  test('matches what a person would type, however they type it', () => {
-    const code = confirmationCode(CODE)
-    for (const typed of [code, code.toLowerCase(), code.replace('-', ''), ` ${code} `, code.replace('-', ' ')])
-      expect(confirmationMatches(CODE, typed)).toBe(true)
-  })
-
-  test('refuses anything else', () => {
-    const code = confirmationCode(CODE)
-    for (const typed of [undefined, null, '', 'ABC-DEF', code.slice(0, 5), `${code}X`, confirmationCode(OTHER), true, 123456])
-      expect(confirmationMatches(CODE, typed)).toBe(false)
-  })
-})
 
 describe('where the confirmation code travels', () => {
   const routes = read('routes/hq.ts')
   const page = read('resources/views/cli/connect.stx')
 
+  test('the code is the package\'s, with no copy of its own here', () => {
+    expect(routes).toContain('import { confirmationCode, confirmationMatches } from \'@stacksjs/hq/service\'')
+    expect(existsSync(join(ROOT, 'app/Hq/confirm.ts'))).toBe(false)
+  })
+
   test('the CLI is given it when it starts a connect', () => {
-    expect(routes).toContain('confirmCode: confirmationCode(body.code)')
+    expect(routes).toContain('confirmCode: body.confirmCode ?? await confirmationCode(body.code)')
   })
 
   test('the approve action refuses without it, before anything is provisioned', () => {
     const approve = routes.slice(routes.indexOf('route.post(\'/api/cli/connect/{code}/approve\''))
-    expect(approve).toContain('confirmationMatches(code, request.jsonBody?.confirm)')
+    expect(approve).toContain('await confirmationMatches(code, request.jsonBody?.confirm)')
     expect(approve.indexOf('confirmationMatches(')).toBeLessThan(approve.indexOf('hq.approveConnect('))
     // After the session and Origin checks, and behind a per-person attempt limit.
     expect(approve.indexOf('sameOrigin(request)')).toBeLessThan(approve.indexOf('confirmationMatches('))

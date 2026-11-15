@@ -15,7 +15,7 @@ useSeoMeta({
 // nothing: only the button does.
 //
 // The confirmation code is deliberately NOT rendered here. The person types
-// what their own terminal shows, and the server checks it (app/Hq/confirm.ts).
+// what their own terminal shows, and the server checks it (routes/hq.ts).
 // A page that displayed it could be agreed with by somebody who was sent the
 // link and has no terminal at all.
 const code = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '').get('code') || ''
