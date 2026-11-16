@@ -773,6 +773,17 @@ export const tsCloud: TsCloudConfig = {
       // step (after .env.keys is on the box, so it can decrypt) — not here in
       // preStart, which runs before decryption is possible.
       preStart: ['bun install'],
+      // The worker that runs what the app dispatches. In production the
+      // framework queues every job to the database, and a job with nothing
+      // reading the queue never runs: a password reset email was accepted and
+      // never sent. `emails` is where the framework's mail jobs go, and it is
+      // read first. The tables are migration 0000000033.
+      //
+      // One process: the work is a handful of emails, and the worker restarts
+      // itself past 256 MB.
+      queues: [
+        { connection: 'database', queue: 'emails,default', processes: 1, timeout: 120, tries: 5, memory: 256, stopWaitSecs: 60 },
+      ],
       // A release is a fresh directory, so anything written and kept has to be
       // listed here or the next deploy silently starts from empty. For a log
       // store that would mean losing every entry on each deploy.

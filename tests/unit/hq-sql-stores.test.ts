@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createCounter, sqlCounterStore } from '@stacksjs/hq/meter'
-import { createHqService, sqlConnectCodeStore } from '@stacksjs/hq/service'
+import { confirmationCode, createHqService, sqlConnectCodeStore } from '@stacksjs/hq/service'
 import { hqServiceContract } from '@stacksjs/hq/testing'
 import { admitLines } from '../../app/Billing/meter'
 import { LOG_LINES_METER } from '../../app/Billing/plans'
@@ -214,7 +214,7 @@ describe('hq_connect_codes, as migrated', () => {
     }))
     const started = await service.handle(new Request('https://loghq.test/api/cli/connect', { method: 'POST', body: JSON.stringify({ app: 'cursio' }), headers: { 'Content-Type': 'application/json' } }))
     const { code } = await started!.json() as { code: string }
-    await service.approveConnect(code, { id: 1 })
+    await service.approveConnect(code, { id: 1 }, await confirmationCode(code))
 
     const row = db.query('SELECT * FROM hq_connect_codes').get() as Record<string, string>
     expect(row.status).toBe('approved')

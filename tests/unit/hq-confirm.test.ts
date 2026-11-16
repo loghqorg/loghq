@@ -12,22 +12,28 @@ describe('where the confirmation code travels', () => {
   const routes = read('routes/hq.ts')
   const page = read('resources/views/cli/connect.stx')
 
-  test('the code is the package\'s, with no copy of its own here', () => {
-    expect(routes).toContain('import { confirmationCode, confirmationMatches } from \'@stacksjs/hq/service\'')
+  test('the code is the service\'s, with no copy or check of its own here', () => {
+    // `@stacksjs/hq` issues the code and checks it, so the route neither
+    // derives nor compares it: there is one place it can be got wrong.
+    expect(routes).not.toContain('confirmationCode')
+    expect(routes).not.toContain('confirmationMatches')
     expect(existsSync(join(ROOT, 'app/Hq/confirm.ts'))).toBe(false)
   })
 
   test('the CLI is given it when it starts a connect', () => {
-    expect(routes).toContain('confirmCode: body.confirmCode ?? await confirmationCode(body.code)')
+    // The service's own answer, `{ code, approveUrl, confirmCode }`, unchanged.
+    const start = routes.slice(routes.indexOf('route.post(\'/api/cli/connect\','), routes.indexOf('route.get(\'/api/cli/connect/{code}\''))
+    expect(start).toContain('return hq.startConnect(hqRequest(request))')
   })
 
-  test('the approve action refuses without it, before anything is provisioned', () => {
+  test('the approve action hands the service what was typed, and answers a mismatch as one', () => {
     const approve = routes.slice(routes.indexOf('route.post(\'/api/cli/connect/{code}/approve\''))
-    expect(approve).toContain('await confirmationMatches(code, request.jsonBody?.confirm)')
-    expect(approve.indexOf('confirmationMatches(')).toBeLessThan(approve.indexOf('hq.approveConnect('))
+    expect(approve).toContain('hq.approveConnect(code, { id: Number(user.id) }, request.jsonBody?.confirm)')
+    expect(approve).toContain('result.reason === \'confirmation_mismatch\'')
+    expect(approve).toContain('}, 422)')
     // After the session and Origin checks, and behind a per-person attempt limit.
-    expect(approve.indexOf('sameOrigin(request)')).toBeLessThan(approve.indexOf('confirmationMatches('))
-    expect(approve.indexOf('hq-approve:')).toBeLessThan(approve.indexOf('confirmationMatches('))
+    expect(approve.indexOf('sameOrigin(request)')).toBeLessThan(approve.indexOf('hq.approveConnect('))
+    expect(approve.indexOf('hq-approve:')).toBeLessThan(approve.indexOf('hq.approveConnect('))
   })
 
   test('the page asks for it and never renders it', () => {
