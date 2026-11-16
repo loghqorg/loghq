@@ -18,7 +18,8 @@ import { log } from '@stacksjs/logging'
 // Shared with the page action in resources/views/projects/new.stx, so the two
 // callers cannot drift on how an id or an ingest key is minted.
 import { newIngestKey, newProjectId } from '../app/Support/projects'
-import { newReadKey } from '../app/Support/read-key'
+import { SETTINGS_READ_KEY_NAME } from '../app/Support/read-key'
+import { mintProjectToken, PROJECT_SCOPES, projectTokens, revokeProjectTokens } from '../app/Support/project-tokens'
 import { MAX_READ_TOKENS_PER_USER, READ_SCOPE, readTokenExpiry, readTokenName } from '../app/Support/read-token'
 import { utcNow } from '../app/Support/time'
 import { GitHubRequestError, verifyAccess } from '../app/Fix/github'
@@ -122,9 +123,6 @@ route.get('/api/projects', async (request: any) => {
     return json({ error: 'unauthorized' }, 401)
   const rows = await db.unsafe(
     `SELECT DISTINCT p.id, p.name, p.platform, p.ingest_key, p.is_active, p.created_at,
-            -- Whether a read key exists and when it was last used, never the
-            -- key: it is a secret, and it is shown once when it is issued.
-            (p.read_key IS NOT NULL) AS has_read_key, p.read_key_last_used_at,
             (p.owner_id = $1) AS is_owner
     FROM projects p
     LEFT JOIN project_members m ON m.project_id = p.id AND lower(m.email) = $2
@@ -132,7 +130,13 @@ route.get('/api/projects', async (request: any) => {
     ORDER BY p.created_at DESC NULLS LAST, p.id`,
     [Number(user.id), userEmail(user)],
   )
-  return json({ projects: rows ?? [] })
+  // Whether a read key exists, never the key: it is a secret, shown once when
+  // it is issued and stored only as a hash (app/Support/project-tokens.ts).
+  const projects = await Promise.all((rows ?? []).map(async (row: any) => ({
+    ...row,
+    has_read_key: (await projectTokens(String(row.id), PROJECT_SCOPES.read)).length > 0,
+  })))
+  return json({ projects })
 })
 
 // Create a project owned by the current user.
@@ -210,16 +214,17 @@ route.post('/api/projects/{projectId}/read-key', async (request: any) => {
   if (!(await ownsProject(user, projectId)))
     return json({ error: 'not found' }, 404)
 
-  const key = newReadKey()
-  // The last-used stamp belongs to the key, so a new key starts with none:
-  // leaving the old one would read as "this key was used before it existed".
-  await db.unsafe('UPDATE projects SET read_key = $1, read_key_last_used_at = NULL, updated_at = $3 WHERE id = $2', [key, projectId, utcNow()])
-  return json({ read_key: key })
+  // Issuing from settings REPLACES: every read key the project holds stops
+  // working and one new key is answered, which is what the page says it does.
+  // (`buddy hq:connect` adds a key instead, in app/Hq/adapter.ts, so a second
+  // machine does not break the first.)
+  await revokeProjectTokens(projectId, PROJECT_SCOPES.read)
+  const created = await mintProjectToken(projectId, PROJECT_SCOPES.read, SETTINGS_READ_KEY_NAME)
+  return json({ read_key: created.token })
 }).skipCsrf()
 
-// Revoke a project's read key. Owner-only. Anything still presenting it gets a
-// 404 from the read API on the next request, the same answer an unknown
-// project gets.
+// Revoke a project's read keys, all of them. Owner-only. Anything still
+// presenting one is answered 401 on its next request.
 route.delete('/api/projects/{projectId}/read-key', async (request: any) => {
   const user = await currentUser(request)
   if (!user)
@@ -228,7 +233,7 @@ route.delete('/api/projects/{projectId}/read-key', async (request: any) => {
   if (!(await ownsProject(user, projectId)))
     return json({ error: 'not found' }, 404)
 
-  await db.unsafe('UPDATE projects SET read_key = NULL, read_key_last_used_at = NULL, updated_at = $2 WHERE id = $1', [projectId, utcNow()])
+  await revokeProjectTokens(projectId, PROJECT_SCOPES.read)
   return json({ revoked: true })
 }).skipCsrf()
 
@@ -344,6 +349,10 @@ route.delete('/api/projects/{projectId}', async (request: any) => {
   if (purged.failed)
     log.warn(`[projects] deleted ${projectId} but ${purged.failed} archived objects could not be removed`)
 
+  // Its read keys first: a key for a project that no longer exists must not
+  // stay live in the framework's token table.
+  await revokeProjectTokens(projectId, PROJECT_SCOPES.read)
+  await db.unsafe('DELETE FROM project_principals WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM log_entries WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM alert_channels WHERE project_id = $1', [projectId])
   await db.unsafe('DELETE FROM project_members WHERE project_id = $1', [projectId])

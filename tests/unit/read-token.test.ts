@@ -116,10 +116,12 @@ describe('a read token only reads', () => {
     expect(resolver).toContain('sessionUser(')
   })
 
-  test('a read key is refused before any token lookup', () => {
+  test('only a person\'s token becomes a person', () => {
+    // A project's read key is a framework token too, owned by the project's
+    // principal. It is refused here by its owner type, not by its shape.
     const holder = requestAuth.slice(requestAuth.indexOf('async function tokenHolder'), requestAuth.indexOf('export async function sessionUser'))
-    expect(holder.indexOf('looksLikeReadKey(token)')).toBeGreaterThan(-1)
-    expect(holder.indexOf('looksLikeReadKey(token)')).toBeLessThan(holder.indexOf('findToken(token)'))
+    expect(holder.indexOf('!== \'users\'')).toBeGreaterThan(holder.indexOf('findToken(token)'))
+    expect(holder.indexOf('!== \'users\'')).toBeLessThan(holder.indexOf('Auth.getUserFromToken(token)'))
   })
 
   test('the read-token resolver wants the read scope and refuses a session', () => {

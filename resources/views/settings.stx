@@ -117,7 +117,7 @@ if (user) {
   try {
     // Owned projects only — settings is the owner's admin surface.
     __projectRows = (await __db.unsafe(
-      'SELECT id, name, platform, ingest_key, is_active, read_key, read_key_last_used_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
+      'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
     )) ?? []
     if (__projectRows.length === 0)
@@ -159,8 +159,8 @@ if (user) {
 
 // Template-facing projections. `ingest_key` is dropped here and nowhere else:
 // the switcher needs a project's id, name and state, never its credential.
-const projects = __projectRows.map(({ ingest_key: _ignored, read_key: _secret, ...p }) => p)
-const activeProject = __activeRow ? (({ ingest_key: _ignored, read_key: _secret, ...p }) => p)(__activeRow) : null
+const projects = __projectRows.map(({ ingest_key: _ignored, ...p }) => p)
+const activeProject = __activeRow ? (({ ingest_key: _ignored, ...p }) => p)(__activeRow) : null
 const projectId = activeProject?.id || null
 
 // The connected repository, for the Repository section below. Loaded here
@@ -261,8 +261,14 @@ const keyMask = maskKey(keyFull)
 // it is issued and never again (#14). Only whether one exists, and when it was
 // last used, so somebody can tell a live key from a forgotten one before
 // revoking it.
-const hasReadKeyInitial = !!(__activeRow && __activeRow.read_key)
-const readKeyUsedInitial = __activeRow && __activeRow.read_key_last_used_at ? String(__activeRow.read_key_last_used_at) : ''
+// A read key never reaches the page: it is a secret, shown once when it is
+// issued and stored only as a hash (app/Support/project-tokens.ts). Only how
+// many the project holds: one from this page, plus one per `buddy hq:connect`.
+let readKeyCountInitial = 0
+if (__activeRow) {
+  const { PROJECT_SCOPES, projectTokens } = await import('../../app/Support/project-tokens')
+  readKeyCountInitial = (await projectTokens(String(__activeRow.id), PROJECT_SCOPES.read)).length
+}
 
 // Framework-specific install snippet, keyed off the project's platform. Key-only
 // (Flare-style): the ingest key alone identifies the project — no project id, no DSN.
@@ -549,8 +555,7 @@ defineClientPayload({
   codeText: guide.code,
   initialKeyFull: keyFull,
   initialKeyMask: keyMask,
-  hasReadKeyInitial,
-  readKeyUsedInitial,
+  readKeyCountInitial,
 })
 
 useSeoMeta({
@@ -862,21 +867,19 @@ async function rotateKey(): Promise<void> {
 // signal only for as long as the page that issued it is open: it is never
 // rendered from the server and nothing stores it, so closing the page is the
 // end of the only copy the browser ever had.
-const hasReadKey = state(hasReadKeyInitial)
-const readKeyUsed = state(readKeyUsedInitial)
+const readKeyHeld = state(readKeyCountInitial)
+const hasReadKey = (): boolean => readKeyHeld() > 0
 const readKeyOnce = state('')
 const readKeyBusy = state(false)
 const readKeyNote = state('')
 const readKeyNoteOk = state(true)
 const copiedReadKey = state(false)
 
-/** "never", or the stamp as the browser's locale writes it. */
-const readKeyUsedLabel = (): string => {
-  const at = readKeyUsed()
-  if (!at)
-    return 'never used'
-  const when = new Date(at)
-  return Number.isNaN(when.getTime()) ? 'used recently' : `last used ${when.toLocaleString()}`
+const readKeyStatus = (): string => {
+  const held = readKeyHeld()
+  if (held === 0)
+    return 'No read key. Issue one to let a server read this project.'
+  return held === 1 ? 'A read key is active.' : `${held} read keys are active.`
 }
 
 function copyReadKey(): void {
@@ -888,7 +891,7 @@ async function issueReadKey(): Promise<void> {
   // so it asks — but only when there is something to break.
   if (hasReadKey()) {
     const ask = window.stxConfirm
-      ? window.stxConfirm('The current read key stops working immediately, and anything still using it will get 404 until you update it. Continue?', { title: 'Replace read key?', confirmText: 'Replace key', cancelText: 'Cancel', type: 'warning' })
+      ? window.stxConfirm('Every read key this project holds stops working immediately, the ones given to connected apps included, and anything still using one is refused until you update it. Continue?', { title: 'Replace read key?', confirmText: 'Replace key', cancelText: 'Cancel', type: 'warning' })
       : Promise.resolve(true)
     if (!(await Promise.resolve(ask)))
       return
@@ -903,8 +906,7 @@ async function issueReadKey(): Promise<void> {
       return
     }
     readKeyOnce.set(String(body.read_key || ''))
-    hasReadKey.set(true)
-    readKeyUsed.set('')
+    readKeyHeld.set(1)
     note(readKeyNote, readKeyNoteOk, 'Copy it now. This is the only time it is shown.', true)
   }
   catch {
@@ -915,7 +917,7 @@ async function issueReadKey(): Promise<void> {
 
 async function revokeReadKey(): Promise<void> {
   const ask = window.stxConfirm
-    ? window.stxConfirm('Anything using this key stops reading immediately. Continue?', { title: 'Revoke read key?', confirmText: 'Revoke', cancelText: 'Cancel', type: 'warning' })
+    ? window.stxConfirm('Anything using a read key for this project stops reading immediately. Continue?', { title: 'Revoke read keys?', confirmText: 'Revoke', cancelText: 'Cancel', type: 'warning' })
     : Promise.resolve(true)
   if (!(await Promise.resolve(ask)))
     return
@@ -928,8 +930,7 @@ async function revokeReadKey(): Promise<void> {
       note(readKeyNote, readKeyNoteOk, body.error || 'Could not revoke.', false)
       return
     }
-    hasReadKey.set(false)
-    readKeyUsed.set('')
+    readKeyHeld.set(0)
     readKeyOnce.set('')
     note(readKeyNote, readKeyNoteOk, 'Revoked.', true)
   }
@@ -1452,14 +1453,14 @@ onMount(() => {
           {{-- Otherwise: whether one exists, and whether it is still in use. --}}
           <div :show="!readKeyOnce()">
             <div class="flex flex-wrap gap-2 items-center">
-              <span class="flex-1 min-w-[220px] text-sm" :class="hasReadKey() ? 'text-ink' : 'text-subtle'" :text="hasReadKey() ? `A read key is active, ${readKeyUsedLabel()}.` : 'No read key. Issue one to let a server read this project.'"></span>
+              <span class="flex-1 min-w-[220px] text-sm" :class="hasReadKey() ? 'text-ink' : 'text-subtle'" :text="readKeyStatus()"></span>
               <Button variant="ghost" @click="issueReadKey" :loading="readKeyBusy()" :label="hasReadKey() ? 'Replace' : 'Issue key'" className="btn-quiet btn-sm">Issue key</Button>
               <span :show="hasReadKey()">
                 <Button variant="ghost" @click="revokeReadKey" :loading="readKeyBusy()" className="btn-danger btn-sm">Revoke</Button>
               </span>
             </div>
             <p class="mt-3.5 leading-relaxed text-subtle text-xs">
-              The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.
+              Only a hash of a key is stored, so one cannot be shown again. Each app connected with <span class="font-mono">buddy hq:connect</span> is given its own.
             </p>
           </div>
 

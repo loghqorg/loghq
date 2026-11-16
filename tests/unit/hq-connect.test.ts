@@ -5,18 +5,25 @@ import { confirmationCode, createHqService, createMemoryConnectCodeStore } from 
 import { hqServiceContract } from '@stacksjs/hq/testing'
 import { FREE_LOG_LINES_PER_MONTH } from '../../app/Billing/plans'
 import { ConnectRefusedError, createLoghqAdapter } from '../../app/Hq/adapter'
-import { looksLikeReadKey } from '../../app/Support/read-key'
 
 const ORIGIN = 'https://loghq.test'
 
-/** The `projects` table, as much of it as the adapter touches. */
-function memoryProjects(seed: HqProject[] = []): ProjectStore & { rows: HqProject[], touched: string[] } {
+/** A read key as the store keeps it: which project it reads, and whether it is still live. */
+interface IssuedKey { projectId: string, key: string, name: string, revoked: boolean }
+
+/**
+ * The `projects` table and the project's read keys, as much of both as the
+ * adapter touches. The real store mints a framework token and keeps a hash
+ * (app/Support/project-tokens.ts); this one keeps the key so a test can
+ * present it back.
+ */
+function memoryProjects(seed: HqProject[] = []): ProjectStore & { rows: HqProject[], keys: IssuedKey[] } {
   const rows = seed.map(project => ({ ...project }))
-  const touched: string[] = []
+  const keys: IssuedKey[] = []
   const byId = (id: string) => rows.find(project => project.id === id)
   return {
     rows,
-    touched,
+    keys,
     async findOwnedByName(ownerId, name) {
       const found = rows.find(project => project.ownerId === ownerId && project.name.toLowerCase() === name.toLowerCase())
       return found ? { ...found } : null
@@ -24,18 +31,18 @@ function memoryProjects(seed: HqProject[] = []): ProjectStore & { rows: HqProjec
     async create({ platform: _platform, ...project }) {
       rows.push({ ...project })
     },
-    async setReadKey(projectId, readKey) {
-      byId(projectId)!.readKey = readKey
-    },
     async setIngestKey(projectId, ingestKey) {
       byId(projectId)!.ingestKey = ingestKey
     },
-    async findByReadKey(readKey) {
-      const found = rows.find(project => project.readKey === readKey)
-      return found ? { ...found } : null
+    async issueReadKey(projectId, name) {
+      const key = `read-key-${keys.length + 1}-${globalThis.crypto.randomUUID()}`
+      keys.push({ projectId, key, name, revoked: false })
+      return key
     },
-    async touchReadKey(projectId) {
-      touched.push(projectId)
+    async findByReadKey(readKey) {
+      const issued = keys.find(entry => entry.key === readKey && !entry.revoked)
+      const found = issued ? byId(issued.projectId) : undefined
+      return found ? { ...found } : null
     },
   }
 }
@@ -101,11 +108,12 @@ describe('connect flow', () => {
       status: 'approved',
       project: { id: projects.rows[0]!.id, name: 'cursio' },
       ingestKey: projects.rows[0]!.ingestKey,
-      readKey: projects.rows[0]!.readKey,
+      readKey: projects.keys[0]!.key,
       dashboardUrl: `${ORIGIN}/dashboard?project=${projects.rows[0]!.id}`,
     })
     expect(first.body.ingestKey).toMatch(/^loghq_[0-9a-f]{64}$/)
-    expect(looksLikeReadKey(first.body.readKey)).toBe(true)
+    // Named after the app it was connected for, so it can be told apart in a list.
+    expect(projects.keys[0]).toMatchObject({ projectId: projects.rows[0]!.id, name: 'Connected: cursio' })
     expect(projects.rows[0]).toMatchObject({ ownerId: 1, isActive: true })
 
     // Collected: the code is gone for everyone, including a second poll.
@@ -134,21 +142,24 @@ describe('connect flow', () => {
     expect(projects.rows).toEqual([])
   })
 
-  test('connecting an app the account already has reuses the project and its keys', async () => {
-    const existing: HqProject = { id: 'cursio-abc123', name: 'Cursio', ownerId: 1, ingestKey: 'loghq_existing', readKey: `lhq_read_${'a'.repeat(64)}`, isActive: true }
+  test('connecting an app the account already has reuses the project and its ingest key', async () => {
+    const existing: HqProject = { id: 'cursio-abc123', name: 'Cursio', ownerId: 1, ingestKey: 'loghq_existing', isActive: true }
     const { connect, projects } = setup({ projects: [existing] })
     const grant = await connect('cursio', ALICE)
-    expect(grant).toMatchObject({ project: { id: 'cursio-abc123', name: 'Cursio' }, ingestKey: 'loghq_existing', readKey: existing.readKey })
+    expect(grant).toMatchObject({ project: { id: 'cursio-abc123', name: 'Cursio' }, ingestKey: 'loghq_existing' })
     expect(projects.rows).toHaveLength(1)
   })
 
-  test('a reused project with no read key is issued one, and keeps its ingest key', async () => {
-    const existing: HqProject = { id: 'cursio-abc123', name: 'cursio', ownerId: 1, ingestKey: 'loghq_existing', readKey: null, isActive: true }
-    const { connect, projects } = setup({ projects: [existing] })
-    const grant = await connect('cursio', ALICE)
-    expect(grant.ingestKey).toBe('loghq_existing')
-    expect(looksLikeReadKey(grant.readKey)).toBe(true)
-    expect(projects.rows[0]!.readKey).toBe(grant.readKey)
+  test('each connect is given a read key of its own, and the earlier one keeps working', async () => {
+    const { connect, usage, projects } = setup()
+    const first = await connect('cursio', ALICE)
+    // A second machine. A stored key is a hash and cannot be handed out twice,
+    // so it gets its own, and the first machine's is not rotated.
+    const second = await connect('cursio', ALICE)
+    expect(second.readKey).not.toBe(first.readKey)
+    expect(projects.keys.map(entry => entry.revoked)).toEqual([false, false])
+    expect((await usage(first.readKey)).status).toBe(200)
+    expect((await usage(second.readKey)).status).toBe(200)
   })
 
   test('two accounts connecting the same app name get separate projects', async () => {
@@ -161,7 +172,7 @@ describe('connect flow', () => {
   })
 
   test('an archived project is refused instead of handing over dead keys', async () => {
-    const archived: HqProject = { id: 'cursio-abc123', name: 'cursio', ownerId: 1, ingestKey: 'loghq_existing', readKey: null, isActive: false }
+    const archived: HqProject = { id: 'cursio-abc123', name: 'cursio', ownerId: 1, ingestKey: 'loghq_existing', isActive: false }
     const { start, service } = setup({ projects: [archived] })
     const { code } = await start('cursio')
     await expect(service.approveConnect(code, ALICE, await confirmationCode(code))).rejects.toBeInstanceOf(ConnectRefusedError)
@@ -226,11 +237,12 @@ describe('GET /api/v1/usage', () => {
     expect((await usage(grant.readKey)).status).toBe(401)
   })
 
-  test('stamps the read key as used', async () => {
+  test('a revoked read key stops reading', async () => {
     const { connect, usage, projects } = setup()
     const grant = await connect('cursio', ALICE)
-    await usage(grant.readKey)
-    expect(projects.touched).toEqual([grant.project.id])
+    expect((await usage(grant.readKey)).status).toBe(200)
+    projects.keys[0]!.revoked = true
+    expect((await usage(grant.readKey)).status).toBe(401)
   })
 })
 

@@ -14,8 +14,7 @@
  */
 import { Auth, findToken } from '@stacksjs/auth'
 import { config } from '@stacksjs/config'
-import { db } from '@stacksjs/database'
-import { authorizeRead, looksLikeReadKey, shouldRecordUse } from './read-key'
+import { PROJECT_SCOPES, projectForToken } from './project-tokens'
 import { READ_SCOPE } from './read-token'
 
 /** What a sign-in is issued, and what a read token never carries. */
@@ -34,13 +33,15 @@ export function isFullSession(scopes: readonly string[]): boolean {
 
 /** The user a token belongs to and the scopes it carries, or null. */
 async function tokenHolder(token: string): Promise<{ user: any, scopes: readonly string[] } | null> {
-  // A read key authorises one project, not a person, and is never a token.
-  if (!token || looksLikeReadKey(token))
+  if (!token)
     return null
   try {
     // The native lookup: it answers only for a live token (not revoked, not
     // expired, not issued before the last password change).
     const access = await findToken(token)
+    // A person's token only. A project's read key is a framework token too,
+    // owned by the project's principal rather than a user
+    // (app/Support/project-tokens.ts), and it is nobody's session.
     if (!access || (access.subjectType ?? 'users') !== 'users')
       return null
     const user = await Auth.getUserFromToken(token)
@@ -118,42 +119,21 @@ export type ProjectReadAccess =
  * Who may read this project: the person signed in, a key issued for it, or a
  * read token belonging to somebody who can see it.
  *
- * Order matters. A read key is checked first when one is presented, because a
- * key is scoped to a single project and answering it does not need a user
- * lookup at all. Anything that is not shaped like a read key falls through to
- * the existing user path unchanged, so the dashboard's cookie and a person's
- * bearer token behave exactly as they did.
- *
- * A key for a different project answers 404 rather than 403, matching what
- * `ownsProject` already does: a caller who cannot read a project should not be
- * able to learn that it exists.
+ * A read key is a project token carrying `project:read`
+ * (app/Support/project-tokens.ts). It is checked first, because it names its
+ * project and answering it needs no user at all. A key for a different project
+ * answers 404 rather than 403, matching what `ownsProject` already does: a
+ * caller who cannot read a project should not be able to learn that it exists.
  */
 export async function projectReadAccess(request: any, projectId: string, ownsProject: (user: any, id: string) => Promise<boolean>): Promise<ProjectReadAccess> {
   const presented = bearerFrom(request)
 
-  if (looksLikeReadKey(presented)) {
-    // db.unsafe answers an untyped row, so the columns are narrowed here rather
-    // than asserted: authorizeRead decides who may read a project and should be
-    // reading values it can see the shape of.
-    const found = (await db.unsafe(
-      'SELECT id, read_key, read_key_last_used_at, is_active FROM projects WHERE id = $1 LIMIT 1',
-      [String(projectId)],
-    ))?.[0]
-    const row = found
-      ? {
-          id: String(found.id),
-          read_key: found.read_key == null ? null : String(found.read_key),
-          read_key_last_used_at: found.read_key_last_used_at == null ? null : String(found.read_key_last_used_at),
-          is_active: found.is_active as boolean | number | null,
-        }
-      : null
-    const verdict = authorizeRead(row, presented)
-    // A key that is valid for some other project must not reveal that this one
-    // exists, so its refusal is the same 404 an unknown id gets.
-    if (!verdict.ok)
-      return verdict.status === 401 ? { ok: false, status: 404, error: 'not found' } : verdict
-    if (row)
-      await recordReadKeyUse(row)
+  const key = await projectForToken(presented, PROJECT_SCOPES.read)
+  if (key) {
+    if (key.projectId !== String(projectId))
+      return { ok: false, status: 404, error: 'not found' }
+    if (!key.isActive)
+      return { ok: false, status: 403, error: 'project inactive' }
     return { ok: true, as: 'key' }
   }
 
@@ -173,28 +153,4 @@ export async function projectReadAccess(request: any, projectId: string, ownsPro
   if (!(await ownsProject(user, projectId)))
     return { ok: false, status: 404, error: 'not found' }
   return { ok: true, as: 'user', user }
-}
-
-/** Stamp the key as used, at most once a minute — see LAST_USED_RESOLUTION_MS. */
-async function recordReadKeyUse(project: { id: string, read_key_last_used_at?: string | null }): Promise<void> {
-  const now = new Date()
-  if (!shouldRecordUse(project.read_key_last_used_at, now))
-    return
-  await stamp('UPDATE projects SET read_key_last_used_at = $1 WHERE id = $2', [now.toISOString(), String(project.id)])
-}
-
-/**
- * Write a last-used stamp without ever failing the read it rides on: the stamp
- * is an aid to revoking a credential, not part of authorising one.
- *
- * try/await, not `.catch()`. `db.unsafe` answers a thenable with no `catch`
- * method, so `db.unsafe(...).catch(() => {})` threw a TypeError before the
- * statement ran. That turned the first read with a read key in any minute into
- * a 500, which is the opposite of what the `.catch` was there to guarantee.
- */
-async function stamp(sql: string, params: unknown[]): Promise<void> {
-  try {
-    await db.unsafe(sql, params)
-  }
-  catch {}
 }

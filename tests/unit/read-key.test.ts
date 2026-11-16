@@ -1,120 +1,102 @@
 import { describe, expect, test } from 'bun:test'
-import { authorizeRead, LAST_USED_RESOLUTION_MS, looksLikeReadKey, newReadKey, sameKey, shouldRecordUse } from '../../app/Support/read-key'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { isProjectToken, PROJECT_SCOPES, PROJECT_TOKEN_LIFETIME_DAYS, PROJECT_TOKEN_OWNER, projectTokenExpiry } from '../../app/Support/project-tokens'
+import { connectReadKeyName, SETTINGS_READ_KEY_NAME } from '../../app/Support/read-key'
+import { READ_SCOPE } from '../../app/Support/read-token'
 
-const KEY = newReadKey()
-const project = { id: 'demo', read_key: KEY, is_active: true }
+const ROOT = join(import.meta.dir, '../..')
+const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8')
 
-describe('newReadKey', () => {
-  test('is prefixed and carries 256 bits of hex', () => {
-    expect(KEY.startsWith('lhq_read_')).toBe(true)
-    expect(KEY.slice('lhq_read_'.length)).toMatch(/^[0-9a-f]{64}$/)
+/** A token as the framework answers it, owned by a project's principal. */
+const projectToken = (scopes: string[]) => ({ id: 7, subjectType: PROJECT_TOKEN_OWNER, subjectId: 3, scopes })
+
+describe('isProjectToken', () => {
+  test('a read key is a principal-owned token carrying the read scope', () => {
+    expect(isProjectToken(projectToken([PROJECT_SCOPES.read]), PROJECT_SCOPES.read)).toBe(true)
   })
 
-  test('does not repeat', () => {
-    const keys = new Set(Array.from({ length: 200 }, () => newReadKey()))
-    expect(keys.size).toBe(200)
-  })
-})
-
-describe('looksLikeReadKey', () => {
-  test('accepts a key it minted', () => {
-    expect(looksLikeReadKey(KEY)).toBe(true)
+  test('a person\'s token is never a read key, whatever it carries', () => {
+    // A sign-in, a person's read token, and a user token naming the project scope.
+    expect(isProjectToken({ id: 1, subjectType: 'users', subjectId: 3, scopes: ['*'] }, PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken({ id: 1, subjectType: 'users', subjectId: 3, scopes: [READ_SCOPE] }, PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken({ id: 1, subjectType: 'users', subjectId: 3, scopes: [PROJECT_SCOPES.read] }, PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken({ id: 1, subjectId: 3, scopes: [PROJECT_SCOPES.read] }, PROJECT_SCOPES.read)).toBe(false)
   })
 
-  test('rejects anything else a bearer header might carry', () => {
-    // The prefix is what keeps a read key out of Auth.getUserFromToken, so a
-    // user's token and an ingest key must never pass for one.
-    for (const value of [
-      '',
-      null,
-      undefined,
-      'loghq_5f3a19b7c4d2e8091ab12cd34ef56ab7',
-      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig',
-      `${'lhq_read_'}${'z'.repeat(64)}`,
-      `${'lhq_read_'}${'a'.repeat(63)}`,
-      `${'lhq_read_'}${'a'.repeat(65)}`,
-      KEY.toUpperCase(),
-    ])
-      expect(looksLikeReadKey(value)).toBe(false)
+  test('full access is not a project scope', () => {
+    expect(isProjectToken(projectToken(['*']), PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken(projectToken(['*', PROJECT_SCOPES.read]), PROJECT_SCOPES.read)).toBe(false)
+  })
+
+  test('nothing, another scope, and a token with no owner id are refused', () => {
+    expect(isProjectToken(null, PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken(undefined, PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken(projectToken(['project:something-else']), PROJECT_SCOPES.read)).toBe(false)
+    expect(isProjectToken({ id: 1, subjectType: PROJECT_TOKEN_OWNER, scopes: [PROJECT_SCOPES.read] }, PROJECT_SCOPES.read)).toBe(false)
   })
 })
 
-describe('sameKey', () => {
-  test('matches an identical key and nothing else', () => {
-    expect(sameKey(KEY, KEY)).toBe(true)
-    expect(sameKey(KEY, newReadKey())).toBe(false)
-  })
-
-  test('is false on a shared prefix, not just a differing first byte', () => {
-    const other = `${KEY.slice(0, -1)}${KEY.endsWith('a') ? 'b' : 'a'}`
-    expect(sameKey(other, KEY)).toBe(false)
-  })
-
-  test('does not throw on a length mismatch', () => {
-    expect(sameKey('short', KEY)).toBe(false)
-    expect(sameKey(KEY, 'short')).toBe(false)
+describe('a read key\'s life', () => {
+  test('is the longest used here, because it runs unattended', () => {
+    const now = new Date('2026-01-01T00:00:00.000Z')
+    expect(projectTokenExpiry(now).getTime() - now.getTime()).toBe(PROJECT_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000)
   })
 })
 
-describe('authorizeRead', () => {
-  test('allows the project its own key', () => {
-    expect(authorizeRead(project, KEY)).toEqual({ ok: true })
+describe('read key names', () => {
+  test('a key given to a connected app is named after it', () => {
+    expect(connectReadKeyName('cursio')).toBe('Connected: cursio')
+    expect(connectReadKeyName('  my   app ')).toBe('Connected: my app')
+    expect(connectReadKeyName('')).toBe('Connected app')
+    expect(connectReadKeyName('x'.repeat(500)).length).toBeLessThanOrEqual('Connected: '.length + 100)
   })
 
-  test('refuses an unknown project with 404', () => {
-    expect(authorizeRead(null, KEY)).toEqual({ ok: false, status: 404, error: 'unknown project' })
-    expect(authorizeRead(undefined, KEY)).toEqual({ ok: false, status: 404, error: 'unknown project' })
-  })
-
-  test('refuses an inactive project with 403, however is_active is stored', () => {
-    // sqlite hands booleans back as 0/1.
-    expect(authorizeRead({ ...project, is_active: false }, KEY).ok).toBe(false)
-    expect(authorizeRead({ ...project, is_active: 0 }, KEY)).toEqual({ ok: false, status: 403, error: 'project inactive' })
-  })
-
-  test('refuses a project with no key issued, whatever is presented', () => {
-    // Guards `null === null`: no key configured must never authorise, not even
-    // against a caller presenting nothing.
-    for (const presented of [KEY, null, undefined, ''])
-      expect(authorizeRead({ ...project, read_key: null }, presented).ok).toBe(false)
-    expect(authorizeRead({ ...project, read_key: null }, KEY).status).toBe(403)
-  })
-
-  test('refuses another project\'s key with 401', () => {
-    expect(authorizeRead(project, newReadKey())).toEqual({ ok: false, status: 401, error: 'invalid read key' })
-  })
-
-  test('refuses an ingest key, which grants writes and must not grant reads', () => {
-    expect(authorizeRead({ ...project, read_key: KEY }, 'loghq_5f3a19b7c4d2e8091ab12cd34ef56ab7').ok).toBe(false)
-  })
-
-  test('refuses a stored value that is not a well-formed key', () => {
-    // A column hand-edited to something short must not become a weak key.
-    expect(authorizeRead({ ...project, read_key: 'x' }, 'x').ok).toBe(false)
+  test('a key issued from settings has a fixed name', () => {
+    expect(SETTINGS_READ_KEY_NAME).toBe('Read key')
   })
 })
 
-describe('shouldRecordUse', () => {
-  const now = new Date('2026-10-19T12:00:00.000Z')
+/*
+ * A read key is the framework's token, owned by the project. The app mints,
+ * lists, resolves and revokes it through @stacksjs/auth and keeps no
+ * credential of its own.
+ */
+describe('a read key is the framework\'s token', () => {
+  const support = read('app/Support/project-tokens.ts')
 
-  test('records the first use', () => {
-    expect(shouldRecordUse(null, now)).toBe(true)
-    expect(shouldRecordUse(undefined, now)).toBe(true)
+  test('minted, listed, resolved and revoked through @stacksjs/auth', () => {
+    expect(support).toContain('import { createToken, findToken, revokeTokenById, tokens } from \'@stacksjs/auth\'')
+    expect(support).toContain('tokenableType: PROJECT_TOKEN_OWNER')
+    expect(support).not.toMatch(/getRandomValues|createHash|randomUUID/)
   })
 
-  test('records again once the resolution has passed, and not before', () => {
-    const justBefore = new Date(now.getTime() - LAST_USED_RESOLUTION_MS + 1).toISOString()
-    const atResolution = new Date(now.getTime() - LAST_USED_RESOLUTION_MS).toISOString()
-    expect(shouldRecordUse(justBefore, now)).toBe(false)
-    expect(shouldRecordUse(atResolution, now)).toBe(true)
+  test('the app keeps no key column, generator or comparison', () => {
+    for (const file of ['app/Support/read-key.ts', 'app/Hq/adapter.ts', 'app/Hq/service.ts', 'app/Support/request-auth.ts', 'routes/projects.ts']) {
+      const source = read(file)
+      expect({ file, clean: !/getRandomValues\(new Uint8Array\(32\)\)|createHash|sameKey\(|\bread_key\b(?!:)/.test(source) }).toEqual({ file, clean: true })
+    }
+    expect(read('app/Models/Project.ts')).not.toContain('read_key')
   })
 
-  test('records when the stored stamp cannot be read', () => {
-    // Better an extra write than a key that never looks used.
-    expect(shouldRecordUse('not a date', now)).toBe(true)
+  test('a read is authorised against the project in the path', () => {
+    const auth = read('app/Support/request-auth.ts')
+    const readAccess = auth.slice(auth.indexOf('export async function projectReadAccess'))
+    expect(readAccess).toContain('projectForToken(presented, PROJECT_SCOPES.read)')
+    // Another project's key answers 404, an archived project's 403.
+    expect(readAccess).toContain('key.projectId !== String(projectId)')
+    expect(readAccess).toContain('!key.isActive')
   })
 
-  test('accepts a Date as well as a string', () => {
-    expect(shouldRecordUse(new Date(now.getTime() - 1000), now)).toBe(false)
+  test('a read key is never resolved to a person', () => {
+    const auth = read('app/Support/request-auth.ts')
+    const holder = auth.slice(auth.indexOf('async function tokenHolder'), auth.indexOf('export async function sessionUser'))
+    expect(holder).toContain('(access.subjectType ?? \'users\') !== \'users\'')
+  })
+
+  test('deleting a project revokes its read keys first', () => {
+    const projects = read('routes/projects.ts')
+    const handler = projects.slice(projects.indexOf('route.delete(\'/api/projects/{projectId}\', async'))
+    expect(handler.indexOf('revokeProjectTokens(projectId, PROJECT_SCOPES.read)')).toBeLessThan(handler.indexOf('DELETE FROM projects WHERE id'))
   })
 })

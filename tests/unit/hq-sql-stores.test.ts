@@ -170,6 +170,8 @@ describe('usage_counters, as migrated', () => {
 
 describe('hq_connect_codes, as migrated', () => {
   const projects = new Map<string, any>()
+  // Read keys as issued: the key, and the project it reads.
+  const keys = new Map<string, string>()
   const adapter = () => {
     const { client } = migrated('hq_connect_codes')
     return createLoghqAdapter({
@@ -184,10 +186,15 @@ describe('hq_connect_codes, as migrated', () => {
         async create({ platform: _platform, ...project }) {
           projects.set(`${project.ownerId}/${project.name.toLowerCase()}`, project)
         },
-        async setReadKey() {},
         async setIngestKey() {},
+        async issueReadKey(projectId) {
+          const key = `read-key-${keys.size + 1}-${globalThis.crypto.randomUUID()}`
+          keys.set(key, projectId)
+          return key
+        },
         async findByReadKey(readKey) {
-          return [...projects.values()].find(project => project.readKey === readKey) ?? null
+          const projectId = keys.get(readKey)
+          return [...projects.values()].find(project => project.id === projectId) ?? null
         },
       },
     })
@@ -207,8 +214,8 @@ describe('hq_connect_codes, as migrated', () => {
       projects: {
         findOwnedByName: async () => null,
         create: async () => {},
-        setReadKey: async () => {},
         setIngestKey: async () => {},
+        issueReadKey: async () => 'a-read-key',
         findByReadKey: async () => null,
       },
     }))
