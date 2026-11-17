@@ -1,4 +1,5 @@
 <script server>
+import { withConnectReturn } from '../../data/connect-return'
 // Static imports, as in projects/new.stx.
 import { sessionUser } from '../../../app/Support/request-auth'
 import { describeApproval as __describeApproval } from '../../../app/Hq/service'
@@ -19,6 +20,12 @@ useSeoMeta({
 // A page that displayed it could be agreed with by somebody who was sent the
 // link and has no terminal at all.
 const code = new URLSearchParams(typeof __stxServeSearch !== 'undefined' ? __stxServeSearch : '').get('code') || ''
+
+// Signing in comes straight back here, in this tab, where the confirmation
+// code is asked for. A sign-in that ended on the dashboard read as the connect
+// having worked, and the terminal was left waiting.
+const signInHref = withConnectReturn('/login', code)
+const registerHref = withConnectReturn('/register', code)
 
 const token = (typeof cookies !== 'undefined' && cookies['auth-token']) || ''
 let user = null
@@ -59,6 +66,8 @@ if (signedIn && code) {
 </script>
 
 <script client>
+import { withConnectReturn } from '../../data/connect-return'
+
 // The connect code is read from the URL rather than handed over from the
 // server script, so no server value crosses into client code.
 const error = state('')
@@ -89,7 +98,7 @@ async function approve(e: Event): Promise<void> {
     try { data = await res.json() }
     catch {}
     if (res.status === 401) {
-      navigate('/login', { replace: true, reload: true })
+      navigate(withConnectReturn('/login', code), { replace: true, reload: true })
       return
     }
     if (!res.ok) {
@@ -118,10 +127,10 @@ async function approve(e: Event): Promise<void> {
     @if (!signedIn)
       <div class="text-center">
         <h1 class="font-semibold text-xl tracking-tight">Sign in to connect your app</h1>
-        <p class="mt-2 text-sm text-subtle">Your terminal is waiting for you to approve this connection. Sign in, then come back to this tab and reload it.</p>
+        <p class="mt-2 text-sm text-subtle">Your terminal is waiting for you to approve this connection. Sign in and you will come straight back here to enter the confirmation code it is showing.</p>
         <div class="flex flex-col gap-3 mt-6">
-          <a href="/login" target="_blank" rel="noopener" class="block py-2.5 w-full font-semibold text-accent-ink text-center text-sm bg-accent rounded-[10px]">Sign in</a>
-          <a href="/register" target="_blank" rel="noopener" class="block py-2.5 w-full font-semibold text-center text-muted text-sm border border-line rounded-[10px]">Create an account</a>
+          <a href="{{ signInHref }}" class="block py-2.5 w-full font-semibold text-accent-ink text-center text-sm bg-accent rounded-[10px]">Sign in</a>
+          <a href="{{ registerHref }}" class="block py-2.5 w-full font-semibold text-center text-muted text-sm border border-line rounded-[10px]">Create an account</a>
         </div>
       </div>
     @endif
