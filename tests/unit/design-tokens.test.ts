@@ -81,7 +81,7 @@ describe('the claim that kept them out of the config', () => {
     expect(TOKENS).not.toBe('')
     expect(CHROME).not.toBe('')
     expect(MARKETING).not.toBe('')
-    expect(ENTRIES).toHaveLength(4)
+    expect(ENTRIES).toHaveLength(5)
   })
 })
 
@@ -218,7 +218,6 @@ describe('the declarations that have to beat a utility', () => {
     ['.seg-discord[data-sel=\'1\']', ['background: var(--discord) !important']],
     ['.dz-overlay[hidden]', ['display: none !important']],
     ['a.pill:hover, button.pill:hover', ['color: var(--text) !important']],
-    ['select.app-panel', ['padding-right: 2rem !important']],
   ]
 
   test('each one keeps its mark, in the config and in the sheet', async () => {
@@ -266,9 +265,9 @@ describe('the declarations that have to beat a utility', () => {
      * element sets.
      *
      * Per DECLARATION, not per rule. A rule-level check would let an unmarked
-     * property hide behind a marked sibling, which select.app-panel has: its
-     * padding-right is marked and its six background and appearance
-     * properties are not, correctly.
+     * property hide behind a marked sibling, which select.app-panel had
+     * before the shared select caret replaced it: its padding-right was marked
+     * and its six background and appearance properties were not, correctly.
      */
     const rules = [...CHROME.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?<=^|\})\s*([^{}@][^{}]*?)\s*\{([^{}]*)\}/g)]
     /*
@@ -315,8 +314,6 @@ describe('the declarations that have to beat a utility', () => {
       'button.pill:active { transform }',
       // .log-row carries px-5/py-2.5 only.
       'details[open] > .log-row { background }',
-      // What is left on the select once padding-right took its mark.
-      'select.app-panel { -webkit-appearance, -moz-appearance, appearance, background-repeat, background-position, background-size, background-image }',
     ])
   })
 })

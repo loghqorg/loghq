@@ -48,8 +48,9 @@ describe('date range picker CSS reaches the generated sheet', () => {
     // the dev-server merge dropped preflights outright (stacksjs/stx#1867).
     // If that ever regresses, every rule in this file goes with it.
     expect(merged.includePreflight).toBe(true)
-    // The picker, the design tokens, the app chrome, and the marketing sheet.
-    expect(appPreflights.length).toBe(4)
+    // The picker, the design tokens, the app chrome, the marketing sheet, and
+    // the select caret.
+    expect(appPreflights.length).toBe(5)
     expect(picker).toBeDefined()
     // Plus the engine's own reset, which is a preflight too.
     expect(merged.config.preflights.length).toBeGreaterThan(appPreflights.length)

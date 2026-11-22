@@ -559,7 +559,6 @@ html {
  *   summary       bare element selector plus ::-webkit-details-marker.
  *   :focus-visible a bare-element accessibility rule, not optional.
  *   .grain,       data-URI backgrounds with prefers-color-scheme variants.
- *   select.app-panel
  *   .reveal       @keyframes plus a reduced-motion variant.
  *
  * What IS expressible went the other way and is now utilities in the markup:
@@ -632,21 +631,6 @@ summary:focus-visible { outline-offset: -2px; }
   background-size: 170px 170px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 @media (prefers-reduced-motion: no-preference) { .grain { opacity: 0.032; } }
-/* Project dropdown: the native select chevron hugged the rounded border. Reset
-  the native appearance and draw our own with a comfortable inset + room for the
-  value text. Chevron is themed to --text-3 in each mode. */
-select.app-panel {
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  /* The one declaration here that a utility also sets: the element carries
-   * \`px-3\`, and layered this rule loses to it outright where it used to win
-   * on specificity. Measured: padding-right 32px -> 12px, which puts the
-   * chevron on top of the project name. The appearance and background
-   * properties have no utility on this element and stay unmarked. */
-  padding-right: 2rem !important; background-repeat: no-repeat;
-  background-position: right 0.7rem center; background-size: 13px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2397a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-}
-@media (prefers-color-scheme: dark) { select.app-panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); } }
 
 /* Log severity, driven by one data attribute rather than an inline style.
  *
@@ -1337,6 +1321,41 @@ summary:focus-visible {
 }
 `
 
+/*
+ * One caret for every single-line <select>, drawn in the text's own colour.
+ *
+ * The browser's arrow sat about 3px from the rounded border whatever the
+ * padding, because Chrome does not apply padding-right to it. Two gradients
+ * paint the caret instead: unlike an SVG in a data URI they read currentColor,
+ * so it follows light and dark (prefers-color-scheme or data-theme) with no
+ * per-theme rule. Sized in em, so the 2rem date-picker select gets a smaller
+ * caret, closer in, than a 42px form field.
+ *
+ * These are the declarations ts-css 0.3.28 ships as `form-select`
+ * (stacksjs/ts-css#45). That one is opt-in per element and brings a base input
+ * look with it, and a `background` or `padding` shorthand in a component rule
+ * after it erases the caret. This rule needs no class in the markup, outranks
+ * those shorthands, and reaches a select added later, so it stays.
+ *
+ * padding-right is !important because this lands in the preflight layer and an
+ * unlayered px-* utility on the element would otherwise win and run a long
+ * label under the caret. The :not()s keep list boxes, which draw no arrow,
+ * out of it; they also put this above a bare class like .select or .drp-sel.
+ */
+const SELECT_CARET_CSS = `
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.3125em) 50%, calc(100% - 1em) 50%;
+  background-size: 0.3125em 0.3125em;
+  background-repeat: no-repeat;
+  padding-right: 2.25em !important;
+  print-color-adjust: exact;
+}
+`
+
 export default {
   preflights: [
     // In the order the three stylesheets they came from were linked:
@@ -1347,6 +1366,8 @@ export default {
     // After TOKENS so its own --sans wins where the two differ.
     { getCSS: () => MARKETING },
     { getCSS: () => DATE_RANGE_PICKER_CSS },
+    // Last, so it is the final word on a <select>'s arrow (see SELECT_CARET_CSS).
+    { getCSS: () => SELECT_CARET_CSS },
   ],
   theme: {
     extend: {
