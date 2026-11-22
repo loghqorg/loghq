@@ -119,7 +119,7 @@ if (user) {
     __projectRows = (await __db.unsafe(
       'SELECT id, name, platform, ingest_key, is_active FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
-    )) ?? []
+    )) as unknown as ProjectRow[] ?? []
     if (__projectRows.length === 0)
       needsOnboarding = true
     else
@@ -130,18 +130,18 @@ if (user) {
         `SELECT id, type, label, webhook_url, enabled, created_at
         FROM alert_channels WHERE project_id = $1 ORDER BY created_at DESC NULLS LAST, id`,
         [__activeRow.id],
-      )) ?? []
+      )) as unknown as AlertChannelRow[] ?? []
       __memberRows = (await __db.unsafe(
         `SELECT m.id, m.email, m.role FROM project_members m
         WHERE m.project_id = $1 ORDER BY m.created_at ASC NULLS LAST, m.email`,
         [__activeRow.id],
-      )) ?? []
+      )) as unknown as MemberRow[] ?? []
       __inviteRows = (await __db.unsafe(
         `SELECT i.id, i.email, i.token, (u.id IS NOT NULL) AS registered
         FROM project_invites i LEFT JOIN users u ON lower(u.email) = lower(i.email)
         WHERE i.project_id = $1 ORDER BY i.created_at ASC NULLS LAST, i.email`,
         [__activeRow.id],
-      )) ?? []
+      )) as unknown as InviteRow[] ?? []
     }
   }
   catch {
@@ -170,7 +170,7 @@ const projectId = activeProject?.id || null
 // This binding IS bridged into the HTML, which is exactly why getRepository
 // selects `token_hint` and never `token_ciphertext`: the last four characters
 // identify which token is connected, and carry nothing that could be replayed.
-let repository: any = null
+let repository: Awaited<ReturnType<typeof getRepository>> = null
 if (projectId) {
   try {
     repository = await getRepository(projectId)
@@ -542,6 +542,9 @@ const guide = activeProject ? installGuide(activeProject.platform, keyFull) : { 
 // initialKeyFull / initialKeyMask are renamed on the way across: the client
 // wraps both in signals under the bare names, and a bridged `var keyFull` would
 // collide with the `const keyFull` that consumes it.
+// Its own line so the server render's {{ projectName }} (the delete/archive
+// confirmation) has the value, not only the client.
+const projectName = activeProject?.name || ''
 defineClientPayload({
   projectId,
   // The client block's onMount bounce reads this. It was NOT listed, so the
@@ -549,13 +552,18 @@ defineClientPayload({
   // render and never ran — the same value is listed in dashboard.stx, which is
   // why only this page was broken.
   needsOnboarding,
-  projectName: activeProject?.name || '',
+  projectName,
   projectActive: activeProject ? activeProject.is_active !== false : true,
   installText: guide.install,
   codeText: guide.code,
   initialKeyFull: keyFull,
   initialKeyMask: keyMask,
   readKeyCountInitial,
+  // The Repository section's client state starts from this. It was read by the
+  // client block but never listed, so `state(repository || null)` threw
+  // `ReferenceError: repository is not defined` and stopped every handler after
+  // it. getRepository selects token_hint, never token_ciphertext (see above).
+  repository,
 })
 
 useSeoMeta({
