@@ -83,30 +83,31 @@ jobs:
       # `tsc` above never opens a .stx file, so without this nothing checks the
       # script blocks or the {{ }} expressions that make up most of this app.
       #
-      # NOT BLOCKING YET, deliberately. Measured baseline on 2026-08-18: 71
-      # errors across 39 files, 0 warnings. 49 of those are TS2304 "cannot find
-      # name", which is the class bughq eliminated by declaring its schema as
-      # ambient types in a single `types/domain.d.ts` and passing it as --lib.
-      # loghq has no such file yet, so the names a script block reads off the
-      # server bridge are simply undeclared.
+      # BLOCKING since 2026-11-22. It ran advisory from 2026-08-18 (71 errors)
+      # and stood at 62 errors when it was flipped. Most of those were names
+      # loghq already declares in types/app.d.ts that the checker was never
+      # given; the rest were real. Two were live bugs: settings.stx read
+      # `repository` without listing it, so its client block threw a
+      # ReferenceError and stopped every handler after it, and projects/new.stx
+      # imported app/Support/projects one directory short, which the build
+      # rendered as an error page.
       #
-      # This mirrors how bughq got there: warnings-only first, then flipped to
-      # load-bearing once the count reached 0. Write types/domain.d.ts, drive
-      # the count down, then delete `continue-on-error` and add the grep that
-      # fails on anything but "0 error(s), 0 warning(s)".
+      # --lib is required, because the checker does not read ambient types from
+      # tsconfig `include`. It may be REPEATED (stacksjs/stx#1926 is fixed).
       #
-      # When that happens: --lib is required, because the checker does not read
-      # ambient types from tsconfig `include`. It may be REPEATED, so the
-      # declarations do not have to be crammed into one file.
-      # stacksjs/stx#1926, where all but the last flag were silently dropped,
-      # is fixed. Verified on this repo's own installed stx (0.2.532) with two
-      # .d.ts files each declaring one global: both passed resolves both, and
-      # passing only the first fails with `Cannot find name 'betaGlobal'`,
-      # which is the control that proves the checker ran at all.
-      # stacksjs/analyticshq passes six --lib flags in CI today.
-      - name: Typecheck .stx (advisory)
-        continue-on-error: true
-        run: bunx --bun stx typecheck 'resources/**/*.stx'
+      # Warnings fail too. The only one this emits is "values reach this block
+      # on the implicit bridge and are untyped", which is how a server value
+      # reaches client code unchecked. `stx typecheck` exits 0 on warnings and
+      # has no --fail-on-warning, hence the grep; errors it exits non-zero for,
+      # which `set -o pipefail` carries through the tee. Same shape as bughq's.
+      - name: Typecheck .stx
+        run: |
+          set -o pipefail
+          bunx --bun stx typecheck 'resources/**/*.stx' --lib types/app.d.ts --lib types/stx-runtime.d.ts --lib types/render-context.d.ts | tee /tmp/stx-typecheck.log
+          if ! grep -qE '0 error\(s\), 0 warning\(s\)' /tmp/stx-typecheck.log; then
+            echo "::error::stx typecheck is not clean, see the log above"
+            exit 1
+          fi
 
   test:
     runs-on: ${{ matrix.os }}

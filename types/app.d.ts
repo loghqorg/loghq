@@ -69,6 +69,15 @@ declare global {
     created_at?: string | null
   }
 
+  /**
+   * A project as the dashboard and projects list select it: everything in
+   * ProjectRow except `ingest_key`. Both pages leave the key out of the SELECT
+   * on purpose (the rows are bridge candidates, and the key is the one
+   * credential routes/logs.ts checks), so typing them as ProjectRow promised a
+   * field that is never there. `is_owner` is computed by the dashboard's query.
+   */
+  type ProjectListRow = Omit<ProjectRow, 'ingest_key'> & { is_owner?: boolean }
+
   /** An invitation the viewer has been sent, joined to its project name. */
   interface PendingInvite {
     token: string
@@ -126,6 +135,16 @@ declare global {
     token: string
     registered: boolean
   }
+
+  // --- Serve path ----------------------------------------------------------
+
+  /**
+   * The query string the serve path hands a page, set by the renderer before
+   * the server block runs. Read as `new URLSearchParams(typeof __stxServeSearch
+   * !== 'undefined' ? __stxServeSearch : '')`, hence `| undefined`.
+   */
+  // eslint-disable-next-line vars-on-top, no-var
+  var __stxServeSearch: string | undefined
 }
 
 export {}

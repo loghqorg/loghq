@@ -205,6 +205,11 @@ function formatBytes(n: number): string {
 }
 
 const archivedBytesLabel = formatBytes(summary.archivedBytes)
+
+// The client block's project switcher navigates here. Listed so it crosses
+// because this says so, typed, rather than on the implicit bridge because the
+// name happens to appear in the client source.
+defineClientPayload({ switchUrl })
 </script>
 
 <script client>

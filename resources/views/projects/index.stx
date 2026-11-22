@@ -38,7 +38,7 @@ if (__token) {
   }
 }
 
-let projects: ProjectRow[] = []
+let projects: ProjectListRow[] = []
 // A failed lookup is not an empty list. Without this flag the page would say
 // "no apps yet" and offer to create one, which is the wrong thing to tell
 // someone whose apps exist and whose database is briefly unreachable.
@@ -50,7 +50,7 @@ if (user) {
       // `projects` is a server→client bridge candidate.
       'SELECT id, name, platform, created_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC NULLS LAST, id',
       [Number(user.id)],
-    )) ?? []
+    )) as unknown as ProjectListRow[] ?? []
   }
   catch {
     projectsUnavailable = true

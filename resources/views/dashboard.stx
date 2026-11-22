@@ -152,8 +152,8 @@ if (__token) {
 }
 
 // Load the user's OWN projects (plus invited) and pick the active one.
-let projects: ProjectRow[] = []
-let activeProject: ProjectRow | null = null
+let projects: ProjectListRow[] = []
+let activeProject: ProjectListRow | null = null
 let needsOnboarding = false
 let pendingInvites: PendingInvite[] = []
 // Set when the project lookup itself fails, as opposed to `live` below, which
@@ -182,13 +182,13 @@ if (user) {
       WHERE p.owner_id = $1 OR m.email IS NOT NULL
       ORDER BY p.created_at DESC NULLS LAST, p.id`,
       [Number(user.id), userEmail],
-    )) ?? []
+    )) as unknown as ProjectListRow[] ?? []
     pendingInvites = (await __db.unsafe(
       `SELECT i.token, p.name AS project_name FROM project_invites i
       JOIN projects p ON p.id = i.project_id
       WHERE lower(i.email) = $1 ORDER BY i.created_at ASC NULLS LAST`,
       [userEmail],
-    )) ?? []
+    )) as unknown as PendingInvite[] ?? []
   }
   catch {
     // Deliberately no onboarding bounce from here: needsOnboarding stays false,
@@ -285,7 +285,7 @@ async function loadData(): Promise<void> {
     `SELECT id, level, message, channel, environment, release, framework, host, context, timestamp
     FROM log_entries WHERE ${where} ORDER BY timestamp DESC, id DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
     params,
-  )) ?? []
+  )) as unknown as LogRow[] ?? []
 
   pager = {
     from: filteredTotal === 0 ? 0 : offset + 1,
@@ -482,8 +482,14 @@ const stats = [
 // needsOnboarding was already crossing on the implicit bridge, just untyped and
 // only because the name happened to appear in the client source. It is listed
 // now, so it crosses because this line says so.
+//
+// switchUrl is computed on its own line rather than inline. `stx typecheck`
+// finds this call with a regex that stops at the first `})`, which an inline
+// `pageUrl({ page: 1 })` supplies, so every name listed after it went
+// unchecked in the client block (needsOnboarding did). stacksjs/stx#2207.
+const switchUrl = pageUrl({ page: 1 })
 defineClientPayload({
-  switchUrl: pageUrl({ page: 1 }),
+  switchUrl,
   needsOnboarding,
 })
 
