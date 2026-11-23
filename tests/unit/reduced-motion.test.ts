@@ -24,7 +24,7 @@
  * Declaring them next to each other makes the order explicit.
  *
  * They moved with the rest of public/tokens.css into the TOKENS preflight in
- * config/crosswind.ts (stx-standards rule 3, §11.2), so this now reads them
+ * config/css.ts (stx-standards rule 3, §11.2), so this now reads them
  * out of the config rather than the deleted stylesheet. The order argument is
  * unchanged -- one block, same specificity, later wins -- but the second test
  * below matters MORE than it did. A preflight lands in @layer tc-base, so an
@@ -35,7 +35,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 
 const ROOT = join(import.meta.dir, '../..')
 

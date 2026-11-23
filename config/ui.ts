@@ -228,7 +228,7 @@ export default {
       // instead, so it arrives with the shell that needs it.
       //
       // /tokens.css and /app-chrome.css used to be linked here and are gone:
-      // both are `preflights` entries in config/crosswind.ts now, emitted into
+      // both are `preflights` entries in config/css.ts now, emitted into
       // the generated sheet (stx-standards rule 3). Nothing replaced them in
       // this list, because the generated sheet is injected by the renderer.
       link: [

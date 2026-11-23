@@ -16,7 +16,7 @@ const footerYear = new Date().getFullYear()
   {{-- The two source rules were `@media (max-width: 900px)` and
       `(max-width: 560px)`, restated mobile-first: one column by default, two
       from bp-sm (561px), the 1.4fr lead column from bp-md (901px). The
-      breakpoints are declared in config/crosswind.ts and sit one pixel above
+      breakpoints are declared in config/css.ts and sit one pixel above
       the max-widths they replace, which is what keeps the boundaries
       identical.
 

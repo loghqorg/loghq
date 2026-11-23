@@ -4,7 +4,7 @@
  * The page had 23 raw `<button>` elements carrying 14 distinct class strings,
  * and those 14 were the same three paints at four sizes with nothing left over.
  * They are `btn-quiet` / `btn-danger` / `btn-solid` plus `btn-xs` / `btn-sm` /
- * `btn-md` / `btn-cta` in config/crosswind.ts now, which is what lets
+ * `btn-md` / `btn-cta` in config/css.ts now, which is what lets
  * `<Button>` sit behind them without each call site re-stating its own paint.
  *
  * Two things this file pins, because neither fails loudly on its own.
@@ -35,7 +35,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 // The installed STX package does not export these subpaths by bare specifier.
 import { processComponents } from '../../node_modules/@stacksjs/stx/dist/component-renderer.js'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'

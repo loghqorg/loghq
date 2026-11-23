@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 
 /*
  * The marketing sheet, read out of the MARKETING preflight. It was
- * public/marketing.css until it moved into config/crosswind.ts, scoped to the
+ * public/marketing.css until it moved into config/css.ts, scoped to the
  * marketing layout group (stx-standards rule 3, §11.2).
  *
  * Everything below still reads the same, because the move nested the rules

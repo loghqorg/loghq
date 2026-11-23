@@ -6,13 +6,13 @@
  * from config/ui.ts, and each opened by saying why it could not be a
  * `preflights` entry. app-chrome.css put it most directly:
  *
- *   "`config/crosswind.ts` `preflights` is where ch.11.2/11.7 says this
+ *   "`config/css.ts` `preflights` is where ch.11.2/11.7 says this
  *    belongs. It does not work on the stx serve path: the entry is spread into
  *    the generator config and then never emitted, verified with a probe token
  *    that appears nowhere in the served CSS on any route."
  *
  * The probe was real and so was its result -- on the stx of the day. It is
- * also what config/crosswind.ts's own `preflights` note already recorded as
+ * also what config/css.ts's own `preflights` note already recorded as
  * fixed by stacksjs/stx #1867, which unified the two render paths onto one
  * merge. The config had carried that correction for a while; only the two
  * stylesheets still said otherwise, and they were the reason 83 declarations
@@ -37,7 +37,7 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 // The installed stx package does not export these subpaths by bare specifier.
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'

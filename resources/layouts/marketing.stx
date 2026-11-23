@@ -63,7 +63,7 @@
     they are genuinely site-wide, and injectConfigHeadTags dedupes by exact href
     so nothing doubles up. --}}
 {{-- /marketing.css is gone: it is the MARKETING preflight in
-    config/crosswind.ts now, scoped to this layout's group
+    config/css.ts now, scoped to this layout's group
     (stx-standards rule 3, §11.2). Nothing replaces it here --
     the generated sheet is injected by the renderer. --}}
 {{-- No @stack('styles') here, following the same rule default.stx states: add a

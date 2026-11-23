@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { CSSGenerator, defaultConfig } from '@cwcss/crosswind'
 // The installed stx package does not export this subpath by bare specifier.
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 
 const ROOT = join(import.meta.dir, '../..')
 
 /*
  * The picker's stylesheet moved out of a <style> block in analytics.stx and
- * into config/crosswind.ts preflights (stx-standards rule 3). It is a
+ * into config/css.ts preflights (stx-standards rule 3). It is a
  * relocation rather than a utility rewrite because every state in this widget
  * is a compound selector the client script toggles, and no utility can say
  * "this class AND that class" -- the arbitrary-variant spelling that could,
