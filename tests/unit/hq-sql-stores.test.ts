@@ -3,6 +3,7 @@ import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { env } from '@stacksjs/env'
 import { createCounter, sqlCounterStore } from '@stacksjs/hq/meter'
 import { confirmationCode, createHqService, sqlConnectCodeStore } from '@stacksjs/hq/service'
 import { hqServiceContract } from '@stacksjs/hq/testing'
@@ -109,8 +110,18 @@ describe('which dialect the stores speak', () => {
       expect(sqlDialect(name)).toBe('postgres')
     for (const name of ['mysql', 'mariadb', 'singlestore', 'MySQL'])
       expect(sqlDialect(name)).toBe('mysql')
-    for (const name of ['sqlite', undefined, '', 'something-else'])
+    // null, not undefined: undefined is "no argument", which reads
+    // DB_CONNECTION from the environment (next test), so it answered
+    // 'postgres' on any machine whose .env says so.
+    for (const name of ['sqlite', null, '', 'something-else'])
       expect(sqlDialect(name)).toBe('sqlite')
+  })
+
+  test('with no argument, DB_CONNECTION from the environment decides', () => {
+    // Whatever this machine's .env says: CI copies .env.example (sqlite), a
+    // developer's .env may point at postgres. Both must agree with the value.
+    expect(sqlDialect()).toBe(sqlDialect(env.DB_CONNECTION))
+    expect(sqlDialect(undefined)).toBe(sqlDialect(env.DB_CONNECTION))
   })
 
   test('a deferred store is built once, on first use, and retries a failed build', async () => {
