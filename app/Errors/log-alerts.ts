@@ -3,10 +3,12 @@ import type { SeenStore } from './alert-state'
 import type { AlertIssue } from './alerts'
 import process from 'node:process'
 import { db } from '@stacksjs/database'
+import { env } from '@stacksjs/env'
 import { fingerprintOf } from '../Fix/fingerprint'
 import { appUrl } from '../Support/urls'
 import { sqlSeenStore } from './alert-state'
 import { dispatchAlerts } from './alerts'
+import { notifyChannels } from './channels'
 import { allowAlert } from './limits'
 
 /**
@@ -19,10 +21,9 @@ import { allowAlert } from './limits'
  * An alert fires the first time a fingerprint at `error` or above is stored
  * for a project, and then not again for that fingerprint for a day.
  *
- * **Off unless `LOG_ALERTS_ENABLED=true`.** Alert channels and owner emails
- * existed long before anything called them, so switching delivery on is the
- * moment every existing project owner starts receiving mail. That is a
- * decision for a person to make, not a side effect of a deploy.
+ * Delivery is off by default. `LOG_ALERTS_ENABLED=true` enables email and
+ * chat everywhere. `LOG_CHAT_ALERT_PROJECTS` enables only the configured
+ * chat channels of the named projects.
  *
  * Which fingerprints have alerted is kept in `log_alert_states`
  * (app/Errors/alert-state.ts), so a restart or a deploy does not re-send.
@@ -39,6 +40,19 @@ import { allowAlert } from './limits'
 /** `LOG_ALERTS_ENABLED`: only `true` (or `1`, `on`, `yes`) sends anything. */
 export function alertsEnabled(value: unknown = process.env.LOG_ALERTS_ENABLED): boolean {
   return ['true', '1', 'on', 'yes'].includes(String(value ?? '').trim().toLowerCase())
+}
+
+type LogAlertDelivery = 'all' | 'chat'
+
+export function alertDelivery(
+  projectId: string | undefined,
+  emailAndChatEnabled = alertsEnabled(),
+  chatProjects: string = env.LOG_CHAT_ALERT_PROJECTS ?? '',
+): LogAlertDelivery | undefined {
+  if (emailAndChatEnabled)
+    return 'all'
+  if (projectId && chatProjects.split(',').some(id => id.trim() === projectId))
+    return 'chat'
 }
 
 export const ALERT_LEVELS: ReadonlySet<string> = new Set(['error', 'critical', 'alert', 'emergency'])
@@ -88,19 +102,21 @@ export function alertCandidates(projectId: string, rows: LogRow[], base: string 
 }
 
 export interface LogAlertDeps {
-  enabled: () => boolean
+  delivery: (projectId: string) => LogAlertDelivery | undefined
   seen: SeenStore
   /** The per-project hourly cap. */
   allow: (projectId: string) => Promise<boolean>
-  dispatch: (projectId: string, issue: AlertIssue, kind: 'new') => Promise<void>
+  dispatch: (projectId: string, issue: AlertIssue, delivery: LogAlertDelivery) => Promise<void>
   now?: () => number
 }
 
 const defaults: LogAlertDeps = {
-  enabled: alertsEnabled,
+  delivery: alertDelivery,
   seen: sqlSeenStore(db),
   allow: allowAlert,
-  dispatch: dispatchAlerts,
+  dispatch: (projectId, issue, delivery) => delivery === 'chat'
+    ? notifyChannels(projectId, issue, 'new')
+    : dispatchAlerts(projectId, issue, 'new'),
 }
 
 /** Projects over the hourly cap, and until when to leave them alone. */
@@ -114,7 +130,8 @@ const capped = new Map<string, number>()
 export async function fireLogAlerts(projectId: string, rows: LogRow[], deps: LogAlertDeps = defaults): Promise<number> {
   let sent = 0
   try {
-    if (!deps.enabled())
+    const delivery = deps.delivery(projectId)
+    if (!delivery)
       return 0
     const at = (deps.now ?? Date.now)()
     const backoff = capped.get(projectId)
@@ -135,7 +152,7 @@ export async function fireLogAlerts(projectId: string, rows: LogRow[], deps: Log
         capped.set(projectId, at + CAPPED_BACKOFF_MS)
         break
       }
-      await deps.dispatch(projectId, candidate.issue, 'new')
+      await deps.dispatch(projectId, candidate.issue, delivery)
       sent++
     }
   }

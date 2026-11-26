@@ -176,7 +176,7 @@ Start with `.env.example`. These are the settings most installations need to rev
 | Queue | `QUEUE_DRIVER`, `QUEUE_CONCURRENCY`, `QUEUE_WORKER_CONCURRENCY` |
 | Billing | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | Ingest quotas | `TRUSTED_PROXY_HOPS`, plus Redis settings if you want quotas shared across instances |
-| Plan enforcement | `RETENTION_PRUNE_ENABLED` (`dry-run` or `true`), `LOG_ALERTS_ENABLED` |
+| Plan enforcement and alerts | `RETENTION_PRUNE_ENABLED` (`dry-run` or `true`), `LOG_ALERTS_ENABLED` (email and chat for all projects), `LOG_CHAT_ALERT_PROJECTS` (chat for the listed project IDs) |
 
 Do not commit plaintext environment secrets. The deployment workflow reconstructs `.env.keys` from GitHub environment secrets and uses the committed encrypted environment files.
 

@@ -109,6 +109,11 @@ const envSchema = defineEnv({
     default: '/api',
   },
 
+  LOG_CHAT_ALERT_PROJECTS: {
+    validation: schema.string(),
+    default: '',
+  },
+
   AI_DRIVER: {
     validation: schema.enum(['anthropic', 'openai', 'ollama']),
     default: 'openai',

@@ -16,6 +16,9 @@ import { env } from '@stacksjs/env'
  * @see https://github.com/stacksjs/ts-cloud
  */
 
+// Project IDs are public. Production opted Votescape into its saved chat routes.
+const chatAlertEnvironment = { LOG_CHAT_ALERT_PROJECTS: 'votescape-a2d78e' }
+
 // ts-cloud configuration for deployment
 export const tsCloud: TsCloudConfig = {
   /**
@@ -807,6 +810,7 @@ export const tsCloud: TsCloudConfig = {
         { path: 'storage/framework/database', target: '/var/www/loghq-main/shared/storage/framework/database', seed: false },
       ],
       env: {
+        ...chatAlertEnvironment,
         APP_URL: 'https://loghq.org',
         API_URL: 'http://127.0.0.1:3043',
       },
@@ -828,7 +832,7 @@ export const tsCloud: TsCloudConfig = {
       // Nothing to share. The database is symlinked by the platform, and the
       // migration snapshot belongs to `main`, which is the only site the deploy
       // runs migrations from.
-      env: { HOST: '127.0.0.1' },
+      env: { ...chatAlertEnvironment, HOST: '127.0.0.1' },
     },
 
     // BunPress documentation, built as static files and mounted under /docs.

@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createMemorySeenStore, QUIET_MS, sqlSeenStore } from '../../app/Errors/alert-state'
-import { alertCandidates, alertsEnabled, CAPPED_BACKOFF_MS, fireLogAlerts, MAX_ALERTS_PER_BATCH } from '../../app/Errors/log-alerts'
+import { alertCandidates, alertDelivery, alertsEnabled, CAPPED_BACKOFF_MS, fireLogAlerts, MAX_ALERTS_PER_BATCH } from '../../app/Errors/log-alerts'
 
 let n = 0
 function row(level: string, message: string, extra: Partial<LogRow> = {}): LogRow {
@@ -42,7 +42,7 @@ function deps(options: { allow?: boolean[], enabled?: boolean } = {}) {
     sent,
     clock,
     deps: {
-      enabled: () => options.enabled ?? true,
+      delivery: (): 'all' | undefined => (options.enabled ?? true) ? 'all' : undefined,
       seen: createMemorySeenStore(),
       allow: async () => allow.length ? allow.shift()! : true,
       dispatch: async (projectId: string, issue: AlertIssue) => {
@@ -146,10 +146,27 @@ describe('LOG_ALERTS_ENABLED', () => {
     expect(claims).toBe(0)
   })
 
-  test('the settings page says alerts are off when they are', () => {
+  test('chat opt-in applies to exact project IDs and preserves the global mode', async () => {
+    const { deps: d } = deps()
+    const modes: string[] = []
+    const optedIn = pid()
+    const optedOut = pid()
+    const scoped = {
+      ...d,
+      delivery: (projectId: string) => alertDelivery(projectId, false, `other, ${optedIn}  , another`),
+      dispatch: async (_projectId: string, _issue: AlertIssue, mode: string) => { modes.push(mode) },
+    }
+    expect(await fireLogAlerts(optedOut, [row('error', 'gateway timeout')], scoped)).toBe(0)
+    expect(await fireLogAlerts(optedIn, [row('error', 'gateway timeout')], scoped)).toBe(1)
+    expect(modes).toEqual(['chat'])
+    expect(alertDelivery(optedOut, true, optedIn)).toBe('all')
+  })
+
+  test('the settings page shows the same project-specific mode as ingest', () => {
     const settings = readFileSync(join(import.meta.dir, '..', '..', 'resources/views/settings.stx'), 'utf8')
-    expect(settings).toContain('const alertsLive = alertsEnabled()')
-    expect(settings).toContain('@if (alertsLive)')
+    expect(settings).toContain('const alertMode = alertDelivery(projectId || undefined)')
+    expect(settings).toContain("@if (alertMode === 'all')")
+    expect(settings).toContain("@elseif (alertMode === 'chat')")
     expect(settings).toContain('Automatic alerts are switched off on this')
   })
 })
@@ -191,7 +208,7 @@ describe('what has alerted survives a restart', () => {
     const { client } = database()
     const sent: string[] = []
     const process = () => ({
-      enabled: () => true,
+      delivery: (): 'all' => 'all',
       seen: sqlSeenStore(client, quiet),
       allow: async () => true,
       dispatch: async (_projectId: string, issue: AlertIssue) => {
@@ -277,9 +294,11 @@ describe('wiring', () => {
     expect(read('routes/logs.ts')).toContain('void fireLogAlerts(projectId, kept)')
   })
 
-  test('the default path is gated by the flag and backed by the table', () => {
+  test('the default path uses project routing and durable deduplication', () => {
     const source = read('app/Errors/log-alerts.ts')
-    expect(source).toContain('enabled: alertsEnabled')
+    expect(source).toContain('delivery: alertDelivery')
+    expect(source).toContain("? notifyChannels(projectId, issue, 'new')")
+    expect(source).toContain(": dispatchAlerts(projectId, issue, 'new')")
     expect(source).toContain('seen: sqlSeenStore(db)')
   })
 
