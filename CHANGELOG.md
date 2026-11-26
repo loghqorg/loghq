@@ -1,5 +1,309 @@
 # Stacks Changelog
 
+## v0.70.53
+
+## ✨ Features
+
+- stacks 0.75.602, the framework's confirmation code, and a queue that runs ([d53cdd2](https://github.com/loghqorg/loghq/commit/d53cdd2)) _(by Chris)_
+- **billing**: enforce the 10,000 line free allowance and add the HQ connect endpoints ([c4f631f](https://github.com/loghqorg/loghq/commit/c4f631f)) _(by Chris)_
+- **logs**: forward cursor, live tail and read tokens ([1f1abf5](https://github.com/loghqorg/loghq/commit/1f1abf5)) _(by Chris)_
+- **projects**: redesign signed-out state as a centered hero ([4af1317](https://github.com/loghqorg/loghq/commit/4af1317)) _(by glennmichael123)_
+- **auth**: let people turn on two-factor from their account page ([f522bd5](https://github.com/loghqorg/loghq/commit/f522bd5)) _(by glennmichael123)_
+- **mail**: create noreply@loghq.org so the app can send at all ([cb38767](https://github.com/loghqorg/loghq/commit/cb38767)) _(by glennmichael123)_
+- **a11y**: say an async button is working, not just that it is dead ([74cb0c9](https://github.com/loghqorg/loghq/commit/74cb0c9)) _(by glennmichael123)_
+- **tokens**: emit this app UI roles as values, not as classes ([dab6dac](https://github.com/loghqorg/loghq/commit/dab6dac)) _(by Glenn Michael Torregosa)_
+- **seeders**: seed an owner with a known credential ([7e8aea2](https://github.com/loghqorg/loghq/commit/7e8aea2)) _(by glennmichael123)_
+- **settings**: adopt the shared Button where it earns it ([6d96297](https://github.com/loghqorg/loghq/commit/6d96297)) _(by glennmichael123)_ ([stacksjs/stx#1997](https://github.com/stacksjs/stx/issues/1997), [#37](https://github.com/loghqorg/loghq/issues/37))
+- **ui**: use EmptyState for the two hand-built empty states ([0a1d4a6](https://github.com/loghqorg/loghq/commit/0a1d4a6)) _(by glennmichael123)_
+- **site**: terms, privacy and security pages, and a way to reach them ([3b909f8](https://github.com/loghqorg/loghq/commit/3b909f8)) _(by glennmichael123)_
+- **ui**: alias the component library's tokens onto this palette ([29405e0](https://github.com/loghqorg/loghq/commit/29405e0)) _(by glennmichael123)_ ([stacksjs/stx#1993](https://github.com/stacksjs/stx/issues/1993), [statushqorg/status#20](https://github.com/statushqorg/status/issues/20))
+- **auth**: configure GitHub sign-in credentials ([f73d86b](https://github.com/loghqorg/loghq/commit/f73d86b)) _(by glennmichael123)_
+- **auth**: converge on the uniform HttpOnly cookie session model ([67e2d6c](https://github.com/loghqorg/loghq/commit/67e2d6c)) _(by glennmichael123)_
+- **analytics**: presets-and-calendar reporting-period picker ([cdbaac8](https://github.com/loghqorg/loghq/commit/cdbaac8)) _(by glennmichael123)_
+- **analytics**: report page views to analyticshq ([d6f8450](https://github.com/loghqorg/loghq/commit/d6f8450)) _(by glennmichael123)_
+- **health**: answer /api/health, and fail when a dependency does ([11ce473](https://github.com/loghqorg/loghq/commit/11ce473)) _(by glennmichael123)_
+- **projects**: refuse a second app with a name you already have ([1561996](https://github.com/loghqorg/loghq/commit/1561996)) _(by glennmichael123)_
+- **errors**: set the bughq ingest key ([b885544](https://github.com/loghqorg/loghq/commit/b885544)) _(by glennmichael123)_
+- **errors**: report this app's own errors to bughq ([ed3b019](https://github.com/loghqorg/loghq/commit/ed3b019)) _(by glennmichael123)_
+- **onboarding**: offer Stacks, with a real install rather than fetch ([c4a77ac](https://github.com/loghqorg/loghq/commit/c4a77ac)) _(by glennmichael123)_
+- **settings**: show retention, and report why an archive run did nothing ([b09474e](https://github.com/loghqorg/loghq/commit/b09474e)) _(by Chris)_
+- **analytics**: add the analytics page ([63c39da](https://github.com/loghqorg/loghq/commit/63c39da)) _(by Chris)_
+- **archive**: query the cold tier, and fix the dashboard's Postgres SQL ([a2cdada](https://github.com/loghqorg/loghq/commit/a2cdada)) _(by Chris)_
+- **archive**: export aged log partitions to Parquet, verified before deletion ([b5a195e](https://github.com/loghqorg/loghq/commit/b5a195e)) _(by Chris)_
+- **archive**: plan the DuckDB Parquet cold tier, and declare the binary ([772fc81](https://github.com/loghqorg/loghq/commit/772fc81)) _(by Chris)_
+- **fix**: connect a repository, so a fix can become a pull request ([50bdea4](https://github.com/loghqorg/loghq/commit/50bdea4)) _(by glennmichael123)_ ([stacksjs/stacks#2203](https://github.com/stacksjs/stacks/issues/2203))
+- **brand**: emerald accent, and an og image that is loghq's ([a39422c](https://github.com/loghqorg/loghq/commit/a39422c)) _(by glennmichael123)_
+- **cloud**: attach loghq to the statushq box instead of its own server ([40243ab](https://github.com/loghqorg/loghq/commit/40243ab)) _(by glennmichael123)_ ([stacksjs/ts-cloud#168](https://github.com/stacksjs/ts-cloud/issues/168), [stacksjs/ts-cloud#169](https://github.com/stacksjs/ts-cloud/issues/169))
+- **fix**: "Fix with AI" - root cause and a fix from one log entry ([01de885](https://github.com/loghqorg/loghq/commit/01de885)) _(by glennmichael123)_
+- **forms**: the remaining four forms handle their own POST — the whole app works with JavaScript off ([90006ad](https://github.com/loghqorg/loghq/commit/90006ad)) _(by glennmichael123)_
+- **login**: the sign-in page handles its own POST, so it works with JavaScript off ([62d46ce](https://github.com/loghqorg/loghq/commit/62d46ce)) _(by glennmichael123)_
+- **session**: one auth interceptor, and sign-in goes through useMutation ([b51fedc](https://github.com/loghqorg/loghq/commit/b51fedc)) _(by glennmichael123)_
+- **scripts**: gate chapter 11, including the collision that broke it twice ([a5cf2be](https://github.com/loghqorg/loghq/commit/a5cf2be)) _(by glennmichael123)_
+- **scripts**: typecheck the TypeScript inside .stx files ([d95c69e](https://github.com/loghqorg/loghq/commit/d95c69e)) _(by glennmichael123)_
+- **stores**: add a session store, and correct three shipped type declarations ([864f53b](https://github.com/loghqorg/loghq/commit/864f53b)) _(by glennmichael123)_
+- **seo**: emit BreadcrumbList JSON-LD and make the trails a real list ([14e7365](https://github.com/loghqorg/loghq/commit/14e7365)) _(by glennmichael123)_
+- **logs**: correlate entries by trace_id and request_id ([dcc52fe](https://github.com/loghqorg/loghq/commit/dcc52fe)) _(by glennmichael123)_
+- **landing**: design-taste pass — copy, bento diversity, footer ([bc53eac](https://github.com/loghqorg/loghq/commit/bc53eac)) _(by glennmichael123)_
+- loghq server — log ingest + live stream dashboard ([3f7c9e0](https://github.com/loghqorg/loghq/commit/3f7c9e0)) _(by glennmichael123)_
+
+## 🐛 Bug Fixes
+
+- enable chat alerts for opted-in projects ([dd20a53](https://github.com/loghqorg/loghq/commit/dd20a53)) _(by Chris)_
+- **ui**: draw the select caret in the text's colour, clear of the border ([ade6bfe](https://github.com/loghqorg/loghq/commit/ade6bfe)) _(by glennmichael123)_ ([stacksjs/ts-css#45](https://github.com/stacksjs/ts-css/issues/45))
+- signing in from a connect link comes back to it, in the same tab ([a6a6754](https://github.com/loghqorg/loghq/commit/a6a6754)) _(by Chris)_
+- a logo on the sign-in pages, and a button that no longer touches the checkbox ([5022d6f](https://github.com/loghqorg/loghq/commit/5022d6f)) _(by Chris)_
+- **database**: create the webhook dedup and queue worker tables the framework reads (#27) ([b8ec67d](https://github.com/loghqorg/loghq/commit/b8ec67d)) _(by Chris)_ ([#27](https://github.com/loghqorg/loghq/issues/27))
+- **billing**: make the prune, alerts and connect safe to promote ([dc71ee7](https://github.com/loghqorg/loghq/commit/dc71ee7)) _(by Chris)_
+- **a11y**: announce busy state on the 2FA setup cancel button ([c57c643](https://github.com/loghqorg/loghq/commit/c57c643)) _(by glennmichael123)_
+- **test**: boot auto-imports in tests ([68c00c9](https://github.com/loghqorg/loghq/commit/68c00c9)) _(by Chris)_
+- **subscribe**: publish the models the action calls ([6f5a6e1](https://github.com/loghqorg/loghq/commit/6f5a6e1)) _(by glennmichael123)_
+- **auth**: stop offering signed-in controls to signed-out visitors ([a1da80d](https://github.com/loghqorg/loghq/commit/a1da80d)) _(by glennmichael123)_
+- **subscribe**: create the two tables the newsletter form posts into ([cdc433f](https://github.com/loghqorg/loghq/commit/cdc433f)) _(by glennmichael123)_ ([stacksjs/stacks#2220](https://github.com/stacksjs/stacks/issues/2220))
+- **migrations**: let the corpus be read on postgres, deleting nothing ([08888d5](https://github.com/loghqorg/loghq/commit/08888d5)) _(by glennmichael123)_ ([stacksjs/stacks#2382](https://github.com/stacksjs/stacks/issues/2382))
+- **tokens**: read the generated CSS, and record whether dark exists ([4d4b5de](https://github.com/loghqorg/loghq/commit/4d4b5de)) _(by Glenn Michael Torregosa)_
+- **tokens**: strip comments, and name the marketing surface ([7e0a91b](https://github.com/loghqorg/loghq/commit/7e0a91b)) _(by Glenn Michael Torregosa)_
+- **visual**: say why Chrome failed to start, instead of timing out blind ([6e8a309](https://github.com/loghqorg/loghq/commit/6e8a309)) _(by Glenn Michael Torregosa)_
+- **copy**: drop the em-dashes, and gate them in CI ([d9b9dae](https://github.com/loghqorg/loghq/commit/d9b9dae)) _(by Glenn Michael Torregosa)_
+- **seeders**: treat APP_ENV=dev as a local environment ([4b73114](https://github.com/loghqorg/loghq/commit/4b73114)) _(by glennmichael123)_
+- **ci**: validate-ui breakpoint check could not fail ([247d36a](https://github.com/loghqorg/loghq/commit/247d36a)) _(by glennmichael123)_
+- **css**: drop the preflight splitter, and fix what justified it ([604d0a6](https://github.com/loghqorg/loghq/commit/604d0a6)) _(by glennmichael123)_
+- **a11y**: make the account skeleton actually respect reduced motion ([825c101](https://github.com/loghqorg/loghq/commit/825c101)) _(by glennmichael123)_ ([stacksjs/ts-css#37](https://github.com/stacksjs/ts-css/issues/37), [#37](https://github.com/loghqorg/loghq/issues/37))
+- **theme**: stop fg-soft being a synonym for fg-muted ([4a10452](https://github.com/loghqorg/loghq/commit/4a10452)) _(by glennmichael123)_
+- **ui**: align component theme and mobile subscription layout ([ab3b7fa](https://github.com/loghqorg/loghq/commit/ab3b7fa)) _(by glennmichael123)_
+- **ui**: the analytics page states match the rest of the app ([1e1bb5c](https://github.com/loghqorg/loghq/commit/1e1bb5c)) _(by glennmichael123)_
+- **ui**: a signed-out page is an empty state, not an error ([c32741f](https://github.com/loghqorg/loghq/commit/c32741f)) _(by glennmichael123)_
+- **a11y**: announce new-app and analyze failures to screen readers ([b7f2509](https://github.com/loghqorg/loghq/commit/b7f2509)) _(by glennmichael123)_
+- **a11y**: announce the rest of the auth forms to screen readers ([b118a05](https://github.com/loghqorg/loghq/commit/b118a05)) _(by glennmichael123)_
+- **a11y**: announce sign-in failures to screen readers ([95abba3](https://github.com/loghqorg/loghq/commit/95abba3)) _(by glennmichael123)_
+- **email**: attach mail to the box that actually runs it ([0b0fe08](https://github.com/loghqorg/loghq/commit/0b0fe08)) _(by glennmichael123)_
+- **gates**: start Chrome on CI, and make the serve gate a module ([59f511f](https://github.com/loghqorg/loghq/commit/59f511f)) _(by glennmichael123)_
+- **billing**: install stripe, which the Pro checkout needs ([6d75485](https://github.com/loghqorg/loghq/commit/6d75485)) _(by Chris)_
+- **auth**: point the OAuth callback defaults at the real route ([f445df6](https://github.com/loghqorg/loghq/commit/f445df6)) _(by glennmichael123)_
+- **auth**: hyphens not em-dashes in 2FA sign-in error copy ([cdc96a3](https://github.com/loghqorg/loghq/commit/cdc96a3)) _(by glennmichael123)_
+- **ui**: bound the mobile menu to the visible viewport ([81f5890](https://github.com/loghqorg/loghq/commit/81f5890)) _(by glennmichael123)_
+- **ci**: update labeler v6 configuration ([9824fc5](https://github.com/loghqorg/loghq/commit/9824fc5)) _(by glennmichael123)_
+- **deps**: pin bun-query-builder ([37e97e5](https://github.com/loghqorg/loghq/commit/37e97e5)) _(by glennmichael123)_
+- **onboarding**: make the setup snippets true, and make them compile ([b686974](https://github.com/loghqorg/loghq/commit/b686974)) _(by glennmichael123)_
+- **nav**: breadcrumbs did a full page reload ([37cd032](https://github.com/loghqorg/loghq/commit/37cd032)) _(by glennmichael123)_
+- **archive**: delete a project's archived Parquet when the project is deleted ([1d48a0e](https://github.com/loghqorg/loghq/commit/1d48a0e)) _(by Chris)_
+- **archive**: read the query result when the preamble printed one first ([f378e76](https://github.com/loghqorg/loghq/commit/f378e76)) _(by Chris)_
+- **archive**: load the json extension, without which every export failed ([34e6266](https://github.com/loghqorg/loghq/commit/34e6266)) _(by Chris)_
+- **sql**: search the log stream in a dialect SQLite accepts ([481d7d7](https://github.com/loghqorg/loghq/commit/481d7d7)) _(by Chris)_
+- **sql**: write timestamps in a dialect SQLite accepts ([c441637](https://github.com/loghqorg/loghq/commit/c441637)) _(by glennmichael123)_
+- **cloud**: keep the migration snapshot across releases ([297bfc7](https://github.com/loghqorg/loghq/commit/297bfc7)) _(by glennmichael123)_
+- **migrations**: settle the spurious destructive diff on projects ([e9ccd8b](https://github.com/loghqorg/loghq/commit/e9ccd8b)) _(by glennmichael123)_
+- **deps**: pin @stacksjs/stx 0.2.198 so login can set a cookie ([378d4b8](https://github.com/loghqorg/loghq/commit/378d4b8)) _(by glennmichael123)_
+- **migrations**: make the corpus runnable on sqlite ([4820df4](https://github.com/loghqorg/loghq/commit/4820df4)) _(by glennmichael123)_ ([stacksjs/stacks#2346](https://github.com/stacksjs/stacks/issues/2346))
+- **cloud**: use SQLite, and keep the file across releases ([6bb9132](https://github.com/loghqorg/loghq/commit/6bb9132)) _(by glennmichael123)_
+- **cloud**: name the API site `api` so the deploy recognises it ([375aff2](https://github.com/loghqorg/loghq/commit/375aff2)) _(by glennmichael123)_
+- **env**: drop the plaintext empty values that triggered a key rewrite ([0850430](https://github.com/loghqorg/loghq/commit/0850430)) _(by glennmichael123)_
+- **cloud**: resolve the Hetzner token through config, not process.env ([24d5897](https://github.com/loghqorg/loghq/commit/24d5897)) _(by glennmichael123)_
+
+## ⚡ Performance Improvements
+
+- **archive**: stream the staged day, and stop counting per delete batch ([fb75146](https://github.com/loghqorg/loghq/commit/fb75146)) _(by Chris)_
+
+## ♻️ Code Refactoring
+
+- a read key belongs to the project, as a Stacks token ([11ae8bb](https://github.com/loghqorg/loghq/commit/11ae8bb)) _(by Chris)_
+- a read token is a Stacks personal access token, not a table of its own ([7fb86d5](https://github.com/loghqorg/loghq/commit/7fb86d5)) _(by Chris)_
+- the confirmation code comes from @stacksjs/hq, not a copy of it ([6ff9136](https://github.com/loghqorg/loghq/commit/6ff9136)) _(by Chris)_
+- **middleware**: drop redundant request-marker casts in Auth ([d4817dc](https://github.com/loghqorg/loghq/commit/d4817dc)) _(by glennmichael123)_
+- **css**: scope the marketing sheet to its layout group ([369f3cf](https://github.com/loghqorg/loghq/commit/369f3cf)) _(by glennmichael123)_
+- **css**: give settings.stx a button vocabulary ([8f7be2f](https://github.com/loghqorg/loghq/commit/8f7be2f)) _(by glennmichael123)_
+- **css**: move the tokens and app chrome into preflights ([dd11ac6](https://github.com/loghqorg/loghq/commit/dd11ac6)) _(by glennmichael123)_ ([#1867](https://github.com/loghqorg/loghq/issues/1867))
+- **css**: move the date-range picker stylesheet into the config ([71689c4](https://github.com/loghqorg/loghq/commit/71689c4)) _(by glennmichael123)_ ([stacksjs/ts-css#37](https://github.com/stacksjs/ts-css/issues/37))
+- **ui**: give the inline form notice one definition ([87451fe](https://github.com/loghqorg/loghq/commit/87451fe)) _(by glennmichael123)_
+- **ui**: move the marketing breadcrumbs onto the shared Breadcrumb ([de9edc1](https://github.com/loghqorg/loghq/commit/de9edc1)) _(by glennmichael123)_
+- **ui**: use shared auth submit buttons ([aa2921d](https://github.com/loghqorg/loghq/commit/aa2921d)) _(by glennmichael123)_
+- **picker**: converge on the shared HQ date picker core ([5ca4259](https://github.com/loghqorg/loghq/commit/5ca4259)) _(by glennmichael123)_
+- **actions**: move the auth cookie helper into Support ([8471adb](https://github.com/loghqorg/loghq/commit/8471adb)) _(by glennmichael123)_
+- **config**: use stx.ts, the name the framework asks for ([d90878a](https://github.com/loghqorg/loghq/commit/d90878a)) _(by glennmichael123)_
+- **forms**: every auth form goes through useMutation, and the bearer header is gone from the call sites ([e4d66fc](https://github.com/loghqorg/loghq/commit/e4d66fc)) _(by glennmichael123)_
+- **dashboard**: severity is a token and a data attribute, not a hex literal in a style attribute ([7d82608](https://github.com/loghqorg/loghq/commit/7d82608)) _(by glennmichael123)_
+- **views**: static imports where they are safe, and keep the db handle off the bridge ([80e7595](https://github.com/loghqorg/loghq/commit/80e7595)) _(by glennmichael123)_
+- **views**: read request state from context locals, not the ambient global ([6ddb001](https://github.com/loghqorg/loghq/commit/6ddb001)) _(by glennmichael123)_
+- **views**: declare the server -> client payload instead of hand-encoding it ([3fa5610](https://github.com/loghqorg/loghq/commit/3fa5610)) _(by glennmichael123)_
+- **session**: call useCookie bare, now that stx gives stores the preamble ([abc5a4c](https://github.com/loghqorg/loghq/commit/abc5a4c)) _(by glennmichael123)_
+- **views**: x-tooltip for hover help, <Icon> for library icons ([a3cff63](https://github.com/loghqorg/loghq/commit/a3cff63)) _(by glennmichael123)_
+- **views**: retire the last DOM-0 handler and the hand-carried ordinal ([e92f5e5](https://github.com/loghqorg/loghq/commit/e92f5e5)) _(by glennmichael123)_ ([#1806](https://github.com/loghqorg/loghq/issues/1806))
+- **types**: retire three type shims stx fixed upstream ([d7fb42e](https://github.com/loghqorg/loghq/commit/d7fb42e)) _(by glennmichael123)_ ([#1807](https://github.com/loghqorg/loghq/issues/1807), [#1808](https://github.com/loghqorg/loghq/issues/1808))
+- **views**: bind every page to its layout explicitly ([428268f](https://github.com/loghqorg/loghq/commit/428268f)) _(by glennmichael123)_
+- **css**: convert the last convertible inline styles ([6b560b4](https://github.com/loghqorg/loghq/commit/6b560b4)) _(by glennmichael123)_
+- **css**: convert dashboard — no <style> block left in resources/ ([11ff4fa](https://github.com/loghqorg/loghq/commit/11ff4fa)) _(by glennmichael123)_
+- **css**: convert settings, add public/app-chrome.css ([ec80df2](https://github.com/loghqorg/loghq/commit/ec80df2)) _(by glennmichael123)_
+- **css**: convert SiteNav, move the mega menu to marketing.css ([66ecc63](https://github.com/loghqorg/loghq/commit/66ecc63)) _(by glennmichael123)_
+- **css**: convert pricing, and drop its last inline style ([064fe9f](https://github.com/loghqorg/loghq/commit/064fe9f)) _(by glennmichael123)_
+- **css**: convert account and projects/index ([4e14d7f](https://github.com/loghqorg/loghq/commit/4e14d7f)) _(by glennmichael123)_
+- **css**: convert index and SiteFooter, add the site's two breakpoints ([dfcc45e](https://github.com/loghqorg/loghq/commit/dfcc45e)) _(by glennmichael123)_
+- **css**: collapse the shared auth-page CSS into Crosswind shortcuts ([fdca83b](https://github.com/loghqorg/loghq/commit/fdca83b)) _(by glennmichael123)_
+- **css**: drop the <style> block from the eight compare pages ([cd11640](https://github.com/loghqorg/loghq/commit/cd11640)) _(by glennmichael123)_
+- **css**: convert the app-page inline styles, promote the status tokens ([1a6c544](https://github.com/loghqorg/loghq/commit/1a6c544)) _(by glennmichael123)_
+- **css**: convert the static inline styles to utilities ([a2431a0](https://github.com/loghqorg/loghq/commit/a2431a0)) _(by glennmichael123)_
+- **css**: declare the design tokens once ([0f97cce](https://github.com/loghqorg/loghq/commit/0f97cce)) _(by glennmichael123)_
+- **stores**: fetch the viewer once, in the session store ([7f77f3e](https://github.com/loghqorg/loghq/commit/7f77f3e)) _(by glennmichael123)_
+- **stx**: finish the DOM-guard burndown and enforce it per file ([8ef6096](https://github.com/loghqorg/loghq/commit/8ef6096)) _(by glennmichael123)_
+- **stx**: route navigation, timers and listeners through the runtime ([aecf182](https://github.com/loghqorg/loghq/commit/aecf182)) _(by glennmichael123)_
+- **stx**: make the session cookie the single source of truth ([cf22b0f](https://github.com/loghqorg/loghq/commit/cf22b0f)) _(by glennmichael123)_
+- **types**: annotate every parameter and return in .stx script blocks ([3c5abcc](https://github.com/loghqorg/loghq/commit/3c5abcc)) _(by glennmichael123)_
+- **types**: give the server blocks real types ([ba12542](https://github.com/loghqorg/loghq/commit/ba12542)) _(by glennmichael123)_
+- **stx**: turn off interceptAllLinks ([c974a37](https://github.com/loghqorg/loghq/commit/c974a37)) _(by glennmichael123)_
+- **stx**: convert internal anchors to StxLink ([72f0233](https://github.com/loghqorg/loghq/commit/72f0233)) _(by glennmichael123)_
+- **stx**: give every page one source of SEO truth ([531fccb](https://github.com/loghqorg/loghq/commit/531fccb)) _(by glennmichael123)_
+- **stx**: give the app one document shell and one layout per group ([d716b04](https://github.com/loghqorg/loghq/commit/d716b04)) _(by glennmichael123)_
+- **stx**: pin the project topology and turn on the guards ([df74cc9](https://github.com/loghqorg/loghq/commit/df74cc9)) _(by glennmichael123)_
+- **styles**: register Crosswind theme tokens, convert inline styles to utilities ([41dfb4b](https://github.com/loghqorg/loghq/commit/41dfb4b)) _(by glennmichael123)_
+
+## 📝 Documentation
+
+- **ui**: say the select caret shipped in ts-css 0.3.28 ([6068e42](https://github.com/loghqorg/loghq/commit/6068e42)) _(by glennmichael123)_
+- **ci**: --lib may be repeated, so the migration need not use one file ([8f42159](https://github.com/loghqorg/loghq/commit/8f42159)) _(by glennmichael123)_ ([#16](https://github.com/loghqorg/loghq/issues/16), [stacksjs/stx#1926](https://github.com/stacksjs/stx/issues/1926))
+- **site-mode**: mark the bypass script, and note that nothing loads it ([b84a39c](https://github.com/loghqorg/loghq/commit/b84a39c)) _(by glennmichael123)_
+- **stx**: the x-tooltip crash is fixed, the silence is not ([cd21919](https://github.com/loghqorg/loghq/commit/cd21919)) _(by glennmichael123)_ ([stacksjs/stx#2077](https://github.com/stacksjs/stx/issues/2077))
+- **css**: the picker comment gave a fixed defect as its reason ([792c918](https://github.com/loghqorg/loghq/commit/792c918)) _(by glennmichael123)_ ([stacksjs/ts-css#37](https://github.com/stacksjs/ts-css/issues/37))
+- **footer**: correct what crosswind actually cannot do here ([d9a0f3e](https://github.com/loghqorg/loghq/commit/d9a0f3e)) _(by glennmichael123)_
+- **partials**: the reason this is not <Breadcrumb> was stale ([8ed0bc1](https://github.com/loghqorg/loghq/commit/8ed0bc1)) _(by glennmichael123)_
+- **auth**: point the cookie-helper references at its new home ([7c603cf](https://github.com/loghqorg/loghq/commit/7c603cf)) _(by glennmichael123)_
+- replace framework manual with LogHQ guide ([24ab485](https://github.com/loghqorg/loghq/commit/24ab485)) _(by glennmichael123)_
+- **archive**: correct the claim of a second storage bug, and link the fix ([9cfd507](https://github.com/loghqorg/loghq/commit/9cfd507)) _(by Chris)_
+- **archive**: replace the plan with what shipped and what is unproven ([a4853bc](https://github.com/loghqorg/loghq/commit/a4853bc)) _(by Chris)_
+- **deploy**: correct the shared-box port table ([095eb73](https://github.com/loghqorg/loghq/commit/095eb73)) _(by glennmichael123)_
+- **ci**: the deploy header still described a dedicated box ([a041280](https://github.com/loghqorg/loghq/commit/a041280)) _(by glennmichael123)_
+- a deployment reference that matches the Hetzner reality ([9c3b1a0](https://github.com/loghqorg/loghq/commit/9c3b1a0)) _(by glennmichael123)_
+- **views**: drop three comments the useMutation work made false ([25c25ee](https://github.com/loghqorg/loghq/commit/25c25ee)) _(by glennmichael123)_
+- **skills**: correct the browser-composables section ([b6c7800](https://github.com/loghqorg/loghq/commit/b6c7800)) _(by glennmichael123)_ ([stacksjs/stx#1797](https://github.com/stacksjs/stx/issues/1797))
+- reposition README from error tracking to log management ([386a0d4](https://github.com/loghqorg/loghq/commit/386a0d4)) _(by glennmichael123)_
+
+## 💄 Styles
+
+- **app**: one content measure per kind of page, instead of four per four pages ([ac7362d](https://github.com/loghqorg/loghq/commit/ac7362d)) _(by glennmichael123)_
+- clear the pickier backlog — 266 warnings to 0 ([be12fa7](https://github.com/loghqorg/loghq/commit/be12fa7)) _(by glennmichael123)_
+- apply pickier formatting ([858aeff](https://github.com/loghqorg/loghq/commit/858aeff)) _(by glennmichael123)_
+- **dashboard**: convert leftover divider to bg-line utility ([feb66fb](https://github.com/loghqorg/loghq/commit/feb66fb)) _(by glennmichael123)_
+- **dashboard**: redesign polish, select-chevron inset, token utilities ([1e16e90](https://github.com/loghqorg/loghq/commit/1e16e90)) _(by glennmichael123)_
+- **dashboard**: indigo chrome accent, distinct from severity reds ([20f40ed](https://github.com/loghqorg/loghq/commit/20f40ed)) _(by glennmichael123)_
+
+## ✅ Tests
+
+- **sql-dialect**: keep the sqlite-default case off the local .env ([2d49a76](https://github.com/loghqorg/loghq/commit/2d49a76)) _(by glennmichael123)_
+- **stx**: gate rule 8 on every client block, not the sampled ones ([501494a](https://github.com/loghqorg/loghq/commit/501494a)) _(by glennmichael123)_
+- **auth**: gate the signed-in controls so they cannot drift back ([ea5243e](https://github.com/loghqorg/loghq/commit/ea5243e)) _(by glennmichael123)_
+- **smoke**: check the subscribe endpoint, a database read in disguise ([d90bfb5](https://github.com/loghqorg/loghq/commit/d90bfb5)) _(by glennmichael123)_
+- **validate-ui**: gate inline style declarations (stx-standards 11.5) ([f910a1c](https://github.com/loghqorg/loghq/commit/f910a1c)) _(by Glenn Michael Torregosa)_
+- **e2e**: isolate mutating runs and account cleanup ([527fa0e](https://github.com/loghqorg/loghq/commit/527fa0e)) _(by glennmichael123)_
+- **serve**: gate deploys on the serve path rendering components ([3b117f2](https://github.com/loghqorg/loghq/commit/3b117f2)) _(by glennmichael123)_ ([stacksjs/stx#2037](https://github.com/stacksjs/stx/issues/2037))
+- **smoke**: fail when a served page ships unresolved stx expressions ([a0e7899](https://github.com/loghqorg/loghq/commit/a0e7899)) _(by glennmichael123)_ ([stacksjs/stx#2037](https://github.com/stacksjs/stx/issues/2037))
+- **sdk**: pin ingest wire compatibility ([f4a8430](https://github.com/loghqorg/loghq/commit/f4a8430)) _(by glennmichael123)_
+- **ui**: validate SSR visual contracts ([8438ade](https://github.com/loghqorg/loghq/commit/8438ade)) _(by glennmichael123)_
+- add static accessibility contracts ([2ac8644](https://github.com/loghqorg/loghq/commit/2ac8644)) _(by glennmichael123)_
+- add deterministic product state fixtures ([d1aba3e](https://github.com/loghqorg/loghq/commit/d1aba3e)) _(by glennmichael123)_
+- harden archived log correlation and alerts ([138ba99](https://github.com/loghqorg/loghq/commit/138ba99)) _(by glennmichael123)_
+- **archive**: verify TLS and both URL styles, and support an internal CA ([ebb75ba](https://github.com/loghqorg/loghq/commit/ebb75ba)) _(by Chris)_
+- an end-to-end suite for the flows that had none ([7b56947](https://github.com/loghqorg/loghq/commit/7b56947)) _(by glennmichael123)_
+- drop fingerprint test (grouping domain removed for loghq) ([4b5e8f5](https://github.com/loghqorg/loghq/commit/4b5e8f5)) _(by glennmichael123)_
+
+## 💚 Continuous Integration
+
+- exact-key node_modules cache, so a stale tree cannot be restored ([c434d51](https://github.com/loghqorg/loghq/commit/c434d51)) _(by glennmichael123)_
+- **stx**: make the .stx typecheck a blocking gate ([2e56890](https://github.com/loghqorg/loghq/commit/2e56890)) _(by glennmichael123)_
+- **deploy**: deploy production on push to main ([4ded67a](https://github.com/loghqorg/loghq/commit/4ded67a)) _(by Chris)_
+- **deploy**: verify the new /api/auth/login + auth-token contract ([2d60e3e](https://github.com/loghqorg/loghq/commit/2d60e3e)) _(by glennmichael123)_
+- harden production release validation ([869ee23](https://github.com/loghqorg/loghq/commit/869ee23)) _(by glennmichael123)_
+- validate application and documentation builds ([2e79644](https://github.com/loghqorg/loghq/commit/2e79644)) _(by glennmichael123)_
+- **archive**: install duckdb on the box, into a shared extension directory ([c34bd89](https://github.com/loghqorg/loghq/commit/c34bd89)) _(by Chris)_
+- deploy from the production branch, not main ([c280670](https://github.com/loghqorg/loghq/commit/c280670)) _(by glennmichael123)_
+- **deploy**: gate on tests, then prove the release actually serves ([47d2c91](https://github.com/loghqorg/loghq/commit/47d2c91)) _(by glennmichael123)_
+- a failed migration fails the deploy ([bd8ef02](https://github.com/loghqorg/loghq/commit/bd8ef02)) _(by glennmichael123)_ ([stacksjs/stacks#2347](https://github.com/stacksjs/stacks/issues/2347), [#2350](https://github.com/loghqorg/loghq/issues/2350))
+- remove the temporary attach-resolution probes ([6c51724](https://github.com/loghqorg/loghq/commit/6c51724)) _(by glennmichael123)_
+- probe token after config load ([f7bf4e7](https://github.com/loghqorg/loghq/commit/f7bf4e7)) _(by glennmichael123)_
+- probe token provenance ([dfdb2e5](https://github.com/loghqorg/loghq/commit/dfdb2e5)) _(by glennmichael123)_
+- probe attach resolution on the runner ([4e04059](https://github.com/loghqorg/loghq/commit/4e04059)) _(by glennmichael123)_
+- temporary HCLOUD_TOKEN fingerprint probe ([35849ee](https://github.com/loghqorg/loghq/commit/35849ee)) _(by glennmichael123)_
+- replace the unrunnable publish-commit job, add an advisory stx gate ([6ff1b9b](https://github.com/loghqorg/loghq/commit/6ff1b9b)) _(by glennmichael123)_ ([stacksjs/stx#1926](https://github.com/stacksjs/stx/issues/1926))
+
+## 🔧 Chores
+
+- **css**: rename config/crosswind.ts to config/css.ts ([98fb06c](https://github.com/loghqorg/loghq/commit/98fb06c)) _(by glennmichael123)_
+- **deps**: stacks 0.75.652, with stx 0.2.925 ([e278bd8](https://github.com/loghqorg/loghq/commit/e278bd8)) _(by glennmichael123)_
+- **deps**: stacks 0.75.635, with the stx it expects ([3608eab](https://github.com/loghqorg/loghq/commit/3608eab)) _(by glennmichael123)_
+- **deps**: stacks 0.75.628 ([7db7ab8](https://github.com/loghqorg/loghq/commit/7db7ab8)) _(by Chris Breuer)_
+- **deps**: stacks 0.75.618, with the stx it expects ([96e3840](https://github.com/loghqorg/loghq/commit/96e3840)) _(by Chris)_
+- **deps**: move the stx packages to 0.2.882 (#30) ([1a3c643](https://github.com/loghqorg/loghq/commit/1a3c643)) _(by Chris)_ ([#30](https://github.com/loghqorg/loghq/issues/30))
+- **deps**: upgrade to stacks 0.75.586 ([6fdf18b](https://github.com/loghqorg/loghq/commit/6fdf18b)) _(by Chris)_
+- **deps**: upgrade to stacks 0.75.585 (#28) ([036cfb5](https://github.com/loghqorg/loghq/commit/036cfb5)) _(by Chris)_ ([#28](https://github.com/loghqorg/loghq/issues/28))
+- **deps**: upgrade to stacks 0.75.575 ([253411e](https://github.com/loghqorg/loghq/commit/253411e)) _(by Chris)_
+- **deps**: bump stacks to 0.75.529 and stx to 0.2.807 ([28ed57d](https://github.com/loghqorg/loghq/commit/28ed57d)) _(by glennmichael123)_
+- **storage**: S3-compatible endpoint from env for off-box backups ([f424511](https://github.com/loghqorg/loghq/commit/f424511)) _(by glennmichael123)_
+- **stx**: fail on a prohibited DOM call in dev, warn elsewhere ([59df385](https://github.com/loghqorg/loghq/commit/59df385)) _(by glennmichael123)_
+- **deps**: ts-css 0.3.15 -> 0.3.16, and drop the guard it obsoletes ([eded7b6](https://github.com/loghqorg/loghq/commit/eded7b6)) _(by glennmichael123)_ ([stacksjs/ts-css#37](https://github.com/stacksjs/ts-css/issues/37), [#36](https://github.com/loghqorg/loghq/issues/36), [#37](https://github.com/loghqorg/loghq/issues/37))
+- **deps**: stx family 0.2.520 -> 0.2.532 ([aa78e60](https://github.com/loghqorg/loghq/commit/aa78e60)) _(by glennmichael123)_
+- **deps**: stx family 0.2.506 -> 0.2.520 ([a9788c9](https://github.com/loghqorg/loghq/commit/a9788c9)) _(by glennmichael123)_ ([#2072](https://github.com/loghqorg/loghq/issues/2072))
+- **deps**: ts-css 0.3.8 -> 0.3.15 ([0b33c10](https://github.com/loghqorg/loghq/commit/0b33c10)) _(by glennmichael123)_
+- **deps**: stx family 0.2.480 -> 0.2.506 ([a8f2a1d](https://github.com/loghqorg/loghq/commit/a8f2a1d)) _(by glennmichael123)_ ([stacksjs/stx#2063](https://github.com/stacksjs/stx/issues/2063), [#2056](https://github.com/loghqorg/loghq/issues/2056))
+- **deps**: stx family 0.2.448 -> 0.2.480 ([904d801](https://github.com/loghqorg/loghq/commit/904d801)) _(by glennmichael123)_
+- **deps**: stx family 0.2.401 -> 0.2.448, and pin the serve path to it ([94b1520](https://github.com/loghqorg/loghq/commit/94b1520)) _(by glennmichael123)_ ([stacksjs/stx#2055](https://github.com/stacksjs/stx/issues/2055))
+- **deps**: stx family 0.2.399 -> 0.2.401 ([2da0fba](https://github.com/loghqorg/loghq/commit/2da0fba)) _(by glennmichael123)_ ([stacksjs/stx#2050](https://github.com/stacksjs/stx/issues/2050))
+- **deps**: stx family to 0.2.399 ([d829475](https://github.com/loghqorg/loghq/commit/d829475)) _(by glennmichael123)_
+- **deps**: stx family to 0.2.396 ([85fc1f2](https://github.com/loghqorg/loghq/commit/85fc1f2)) _(by glennmichael123)_
+- **deps**: stx family to 0.2.395, plugin pinned ([f3276ec](https://github.com/loghqorg/loghq/commit/f3276ec)) _(by glennmichael123)_
+- **deps**: stx family to 0.2.382, override included ([95343bc](https://github.com/loghqorg/loghq/commit/95343bc)) _(by glennmichael123)_ ([stacksjs/stx#2039](https://github.com/stacksjs/stx/issues/2039))
+- **deps**: upgrade stacks to 0.75.79, checkout through the payment driver ([db7a79c](https://github.com/loghqorg/loghq/commit/db7a79c)) _(by Chris)_
+- **lint**: lint .stx on commit, and clear the backlog behind it ([6e37486](https://github.com/loghqorg/loghq/commit/6e37486)) _(by glennmichael123)_
+- **deps**: Stacks 0.74.0 ([1d02965](https://github.com/loghqorg/loghq/commit/1d02965)) _(by glennmichael123)_ ([stacksjs/stacks#2400](https://github.com/stacksjs/stacks/issues/2400))
+- type env from config/env.ts, declare the deploy-only variables ([5c0482e](https://github.com/loghqorg/loghq/commit/5c0482e)) _(by Chris)_
+- **deps**: drop four deps this app does not import ([67fdbaa](https://github.com/loghqorg/loghq/commit/67fdbaa)) _(by glennmichael123)_
+- drop app/Commands.ts, type archive:run from its flags ([1704954](https://github.com/loghqorg/loghq/commit/1704954)) _(by Chris)_
+- **deps**: upgrade stacks to 0.72.34, which fixes attach resolution (#3) ([c0db27f](https://github.com/loghqorg/loghq/commit/c0db27f)) _(by Glenn Michael Torregosa)_ ([#3](https://github.com/loghqorg/loghq/issues/3), [stacksjs/stacks#2344](https://github.com/stacksjs/stacks/issues/2344))
+- **deps**: upgrade stacks 0.70.366 to 0.72.24 (#2) ([34f0203](https://github.com/loghqorg/loghq/commit/34f0203)) _(by Glenn Michael Torregosa)_ ([#2](https://github.com/loghqorg/loghq/issues/2))
+- encrypted production environment ([1dcfcdc](https://github.com/loghqorg/loghq/commit/1dcfcdc)) _(by glennmichael123)_
+- drop two obsolete auth routes, annotate the clipboard sites ([2639e5d](https://github.com/loghqorg/loghq/commit/2639e5d)) _(by glennmichael123)_
+- **framework**: sync the vendored tree to 0.70.366 — 613 stale files to 0 ([facf535](https://github.com/loghqorg/loghq/commit/facf535)) _(by glennmichael123)_ ([stacksjs/stacks#2302](https://github.com/stacksjs/stacks/issues/2302))
+- **deps**: stacks 0.70.362 -> 0.70.366, on a wiped node_modules and lockfile ([6142243](https://github.com/loghqorg/loghq/commit/6142243)) _(by glennmichael123)_ ([stacksjs/stacks#2302](https://github.com/stacksjs/stacks/issues/2302))
+- **deps**: pickier 0.1.56, bun-query-builder 0.2.26, and declare the two we actually import ([9b095fa](https://github.com/loghqorg/loghq/commit/9b095fa)) _(by glennmichael123)_
+- **deps**: stacks 0.70.352 -> 0.70.362, and the stx fork to 0.2.175 ([95083bb](https://github.com/loghqorg/loghq/commit/95083bb)) _(by glennmichael123)_
+- **deps**: upgrade stacks 0.70.251 -> 0.70.352, which unhijacks /docs ([963a819](https://github.com/loghqorg/loghq/commit/963a819)) _(by glennmichael123)_
+- **assets**: delete the Stacks desktop-demo scaffold, unreferenced since day one ([c13fbe6](https://github.com/loghqorg/loghq/commit/c13fbe6)) _(by glennmichael123)_
+- **types**: retire the fourth shim — #1838 removed the last reason for it ([354334b](https://github.com/loghqorg/loghq/commit/354334b)) _(by glennmichael123)_ ([#1838](https://github.com/loghqorg/loghq/issues/1838))
+- ship the sitemap robots.txt promises, drop two dead sources ([8d8105d](https://github.com/loghqorg/loghq/commit/8d8105d)) _(by glennmichael123)_
+- **config**: uninstall the six framework feature bundles loghq never used ([58e532b](https://github.com/loghqorg/loghq/commit/58e532b)) _(by glennmichael123)_
+- remove the check scripts ([3244212](https://github.com/loghqorg/loghq/commit/3244212)) _(by glennmichael123)_
+- **deps**: resolve stx 0.2.152 ([6859d96](https://github.com/loghqorg/loghq/commit/6859d96)) _(by glennmichael123)_
+- **deps**: upgrade stacks 0.70.251 (stx 0.2.113 -> 0.2.151) ([3d37d02](https://github.com/loghqorg/loghq/commit/3d37d02)) _(by glennmichael123)_
+- **deps**: refresh lockfile ([56d74f7](https://github.com/loghqorg/loghq/commit/56d74f7)) _(by glennmichael123)_
+- delete unreferenced scaffolding ([e63e4d0](https://github.com/loghqorg/loghq/commit/e63e4d0)) _(by glennmichael123)_
+- **harness**: seed auth and drive interactions in browse.ts ([da0ed3b](https://github.com/loghqorg/loghq/commit/da0ed3b)) _(by glennmichael123)_
+- **db**: widen projects.ingest_key, drop a stale index name ([367a454](https://github.com/loghqorg/loghq/commit/367a454)) _(by glennmichael123)_
+
+## ⏪ Reverts
+
+- **tokens**: drop the generated manifest, nothing read it ([80660d0](https://github.com/loghqorg/loghq/commit/80660d0)) _(by glennmichael123)_
+- **config**: keep the stx config at ui.ts ([34ff10a](https://github.com/loghqorg/loghq/commit/34ff10a)) _(by glennmichael123)_
+
+## 🎉 Miscellaneous
+
+- Merge pull request #36 from loghqorg/fix/sql-dialect-test-env ([639413b](https://github.com/loghqorg/loghq/commit/639413b)) _(by Glenn Michael Torregosa)_ ([#36](https://github.com/loghqorg/loghq/issues/36))
+- Merge pull request #35 from loghqorg/ci/node-modules-cache-exact ([26760ed](https://github.com/loghqorg/loghq/commit/26760ed)) _(by Glenn Michael Torregosa)_ ([#35](https://github.com/loghqorg/loghq/issues/35))
+- Merge pull request #34 from loghqorg/chore/stacks-0.75.652 ([1f833fa](https://github.com/loghqorg/loghq/commit/1f833fa)) _(by Glenn Michael Torregosa)_ ([#34](https://github.com/loghqorg/loghq/issues/34))
+- Merge pull request #33 from loghqorg/ci/stx-typecheck-gate ([07b3027](https://github.com/loghqorg/loghq/commit/07b3027)) _(by Glenn Michael Torregosa)_ ([#33](https://github.com/loghqorg/loghq/issues/33))
+- Merge pull request #32 from loghqorg/fix/select-caret-in-text-colour ([27c2e9d](https://github.com/loghqorg/loghq/commit/27c2e9d)) _(by Glenn Michael Torregosa)_ ([#32](https://github.com/loghqorg/loghq/issues/32))
+- Merge pull request #31 from loghqorg/chore/bump-stacks-0.75.635 ([cff4aba](https://github.com/loghqorg/loghq/commit/cff4aba)) _(by Glenn Michael Torregosa)_ ([#31](https://github.com/loghqorg/loghq/issues/31))
+- Merge pull request #22 from loghqorg/signed-out-ui-and-mw-typing ([19cc0bd](https://github.com/loghqorg/loghq/commit/19cc0bd)) _(by Glenn Michael Torregosa)_ ([#22](https://github.com/loghqorg/loghq/issues/22))
+- Merge pull request #21 from loghqorg/chore/bump-stacks-0.75.529 ([9c408ba](https://github.com/loghqorg/loghq/commit/9c408ba)) _(by Glenn Michael Torregosa)_ ([#21](https://github.com/loghqorg/loghq/issues/21))
+- Merge pull request #12 from loghqorg/test/loghq-e2e-safety ([38d2260](https://github.com/loghqorg/loghq/commit/38d2260)) _(by Glenn Michael Torregosa)_ ([#12](https://github.com/loghqorg/loghq/issues/12))
+- A read-scoped project key, so a Stacks dashboard can read logs without a person's credentials (#15) ([fee9d6a](https://github.com/loghqorg/loghq/commit/fee9d6a)) _(by Glenn Michael Torregosa)_ ([#14](https://github.com/loghqorg/loghq/issues/14), [#15](https://github.com/loghqorg/loghq/issues/15))
+- Merge pull request #13 from loghqorg/refactor/loghq-shared-controls ([4762901](https://github.com/loghqorg/loghq/commit/4762901)) _(by Glenn Michael Torregosa)_ ([#13](https://github.com/loghqorg/loghq/issues/13))
+- Merge pull request #10 from loghqorg/fix/loghq-component-theme ([235eb35](https://github.com/loghqorg/loghq/commit/235eb35)) _(by Glenn Michael Torregosa)_ ([#10](https://github.com/loghqorg/loghq/issues/10))
+- Merge pull request #6 from loghqorg/feat/date-range-picker ([491b5c3](https://github.com/loghqorg/loghq/commit/491b5c3)) _(by Glenn Michael Torregosa)_ ([#6](https://github.com/loghqorg/loghq/issues/6))
+- Merge pull request #5 from loghqorg/fix/mobile-nav ([59b56b7](https://github.com/loghqorg/loghq/commit/59b56b7)) _(by Glenn Michael Torregosa)_ ([#5](https://github.com/loghqorg/loghq/issues/5))
+- Merge pull request #4 from loghqorg/docs/bunpress-product-guide ([3315a1f](https://github.com/loghqorg/loghq/commit/3315a1f)) _(by Glenn Michael Torregosa)_ ([#4](https://github.com/loghqorg/loghq/issues/4))
+
+## Contributors
+
+- _Chris_
+- _Chris Breuer_
+- _Glenn Michael Torregosa_
+- _glennmichael123_
+
 ## v0.70.51
 
 [compare changes](https://github.com/stacksjs/stacks/compare/v0.70.50...v0.70.51)
