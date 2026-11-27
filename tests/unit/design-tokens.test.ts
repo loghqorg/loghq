@@ -81,7 +81,8 @@ describe('the claim that kept them out of the config', () => {
     expect(TOKENS).not.toBe('')
     expect(CHROME).not.toBe('')
     expect(MARKETING).not.toBe('')
-    expect(ENTRIES).toHaveLength(5)
+    // Those three, the syntax-highlighting colours, the date picker and the select caret.
+    expect(ENTRIES).toHaveLength(6)
   })
 })
 
