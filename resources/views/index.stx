@@ -49,6 +49,9 @@ useHead({ link: [{ rel: 'canonical', href: 'https://loghq.org/' }] })
 // binding, which is a same-origin navigation done as a full document load. They
 // are `<StxLink>` now — one branch, one destination, no binding to override it.
 const pageAuthed = typeof cookies !== 'undefined' && !!cookies['auth-token']
+// Highlighted on the server (app/Support/highlight.ts), so the page ships no highlighter.
+const { highlightCode } = await import('../../app/Support/highlight')
+const snippetHtml = await highlightCode(snippet, 'php')
 </script>
 
 <script client>
@@ -121,7 +124,7 @@ async function subscribe() {
         <span class="h-[9px] w-[9px] bg-accent rounded-[999px]" aria-hidden="true"></span>
         <span class="chart-cap">config/logging.php</span>
       </div>
-      <pre class="code-body"><code>{{ snippet }}</code></pre>
+      <pre class="code-body"><code>{!! snippetHtml !!}</code></pre>
     </div>
   </section>
 

@@ -1,4 +1,5 @@
 import type { CrosswindConfig, Theme } from '@cwcss/crosswind'
+import { SYNTAX_DARK, SYNTAX_LIGHT, syntaxTokenRules, syntaxVariables } from '@stacksjs/components'
 
 /**
  * Crosswind (utility CSS) config.
@@ -933,7 +934,7 @@ a { color: inherit; text-decoration: none; }
 /* code panel */
 .code { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
 .code-bar { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1rem; border-bottom: 1px solid rgba(148,163,184,0.14); }
-.code-body { margin: 0; padding: 1.1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--code-ink); }
+.code-body { margin: 0; padding: 1.1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--code-ink); ${syntax(SYNTAX_DARK)} }
 .chart-cap { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
 /* Only on the code surface. \`.chart-cap\` is also used inside \`.panel-head\`,
   which sits on the normal page surface where --text-3 is the correct token. */
@@ -1356,11 +1357,42 @@ select:not([multiple]):not([size]) {
 }
 `
 
+/**
+ * Syntax highlighting (app/Support/highlight.ts). The highlighter writes a class
+ * on each token and no colour; these rules colour them from the
+ * `--stx-syntax-*` properties, which are stx's own GitHub light and dark pair,
+ * set in the same four places TOKENS sets the theme so highlighted code follows
+ * the toggle. Every `.code-body` sits on the marketing sheet's dark --code-bg
+ * in both themes (the marketing panels and the home hero), so MARKETING's own
+ * `.code-body` rule pins the dark set: wherever that background applies, so
+ * do the colours made for it.
+ */
+/**
+ * stx's light set with one change: comments. Its #6e7781 is 4.4:1 on this
+ * app's off-white surfaces, under the 4.5:1 body-text minimum, so comments take
+ * GitHub's own darker muted grey. The dark set passes as it is.
+ */
+const SYNTAX_LIGHT_AA: Readonly<Record<string, string>> = { ...SYNTAX_LIGHT, comment: '#57606a' }
+
+function syntax(palette: Readonly<Record<string, string>>): string {
+  return syntaxVariables(palette, '').replace(/\n/g, ' ')
+}
+
+const SYNTAX = [
+  `:root { ${syntax(SYNTAX_LIGHT_AA)} }`,
+  `@media (prefers-color-scheme: dark) { :root { ${syntax(SYNTAX_DARK)} } }`,
+  `:root[data-theme='dark'] { ${syntax(SYNTAX_DARK)} }`,
+  `:root[data-theme='light'] { ${syntax(SYNTAX_LIGHT_AA)} }`,
+  syntaxTokenRules(),
+].join('\n')
+
 export default {
   preflights: [
     // In the order the three stylesheets they came from were linked:
     // tokens, then the app chrome that reads them, then page CSS.
     { getCSS: () => TOKENS },
+    // Syntax-highlighting colours, beside the palette they theme with.
+    { getCSS: () => SYNTAX },
     { getCSS: () => APP_CHROME },
     // Scoped to the marketing layout group; everything above is site-wide.
     // After TOKENS so its own --sans wins where the two differ.

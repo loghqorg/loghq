@@ -17,6 +17,16 @@ const crumbs = [
   { label: 'Features', href: '/#features', url: 'https://loghq.org/#features' },
   { label: 'Self-hosting' },
 ]
+// The snippet below, highlighted on the server (app/Support/highlight.ts).
+const { highlightCode } = await import('../../../app/Support/highlight')
+const code = `git clone https://github.com/stacksjs/loghq
+cd loghq
+
+# point it at your Postgres and go
+export DATABASE_URL=postgres://user@db/loghq
+buddy migrate
+buddy serve   # your instance, your data`
+const codeHtml = await highlightCode(code, 'bash')
 </script>
 
 @section('content')
@@ -40,13 +50,7 @@ const crumbs = [
 <section class="reveal section shell" aria-label="Self-hosting preview">
   <div class="max-w-[700px] code">
     <div class="code-bar"><span class="chart-cap">Run loghq on your own box</span></div>
-    <pre class="code-body"><code>git clone https://github.com/stacksjs/loghq
-cd loghq
-
-# point it at your Postgres and go
-export DATABASE_URL=postgres://user@db/loghq
-buddy migrate
-buddy serve   # your instance, your data</code></pre>
+    <pre class="code-body"><code>{!! codeHtml !!}</code></pre>
   </div>
 </section>
 
